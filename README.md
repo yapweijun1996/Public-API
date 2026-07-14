@@ -2,6 +2,8 @@
 
 A reusable Vite + React + TypeScript admin console for demonstrating public APIs to developers and browser-based AI agents.
 
+**Live demo:** [yapweijun1996.github.io/Public-API](https://yapweijun1996.github.io/Public-API/)
+
 ## What is included
 
 - A searchable catalog of keyless public APIs
@@ -30,6 +32,10 @@ Then open the local URL printed by Vite.
 npm test
 npm run build
 ```
+
+## Deploy
+
+Pushes to `main` are tested, built, and deployed to GitHub Pages by `.github/workflows/deploy-pages.yml`. The workflow sets Vite's repository base path automatically and publishes the `dist` artifact through GitHub's official Pages actions.
 
 ## Add another public API
 

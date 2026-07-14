@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   apiCatalog,
   getDefaultParameters,
@@ -14,13 +14,25 @@ type RequestState =
   | { status: 'success'; data: unknown; httpStatus: number; elapsed: number; size: number; url: string }
   | { status: 'error'; message: string; url: string }
 
+type AdminPage =
+  | 'overview'
+  | 'catalog'
+  | 'collections'
+  | 'providers'
+  | 'tags'
+  | 'request-lab'
+  | 'agent-tools'
+  | 'health'
+  | 'documentation'
+
+type SupportingPage = 'collections' | 'providers' | 'tags' | 'health' | 'documentation'
+
 type IconName =
   | 'activity'
   | 'agent'
   | 'alert'
   | 'api'
   | 'arrow'
-  | 'bell'
   | 'book'
   | 'box'
   | 'check'
@@ -37,10 +49,8 @@ type IconName =
   | 'menu'
   | 'play'
   | 'search'
-  | 'settings'
   | 'shield'
   | 'spark'
-  | 'users'
   | 'x'
 
 const categories: Array<'All' | ApiCategory> = ['All', 'Data', 'Utility', 'People', 'Nature']
@@ -51,7 +61,6 @@ const paths: Record<IconName, React.ReactNode> = {
   alert: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
   api: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   arrow: <path d="M5 12h14m-5-5 5 5-5 5" />,
-  bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
   book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>,
   box: <><path d="m21 8-9 5-9-5 9-5 9 5Z" /><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z" /><path d="M12 13v8" /></>,
   check: <path d="m5 12 4 4L19 6" />,
@@ -68,10 +77,8 @@ const paths: Record<IconName, React.ReactNode> = {
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   play: <path d="m8 5 11 7-11 7V5Z" />,
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
-  settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,
   shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></>,
   spark: <><path d="m12 3-1.4 3.6L7 8l3.6 1.4L12 13l1.4-3.6L17 8l-3.6-1.4L12 3Z" /><path d="m5 14-.9 2.1L2 17l2.1.9L5 20l.9-2.1L8 17l-2.1-.9L5 14Z" /></>,
-  users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></>,
   x: <path d="M18 6 6 18M6 6l12 12" />,
 }
 
@@ -92,15 +99,82 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
 
 const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 const codeSample = (url: string) => `const response = await fetch('${url}', {\n  headers: { Accept: 'application/json' },\n});\n\nconst data = await response.json();`
+const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
 
-const navGroups: Array<{ label: string; items: Array<{ label: string; icon: IconName; section?: AdminSection; badge?: string }> }> = [
-  { label: '', items: [{ label: 'Overview', icon: 'home' }] },
-  { label: 'Discover', items: [{ label: 'API Catalog', icon: 'api', section: 'catalog' }, { label: 'Collections', icon: 'box' }, { label: 'Providers', icon: 'database' }, { label: 'Tags', icon: 'filter' }] },
-  { label: 'Operate', items: [{ label: 'Request Lab', icon: 'activity', section: 'request-lab' }, { label: 'Agent Tools', icon: 'agent', section: 'agent-tools', badge: '5' }, { label: 'Health', icon: 'shield' }] },
-  { label: 'Admin', items: [{ label: 'Settings', icon: 'settings' }, { label: 'Users & Teams', icon: 'users' }, { label: 'Documentation', icon: 'book' }] },
+const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: string }> = {
+  overview: { title: 'Overview', subtitle: 'Monitor the public API demo workspace', path: '/overview' },
+  catalog: { title: 'API Catalog', subtitle: 'Discover and evaluate trusted public APIs', path: '/catalog' },
+  collections: { title: 'Collections', subtitle: 'Curated API groups for common demo scenarios', path: '/collections' },
+  providers: { title: 'Providers', subtitle: 'Review source ownership and documentation', path: '/providers' },
+  tags: { title: 'Tags', subtitle: 'Explore the catalog by capability and category', path: '/tags' },
+  'request-lab': { title: 'Request Lab', subtitle: 'Configure and run a live public API request', path: '/request-lab' },
+  'agent-tools': { title: 'Agent Tools', subtitle: 'Inspect the WebMCP control surface', path: '/agent-tools' },
+  health: { title: 'Health', subtitle: 'Review endpoint readiness and source quality', path: '/health' },
+  documentation: { title: 'Documentation', subtitle: 'Learn how to extend this API demo template', path: '/documentation' },
+}
+
+const pageFromPath = Object.fromEntries(Object.entries(pageMeta).map(([page, meta]) => [meta.path, page])) as Record<string, AdminPage>
+
+function readPageFromLocation(): AdminPage {
+  const hashPath = window.location.hash.replace(/^#/, '')
+  return pageFromPath[hashPath] ?? pageFromPath[window.location.pathname] ?? 'catalog'
+}
+
+const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string; description: string; cards: Array<{ title: string; description: string; meta: string }> }> = {
+  collections: {
+    icon: 'box', eyebrow: 'Curated workspaces', description: 'Start with a focused set of public APIs instead of searching the full inventory.',
+    cards: [
+      { title: 'Keyless starter pack', description: 'All six APIs work without account setup or secret management.', meta: '6 APIs' },
+      { title: 'Data & geography', description: 'Country, content, and planning datasets for dashboard prototypes.', meta: '3 APIs' },
+      { title: 'Utility demos', description: 'Weather and holiday endpoints for practical workflow examples.', meta: '2 APIs' },
+    ],
+  },
+  providers: {
+    icon: 'database', eyebrow: 'Source directory', description: 'Every demo links back to its official provider documentation.',
+    cards: apiCatalog.map((api) => ({ title: api.provider, description: api.name, meta: new URL(api.documentationUrl).hostname })),
+  },
+  tags: {
+    icon: 'filter', eyebrow: 'Catalog taxonomy', description: 'Use tags to help people and agents select the right demo module.',
+    cards: [
+      { title: 'no-key', description: 'No API key or sign-up is required.', meta: '6 APIs' },
+      { title: 'GET', description: 'Read-only requests that are safe for demonstrations.', meta: '6 APIs' },
+      { title: 'Data', description: 'Structured records for dashboards and content views.', meta: '2 APIs' },
+      { title: 'Utility', description: 'Practical services for weather and scheduling.', meta: '2 APIs' },
+      { title: 'People', description: 'Placeholder identity data for interface prototypes.', meta: '1 API' },
+      { title: 'Nature', description: 'Media content for friendly visual demonstrations.', meta: '1 API' },
+    ],
+  },
+  health: {
+    icon: 'shield', eyebrow: 'Readiness overview', description: 'Static governance checks for every public endpoint in this demo catalog.',
+    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: 'Low risk' })),
+  },
+  documentation: {
+    icon: 'book', eyebrow: 'Developer guide', description: 'Use this project as a repeatable starting point for new public API demos.',
+    cards: [
+      { title: '1. Add a module', description: 'Define its metadata, fields, validation, and URL builder in apiCatalog.ts.', meta: 'Catalog' },
+      { title: '2. Test the endpoint', description: 'Use Request Lab to validate parameters, responses, and error states.', meta: 'Runtime' },
+      { title: '3. Expose agent controls', description: 'Keep visible UI actions aligned with typed WebMCP tools.', meta: 'WebMCP' },
+    ],
+  },
+}
+
+function readSidebarPreference() {
+  try {
+    return window.localStorage.getItem(sidebarPreferenceKey) === 'true'
+  } catch {
+    return false
+  }
+}
+
+const navGroups: Array<{ label: string; items: Array<{ label: string; icon: IconName; page: AdminPage; badge?: string }> }> = [
+  { label: '', items: [{ label: 'Overview', icon: 'home', page: 'overview' }] },
+  { label: 'Discover', items: [{ label: 'API Catalog', icon: 'api', page: 'catalog' }, { label: 'Collections', icon: 'box', page: 'collections' }, { label: 'Providers', icon: 'database', page: 'providers' }, { label: 'Tags', icon: 'filter', page: 'tags' }] },
+  { label: 'Operate', items: [{ label: 'Request Lab', icon: 'activity', page: 'request-lab' }, { label: 'Agent Tools', icon: 'agent', page: 'agent-tools', badge: '5' }, { label: 'Health', icon: 'shield', page: 'health' }] },
+  { label: 'Resources', items: [{ label: 'Documentation', icon: 'book', page: 'documentation' }] },
 ]
 
 function App() {
+  const [currentPage, setCurrentPage] = useState<AdminPage>(readPageFromLocation)
   const [selectedId, setSelectedId] = useState(apiCatalog[0].id)
   const [parameters, setParameters] = useState<Record<string, string>>(getDefaultParameters(apiCatalog[0]))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -108,6 +182,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<string>('All')
   const [mobileNav, setMobileNav] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarPreference)
   const [viewport, setViewport] = useState(() => ({
     compact: window.matchMedia('(max-width: 1180px)').matches,
     mobile: window.matchMedia('(max-width: 760px)').matches,
@@ -115,11 +190,39 @@ function App() {
   const [detailOpen, setDetailOpen] = useState(() => !window.matchMedia('(max-width: 1180px)').matches)
   const [outputTab, setOutputTab] = useState<'response' | 'code'>('response')
   const [copied, setCopied] = useState(false)
-  const catalogRef = useRef<HTMLElement>(null)
-  const labRef = useRef<HTMLElement>(null)
-  const agentRef = useRef<HTMLElement>(null)
 
   const activeApi = apiCatalog.find((api) => api.id === selectedId) ?? apiCatalog[0]
+  const activePage = pageMeta[currentPage]
+  const supportingPage = currentPage in supportingPages ? supportingPages[currentPage as SupportingPage] : null
+
+  const navigatePage = useCallback((page: AdminPage, replace = false) => {
+    const path = pageMeta[page].path
+    const hash = `#${path}`
+    if (window.location.hash !== hash) {
+      window.history[replace ? 'replaceState' : 'pushState']({}, '', `${import.meta.env.BASE_URL}${hash}`)
+    }
+    setCurrentPage(page)
+    setMobileNav(false)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [])
+
+  useEffect(() => {
+    if (!pageFromPath[window.location.hash.replace(/^#/, '')]) navigatePage(readPageFromLocation(), true)
+    const handleRouteChange = () => {
+      setCurrentPage(readPageFromLocation())
+      setMobileNav(false)
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    window.addEventListener('hashchange', handleRouteChange)
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange)
+      window.removeEventListener('hashchange', handleRouteChange)
+    }
+  }, [navigatePage])
+
+  useEffect(() => {
+    document.title = `${activePage.title} — Public API Admin`
+  }, [activePage.title])
 
   useEffect(() => {
     const compactQuery = window.matchMedia('(max-width: 1180px)')
@@ -137,6 +240,28 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sidebarPreferenceKey, String(sidebarCollapsed))
+    } catch {
+      // Storage may be unavailable in private or restricted browser contexts.
+    }
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    if (!mobileNav) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNav(false)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [mobileNav])
+
   const filteredApis = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return apiCatalog.filter((api) => {
@@ -147,15 +272,14 @@ function App() {
   }, [category, query])
 
   const navigateSection = useCallback((section: AdminSection) => {
-    const refs = { catalog: catalogRef, 'request-lab': labRef, 'agent-tools': agentRef }
-    refs[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setMobileNav(false)
-  }, [])
+    navigatePage(section)
+  }, [navigatePage])
 
   const filterCatalog = useCallback((nextQuery: string, nextCategory: string) => {
+    navigatePage('catalog')
     setQuery(nextQuery)
     if (categories.includes(nextCategory as (typeof categories)[number])) setCategory(nextCategory)
-  }, [])
+  }, [navigatePage])
 
   const selectApi = useCallback((id: string, openOnMobile = true) => {
     const api = apiCatalog.find((candidate) => candidate.id === id)
@@ -186,9 +310,9 @@ function App() {
   }, [])
 
   const selectApiForAgent = useCallback((id: string) => {
-    selectApi(id, true)
-    requestAnimationFrame(() => labRef.current?.scrollIntoView({ behavior: 'smooth' }))
-  }, [selectApi])
+    selectApi(id, false)
+    navigatePage('request-lab')
+  }, [navigatePage, selectApi])
 
   const webMcpStatus = useWebMcp({ onSelectApi: selectApiForAgent, onRunApi: runForAgent, onNavigate: navigateSection, onFilter: filterCatalog })
   const endpoint = activeApi.buildUrl(parameters)
@@ -208,8 +332,8 @@ function App() {
   }
 
   return (
-    <div className="admin-shell">
-      <aside className={`sidebar ${mobileNav ? 'mobile-open' : ''}`} aria-hidden={viewport.mobile && !mobileNav} inert={viewport.mobile && !mobileNav ? true : undefined}>
+    <div className={`admin-shell ${currentPage === 'catalog' ? 'has-detail' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <aside id="primary-navigation" className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNav ? 'mobile-open' : ''}`} aria-label="Primary navigation" aria-hidden={viewport.mobile && !mobileNav} inert={viewport.mobile && !mobileNav ? true : undefined}>
         <div className="sidebar-brand">
           <span className="logo-cube"><i /></span>
           <div><b>API Console</b><small>Govern • Discover • Operate</small></div>
@@ -220,14 +344,31 @@ function App() {
             <div className="nav-group" key={`${group.label}-${index}`}>
               {group.label && <span className="nav-label">{group.label}</span>}
               {group.items.map((item) => (
-                <button type="button" className={item.section === 'catalog' ? 'active' : ''} key={item.label} onClick={() => item.section && navigateSection(item.section)}>
+                <button
+                  type="button"
+                  className={item.page === currentPage ? 'active' : ''}
+                  key={item.label}
+                  onClick={() => navigatePage(item.page)}
+                  aria-current={item.page === currentPage ? 'page' : undefined}
+                  aria-label={sidebarCollapsed && !viewport.mobile ? item.label : undefined}
+                  title={sidebarCollapsed && !viewport.mobile ? item.label : undefined}
+                >
                   <Icon name={item.icon} size={17} /><span>{item.label}</span>{item.badge && <em>{item.badge}</em>}
                 </button>
               ))}
             </div>
           ))}
         </nav>
-        <div className="sidebar-environment"><Icon name="database" /><div><small>Environment</small><b><i /> Production</b></div><Icon name="chevron" size={14} /></div>
+        <button
+          className="sidebar-toggle"
+          type="button"
+          onClick={() => setSidebarCollapsed((current) => !current)}
+          aria-expanded={!sidebarCollapsed}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <Icon name="chevron" size={16} /><span>{sidebarCollapsed ? 'Expand' : 'Collapse'}</span>
+        </button>
         <div className="sidebar-version">API Console v1.0.0</div>
       </aside>
 
@@ -235,15 +376,14 @@ function App() {
 
       <div className="admin-main">
         <header className="topbar">
-          <button className="menu-button" type="button" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Icon name="menu" /></button>
-          <div className="page-title"><h1>API Catalog</h1><p>Discover, evaluate and operate trusted public APIs</p></div>
-          <label className="global-search"><Icon name="search" size={17} /><span className="sr-only">Search APIs</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search APIs, tags, providers…" /><kbd>⌘ K</kbd></label>
-          <button className="icon-button has-dot" type="button" aria-label="Notifications"><Icon name="bell" /></button>
-          <button className="icon-button" type="button" aria-label="Help"><Icon name="help" /></button>
-          <div className="admin-profile"><span>AD</span><div><b>Admin</b><small>Platform Admin</small></div><Icon name="chevron" size={14} /></div>
+          <button className="menu-button" type="button" onClick={() => setMobileNav(true)} aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded={mobileNav}><Icon name="menu" /></button>
+          <div className="page-title"><h1>{activePage.title}</h1><p>{activePage.subtitle}</p></div>
+          {currentPage === 'catalog' ? <label className="global-search"><Icon name="search" size={17} /><span className="sr-only">Search APIs</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search APIs, tags, providers…" /><kbd>⌘ K</kbd></label> : <div className="topbar-spacer" />}
+          <button className="icon-button" type="button" aria-label="Help" onClick={() => navigatePage('documentation')}><Icon name="help" /></button>
         </header>
 
         <main className="dashboard">
+          {currentPage === 'overview' && <>
           <section className="metric-grid" aria-label="API catalog summary">
             {[
               { label: 'Total APIs', value: apiCatalog.length, note: '100% of catalog', icon: 'box' as IconName, tone: 'blue' },
@@ -260,7 +400,17 @@ function App() {
             ))}
           </section>
 
-          <section className="catalog-panel" ref={catalogRef} aria-labelledby="catalog-heading">
+          <section className="overview-launch" aria-labelledby="overview-heading">
+            <div className="workspace-heading"><span><Icon name="spark" /></span><div><p>Demo workspace</p><h2 id="overview-heading">Choose what you want to do next</h2><small>Each workspace now has its own URL and focused page.</small></div></div>
+            <div className="launch-grid">
+              <button type="button" onClick={() => navigatePage('catalog')}><span><Icon name="api" /></span><div><b>Browse API Catalog</b><small>Compare all public API modules.</small></div><Icon name="arrow" /></button>
+              <button type="button" onClick={() => navigatePage('request-lab')}><span><Icon name="activity" /></span><div><b>Open Request Lab</b><small>Run the selected endpoint live.</small></div><Icon name="arrow" /></button>
+              <button type="button" onClick={() => navigatePage('agent-tools')}><span><Icon name="agent" /></span><div><b>Inspect Agent Tools</b><small>Review the WebMCP interface.</small></div><Icon name="arrow" /></button>
+            </div>
+          </section>
+          </>}
+
+          {currentPage === 'catalog' && <section className="catalog-panel page-panel" aria-labelledby="catalog-heading">
             <div className="panel-heading">
               <div><h2 id="catalog-heading">Public API inventory</h2><p>Select an API to inspect its source, parameters and live response.</p></div>
               <div className={`agent-connection ${webMcpStatus}`}><i /><span>{webMcpStatus === 'ready' ? 'Agent connected' : webMcpStatus === 'unsupported' ? 'Browser preview' : webMcpStatus === 'error' ? 'Agent unavailable' : 'Checking WebMCP'}</span></div>
@@ -293,9 +443,9 @@ function App() {
               {filteredApis.length === 0 && <div className="catalog-empty"><Icon name="search" /><b>No matching APIs</b><p>Clear the search or choose another category.</p></div>}
             </div>
             <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled>‹</button><button type="button" className="current">1</button><button type="button" disabled>›</button></div></div>
-          </section>
+          </section>}
 
-          <section className="request-lab" ref={labRef} aria-labelledby="lab-heading">
+          {currentPage === 'request-lab' && <section className="request-lab page-section" aria-labelledby="lab-heading">
             <div className="section-title"><span><Icon name="activity" /></span><div><h2 id="lab-heading">Request lab</h2><p>Run the selected public API and inspect the raw response.</p></div></div>
             <div className="lab-grid">
               <form className="parameter-card" onSubmit={submitRequest} noValidate>
@@ -319,9 +469,9 @@ function App() {
                 </div>
               </div>
             </div>
-          </section>
+          </section>}
 
-          <section className="agent-section" ref={agentRef} aria-labelledby="agent-heading">
+          {currentPage === 'agent-tools' && <section className="agent-section page-section" aria-labelledby="agent-heading">
             <div className="agent-intro"><span className="agent-hero-icon"><Icon name="agent" size={26} /></span><p className="eyebrow">WebMCP control layer</p><h2 id="agent-heading">Built for people.<br />Operable by AI agents.</h2><p>The same actions a person performs in this console are exposed as typed browser tools. Agent actions update the visible interface, preserving shared context and user control.</p><div className={`webmcp-state ${webMcpStatus}`}><i /><div><b>{webMcpStatus === 'ready' ? 'WebMCP tools registered' : webMcpStatus === 'unsupported' ? 'WebMCP preview not available in this browser' : 'Checking WebMCP support'}</b><small>The admin console remains fully usable without agent support.</small></div></div></div>
             <div className="tool-list">
               {[
@@ -332,11 +482,27 @@ function App() {
                 ['run_public_api_demo', 'Execute a live request and return JSON', 'Execute'],
               ].map(([name, description, type], index) => <article key={name}><span>0{index + 1}</span><div><code>{name}</code><p>{description}</p></div><em>{type}</em><Icon name="check" /></article>)}
             </div>
-          </section>
+          </section>}
+
+          {supportingPage && <section className="workspace-page" aria-labelledby="workspace-heading">
+            <div className="workspace-hero">
+              <span><Icon name={supportingPage.icon} size={24} /></span>
+              <p>{supportingPage.eyebrow}</p>
+              <h2 id="workspace-heading">{activePage.title}</h2>
+              <small>{supportingPage.description}</small>
+            </div>
+            <div className="workspace-grid">
+              {supportingPage.cards.map((card) => <article key={`${card.title}-${card.meta}`}><span>{card.meta}</span><h3>{card.title}</h3><p>{card.description}</p></article>)}
+            </div>
+            <div className="workspace-actions">
+              <button className="primary-action" type="button" onClick={() => navigatePage('catalog')}><Icon name="api" size={15} /> Open API Catalog</button>
+              {currentPage !== 'documentation' && <button type="button" onClick={() => navigatePage('documentation')}><Icon name="book" size={15} /> Read developer guide</button>}
+            </div>
+          </section>}
         </main>
       </div>
 
-      <aside className={`detail-panel ${detailOpen ? 'mobile-open' : ''}`} aria-label="Selected API details" aria-hidden={viewport.compact && !detailOpen} inert={viewport.compact && !detailOpen ? true : undefined}>
+      {currentPage === 'catalog' && <aside className={`detail-panel ${detailOpen ? 'mobile-open' : ''}`} aria-label="Selected API details" aria-hidden={viewport.compact && !detailOpen} inert={viewport.compact && !detailOpen ? true : undefined}>
         <div className="detail-head"><span>Selected module</span><button type="button" onClick={() => setDetailOpen(false)} aria-label="Close details"><Icon name="x" /></button></div>
         <div className="detail-title"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><h2>{activeApi.name}</h2><small>DEMO PICK</small></div></div>
         <p className="detail-description">{activeApi.description}</p>
@@ -344,8 +510,8 @@ function App() {
         <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
         <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Commercial use</small>Suitable for demonstration and internal prototyping. Review the provider terms before production use.</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
         <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>GET</b></div><code>{endpoint}</code></section>
-        <div className="detail-actions"><button className="primary-action" type="button" onClick={() => { setDetailOpen(false); navigateSection('request-lab') }}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
-      </aside>
+        <div className="detail-actions"><button className="primary-action" type="button" onClick={() => { setDetailOpen(false); navigatePage('request-lab') }}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
+      </aside>}
     </div>
   )
 }
