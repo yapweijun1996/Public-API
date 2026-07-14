@@ -344,12 +344,24 @@ function App() {
   const webMcpStatus = useWebMcp({ onSelectApi: selectApiForAgent, onRunApi: runForAgent, onNavigate: navigateSection, onFilter: filterCatalog })
   const endpoint = activeApi.buildUrl(parameters)
 
+  const executeRequest = useCallback(async (api: ApiDemo, values: Record<string, string>) => {
+    const nextErrors = validateParameters(api, values)
+    setErrors(nextErrors)
+    setOutputTab('response')
+    if (Object.keys(nextErrors).length) return false
+    await runForAgent(api, values).catch(() => undefined)
+    return true
+  }, [runForAgent])
+
   const submitRequest = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const nextErrors = validateParameters(activeApi, parameters)
-    setErrors(nextErrors)
-    if (Object.keys(nextErrors).length) return
-    await runForAgent(activeApi, parameters).catch(() => undefined)
+    await executeRequest(activeApi, parameters)
+  }
+
+  const trySelectedApi = () => {
+    setDetailOpen(false)
+    navigatePage('request-lab')
+    void executeRequest(activeApi, parameters)
   }
 
   const copyFetch = async () => {
@@ -537,7 +549,7 @@ function App() {
         <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
         <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Important notes</small>{activeApi.usageNote ?? 'Suitable for demonstration and internal prototyping. Review the provider terms before production use.'}</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
         <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? 'GET'}</b></div><code>{endpoint}</code></section>
-        <div className="detail-actions"><button className="primary-action" type="button" onClick={() => { setDetailOpen(false); navigatePage('request-lab') }}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
+        <div className="detail-actions"><button className="primary-action" type="button" onClick={trySelectedApi}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
       </aside>}
     </div>
   )
