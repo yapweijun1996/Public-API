@@ -10,6 +10,8 @@ export type PreviewLayout =
   | 'calendar-timeline'
   | 'result-list'
 
+export type WeatherPreviewVariant = 'current' | 'four-day' | 'twenty-four-hour' | 'area-forecast' | 'station-readings' | 'regional-air-quality' | 'uv-index'
+
 export type DemoPreviewItem = {
   title: string
   fields: Array<{ label: string; value: string }>
@@ -97,6 +99,7 @@ export const buildDemoPreview = (data: unknown): DemoPreviewItem[] => {
 }
 
 const weatherIds = ['weather', 'data-gov-24hr-forecast', 'data-gov-4day-forecast', 'data-gov-air-temperature', 'data-gov-forecast-2hr', 'data-gov-pm25', 'data-gov-psi', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-uv-index', 'data-gov-wind-direction', 'data-gov-wind-speed']
+const stationWeatherIds = ['data-gov-air-temperature', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-wind-direction', 'data-gov-wind-speed']
 const mapIds = ['data-gov-carpark', 'data-gov-taxi', 'postcodes-io', 'usgs', 'nhtsa-vpic']
 const galleryIds = ['dogs', 'people', 'data-gov-traffic-images', 'met-museum-object-detail', 'met-museum-search', 'art-institute-search', 'pokeapi', 'tvmaze-search', 'open-food-facts', 'gbif-species-search']
 
@@ -109,6 +112,16 @@ export function selectPreviewLayout(api: Pick<ApiDemo, 'id' | 'category'>): Prev
   if (mapIds.includes(api.id) || ['Geo', 'Vehicle'].includes(api.category)) return 'location-map'
   if (api.category === 'Calendar' || api.id === 'holidays') return 'calendar-timeline'
   return 'result-list'
+}
+
+export function selectWeatherPreviewVariant(api: Pick<ApiDemo, 'id'>): WeatherPreviewVariant {
+  if (api.id === 'data-gov-4day-forecast') return 'four-day'
+  if (api.id === 'data-gov-24hr-forecast') return 'twenty-four-hour'
+  if (api.id === 'data-gov-forecast-2hr') return 'area-forecast'
+  if (stationWeatherIds.includes(api.id)) return 'station-readings'
+  if (['data-gov-pm25', 'data-gov-psi'].includes(api.id)) return 'regional-air-quality'
+  if (api.id === 'data-gov-uv-index') return 'uv-index'
+  return 'current'
 }
 
 const scalar = (value: unknown) => ['string', 'number', 'boolean'].includes(typeof value) ? value : undefined
@@ -149,7 +162,47 @@ const weatherCondition = (code: number | undefined) => {
   return { label: 'Mixed conditions', icon: '◒' }
 }
 
+const forecastSymbol = (forecast: string | undefined) => {
+  const value = forecast?.toLowerCase() ?? ''
+  if (value.includes('thunder')) return 'ϟ'
+  if (value.includes('shower') || value.includes('rain')) return '☂'
+  if (value.includes('cloud')) return '☁'
+  if (value.includes('fair') || value.includes('sun') || value.includes('clear')) return '☀'
+  if (value.includes('haze') || value.includes('mist')) return '≋'
+  return '◒'
+}
+
+const firstResponseItem = (data: unknown) => {
+  if (!isRecord(data) || !Array.isArray(data.items) || !isRecord(data.items[0])) return undefined
+  return data.items[0]
+}
+
+const dateParts = (value: unknown) => {
+  const text = textValue(value)
+  if (!text) return { day: '—', weekday: 'Forecast', full: '' }
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return { day: text.slice(-2), weekday: 'Forecast', full: text }
+  return {
+    day: date.toLocaleDateString('en-SG', { day: '2-digit' }),
+    weekday: date.toLocaleDateString('en-SG', { weekday: 'short' }),
+    full: date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
+  }
+}
+
+const timeLabel = (value: unknown) => {
+  const text = textValue(value)
+  if (!text) return '—'
+  const date = new Date(text)
+  return Number.isNaN(date.getTime()) ? text : date.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
+}
+
+const rangeValues = (value: unknown) => {
+  const range = isRecord(value) ? value : {}
+  return { low: numberValue(range.low), high: numberValue(range.high) }
+}
+
 const measurementMeta = (api: ApiDemo) => {
+  if (api.id === 'data-gov-air-temperature') return { label: 'Air temperature', unit: '°C' }
   if (api.id === 'data-gov-pm25') return { label: 'PM2.5 reading', unit: ' µg/m³' }
   if (api.id === 'data-gov-psi') return { label: 'Air quality index', unit: ' PSI' }
   if (api.id === 'data-gov-rainfall') return { label: 'Rainfall', unit: ' mm' }
@@ -160,7 +213,7 @@ const measurementMeta = (api: ApiDemo) => {
   return { label: 'Current conditions', unit: undefined }
 }
 
-function WeatherPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+function CurrentConditionsPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   const current = isRecord(root.current) ? root.current : findPreviewRecords(data)[0] ?? {}
   const units = isRecord(root.current_units) ? root.current_units : {}
@@ -187,6 +240,133 @@ function WeatherPreview({ data, api }: { data: unknown; api: ApiDemo }) {
     </div>
     <div className="weather-metrics">{metrics.map((metric) => <article key={metric.label}><span aria-hidden="true">{metric.icon}</span><div><small>{metric.label}</small><strong>{metric.value}</strong></div></article>)}</div>
   </div>
+}
+
+function FourDayForecastPreview({ data }: { data: unknown }) {
+  const item = firstResponseItem(data)
+  const forecasts = item && Array.isArray(item.forecasts) ? item.forecasts.filter(isRecord).slice(0, 4) : []
+  if (!item || !forecasts.length) return <div className="weather-empty"><strong>Forecast unavailable</strong><span>The response did not include daily forecast records.</span></div>
+  const lead = forecasts[0]
+  const leadTemperature = rangeValues(lead.temperature)
+  const leadHumidity = rangeValues(lead.relative_humidity)
+  const leadWind = isRecord(lead.wind) ? lead.wind : {}
+  const leadWindSpeed = rangeValues(leadWind.speed)
+  const leadForecast = cleanText(lead.forecast) ?? 'Forecast available'
+  return <div className="weather-preview weather-forecast-preview" data-weather-view="four-day-outlook">
+    <div className="forecast-lead">
+      <div><span className="weather-location">⌖ Singapore · {dateParts(lead.date ?? lead.timestamp).full}</span><strong>{leadTemperature.high === undefined ? '—' : `${formatNumber(leadTemperature.high)}°`}<small>{leadTemperature.low === undefined ? '' : ` / ${formatNumber(leadTemperature.low)}°`}</small></strong><b>{leadForecast}</b><small>Updated {timeLabel(item.update_timestamp ?? item.timestamp)}</small></div>
+      <span className="weather-symbol" aria-hidden="true">{forecastSymbol(leadForecast)}</span>
+    </div>
+    <div className="forecast-summary" aria-label="First forecast day details">
+      <span><small>Humidity</small><strong>{leadHumidity.low ?? '—'}–{leadHumidity.high ?? '—'}%</strong></span>
+      <span><small>Wind</small><strong>{leadWindSpeed.low ?? '—'}–{leadWindSpeed.high ?? '—'} km/h</strong></span>
+      <span><small>Direction</small><strong>{previewValue(leadWind.direction)}</strong></span>
+    </div>
+    <div className="forecast-days">{forecasts.map((forecast, index) => {
+      const date = dateParts(forecast.date ?? forecast.timestamp)
+      const temperature = rangeValues(forecast.temperature)
+      const humidity = rangeValues(forecast.relative_humidity)
+      const description = cleanText(forecast.forecast) ?? 'Forecast'
+      return <article className={index === 0 ? 'active' : ''} key={`${date.full}-${index}`}><div><span>{date.weekday}</span><small>{date.full}</small></div><b aria-hidden="true">{forecastSymbol(description)}</b><strong>{temperature.high ?? '—'}° <small>{temperature.low ?? '—'}°</small></strong><p>{description}</p><em>Humidity {humidity.low ?? '—'}–{humidity.high ?? '—'}%</em></article>
+    })}</div>
+  </div>
+}
+
+function TwentyFourHourForecastPreview({ data }: { data: unknown }) {
+  const item = firstResponseItem(data)
+  const general = item && isRecord(item.general) ? item.general : undefined
+  const periods = item && Array.isArray(item.periods) ? item.periods.filter(isRecord).slice(0, 3) : []
+  if (!item || !general) return <div className="weather-empty"><strong>Forecast unavailable</strong><span>The response did not include a general forecast.</span></div>
+  const temperature = rangeValues(general.temperature)
+  const humidity = rangeValues(general.relative_humidity)
+  const wind = isRecord(general.wind) ? general.wind : {}
+  const windSpeed = rangeValues(wind.speed)
+  const description = cleanText(general.forecast) ?? '24-hour forecast'
+  return <div className="weather-preview weather-forecast-preview" data-weather-view="twenty-four-hour">
+    <div className="forecast-lead compact"><div><span className="weather-location">⌖ Singapore · next 24 hours</span><strong>{temperature.high ?? '—'}°<small> / {temperature.low ?? '—'}°</small></strong><b>{description}</b><small>Valid {timeLabel(recordValue(item.valid_period, 'start'))}–{timeLabel(recordValue(item.valid_period, 'end'))}</small></div><span className="weather-symbol" aria-hidden="true">{forecastSymbol(description)}</span></div>
+    <div className="forecast-summary"><span><small>Humidity</small><strong>{humidity.low ?? '—'}–{humidity.high ?? '—'}%</strong></span><span><small>Wind</small><strong>{windSpeed.low ?? '—'}–{windSpeed.high ?? '—'} km/h</strong></span><span><small>Direction</small><strong>{previewValue(wind.direction)}</strong></span></div>
+    <div className="forecast-periods">{periods.map((period, index) => {
+      const regions = isRecord(period.regions) ? period.regions : {}
+      return <article key={`${timeLabel(recordValue(period.time, 'start'))}-${index}`}><div><strong>{timeLabel(recordValue(period.time, 'start'))}–{timeLabel(recordValue(period.time, 'end'))}</strong><small>Regional outlook</small></div><ul>{Object.entries(regions).map(([region, forecast]) => <li key={region}><span>{previewLabel(region)}</span><b>{previewValue(forecast)}</b></li>)}</ul></article>
+    })}</div>
+  </div>
+}
+
+function AreaForecastPreview({ data }: { data: unknown }) {
+  const item = firstResponseItem(data)
+  const forecasts = item && Array.isArray(item.forecasts) ? item.forecasts.filter(isRecord) : []
+  if (!item || !forecasts.length) return <div className="weather-empty"><strong>Area forecast unavailable</strong><span>No neighbourhood forecasts were returned.</span></div>
+  const counts = new Map<string, number>()
+  forecasts.forEach((forecast) => {
+    const description = cleanText(forecast.forecast) ?? 'Unknown'
+    counts.set(description, (counts.get(description) ?? 0) + 1)
+  })
+  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+  return <div className="weather-preview area-forecast-preview" data-weather-view="area-forecast">
+    <div className="area-forecast-summary"><div><span>Singapore neighbourhoods</span><strong>{forecasts.length}</strong><b>areas reporting</b><small>Valid {timeLabel(recordValue(item.valid_period, 'start'))}–{timeLabel(recordValue(item.valid_period, 'end'))}</small></div><div><span aria-hidden="true">{forecastSymbol(dominant?.[0])}</span><strong>{dominant?.[0] ?? 'Current outlook'}</strong><small>{dominant?.[1] ?? 0} areas</small></div></div>
+    <div className="area-forecast-grid">{forecasts.slice(0, 12).map((forecast, index) => <article key={`${forecast.area}-${index}`}><span aria-hidden="true">{forecastSymbol(cleanText(forecast.forecast))}</span><div><strong>{previewValue(forecast.area)}</strong><small>{previewValue(forecast.forecast)}</small></div></article>)}</div>
+  </div>
+}
+
+function StationReadingsPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const root = isRecord(data) ? data : {}
+  const metadata = isRecord(root.metadata) ? root.metadata : {}
+  const item = firstResponseItem(data)
+  const readings = item && Array.isArray(item.readings) ? item.readings.filter(isRecord) : []
+  const stations = Array.isArray(metadata.stations) ? metadata.stations.filter(isRecord) : []
+  const stationById = new Map(stations.map((station) => [textValue(station.id) ?? '', station]))
+  const values = readings.map((reading) => numberValue(reading.value)).filter((value): value is number => value !== undefined)
+  if (!readings.length || !values.length) return <div className="weather-empty"><strong>Station readings unavailable</strong><span>No measurement values were returned.</span></div>
+  const measurement = measurementMeta(api)
+  const metadataUnit = textValue(metadata.reading_unit)?.replace('deg C', '°C')
+  const unit = metadataUnit ?? measurement.unit?.trim() ?? ''
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length
+  return <div className="weather-preview station-readings-preview" data-weather-view="station-readings">
+    <div className="station-summary"><div><span>{measurement.label}</span><strong>{formatNumber(average)}{unit}</strong><b>Network average</b><small>{values.length} active station{values.length === 1 ? '' : 's'} · {timeLabel(item?.timestamp)}</small></div><dl><div><dt>Lowest</dt><dd>{formatNumber(Math.min(...values))}{unit}</dd></div><div><dt>Highest</dt><dd>{formatNumber(Math.max(...values))}{unit}</dd></div><div><dt>Updated</dt><dd>{timeLabel(item?.timestamp)}</dd></div></dl></div>
+    <div className="station-list">{readings.slice(0, 8).map((reading, index) => {
+      const station = stationById.get(textValue(reading.station_id) ?? '')
+      return <article key={`${reading.station_id}-${index}`}><span>{textValue(reading.station_id) ?? index + 1}</span><div><strong>{textValue(station?.name) ?? 'Weather station'}</strong><small>{station && isRecord(station.location) ? `${previewValue(station.location.latitude)}, ${previewValue(station.location.longitude)}` : 'Singapore sensor network'}</small></div><b>{previewValue(reading.value)}{unit}</b></article>
+    })}</div>
+  </div>
+}
+
+function RegionalAirQualityPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const item = firstResponseItem(data)
+  const readings = item && isRecord(item.readings) ? item.readings : {}
+  const preferredKey = api.id === 'data-gov-psi' ? 'psi_twenty_four_hourly' : 'pm25_one_hourly'
+  let regional = isRecord(readings[preferredKey]) ? readings[preferredKey] : undefined
+  if (!regional) regional = Object.values(readings).find((value) => isRecord(value) && Object.values(value).some((reading) => numberValue(reading) !== undefined)) as Record<string, unknown> | undefined
+  const regions = regional ? Object.entries(regional).map(([name, value]) => ({ name, value: numberValue(value) })).filter((entry): entry is { name: string; value: number } => entry.value !== undefined) : []
+  if (!regions.length) return <div className="weather-empty"><strong>Regional readings unavailable</strong><span>No regional air-quality values were returned.</span></div>
+  const max = Math.max(...regions.map((region) => region.value))
+  const average = regions.reduce((sum, region) => sum + region.value, 0) / regions.length
+  const unit = api.id === 'data-gov-psi' ? 'PSI' : 'µg/m³'
+  const status = api.id === 'data-gov-psi' ? max <= 50 ? 'Good' : max <= 100 ? 'Moderate' : 'Elevated' : max <= 12 ? 'Low' : max <= 35 ? 'Moderate' : 'Elevated'
+  return <div className="weather-preview regional-air-preview" data-weather-view="regional-air-quality">
+    <div className="air-quality-summary"><div><span>Singapore air quality</span><strong>{formatNumber(average)}</strong><b>{unit} regional average</b><small>Updated {timeLabel(item?.update_timestamp ?? item?.timestamp)}</small></div><em className={status.toLowerCase()}>{status}</em></div>
+    <div className="regional-reading-grid">{regions.map((region) => <article key={region.name}><span>{previewLabel(region.name)}</span><strong>{formatNumber(region.value)}</strong><small>{unit}</small><i style={{ '--reading-level': `${Math.min(100, (region.value / Math.max(max, 1)) * 100)}%` } as CSSProperties}/></article>)}</div>
+  </div>
+}
+
+function UvIndexPreview({ data }: { data: unknown }) {
+  const item = firstResponseItem(data)
+  const indexes = item && Array.isArray(item.index) ? item.index.filter(isRecord) : []
+  const latest = indexes[0]
+  const value = numberValue(latest?.value)
+  if (value === undefined) return <div className="weather-empty"><strong>UV reading unavailable</strong><span>No UV index values were returned.</span></div>
+  const status = value < 3 ? 'Low' : value < 6 ? 'Moderate' : value < 8 ? 'High' : value < 11 ? 'Very high' : 'Extreme'
+  return <div className="weather-preview uv-preview" data-weather-view="uv-index"><div className="uv-summary"><div><span>Current UV index</span><strong>{formatNumber(value)}</strong><b>{status}</b><small>Updated {timeLabel(item?.update_timestamp ?? latest.timestamp)}</small></div><div className="uv-gauge" style={{ '--uv-position': `${Math.min(100, (value / 12) * 100)}%` } as CSSProperties}><i/><span>Low</span><span>Extreme</span></div></div>{indexes.length > 1 && <div className="uv-timeline">{indexes.slice(0, 8).map((entry, index) => <article key={`${entry.timestamp}-${index}`}><span>{timeLabel(entry.timestamp)}</span><strong>{previewValue(entry.value)}</strong></article>)}</div>}</div>
+}
+
+function WeatherPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const variant = selectWeatherPreviewVariant(api)
+  if (variant === 'four-day') return <FourDayForecastPreview data={data}/>
+  if (variant === 'twenty-four-hour') return <TwentyFourHourForecastPreview data={data}/>
+  if (variant === 'area-forecast') return <AreaForecastPreview data={data}/>
+  if (variant === 'station-readings') return <StationReadingsPreview data={data} api={api}/>
+  if (variant === 'regional-air-quality') return <RegionalAirQualityPreview data={data} api={api}/>
+  if (variant === 'uv-index') return <UvIndexPreview data={data}/>
+  return <CurrentConditionsPreview data={data} api={api}/>
 }
 
 function CountryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
@@ -352,9 +532,20 @@ const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title:
   'result-list': { icon: '✦', eyebrow: 'Live response · Results layout', title: 'Result explorer', description: 'A structured result browser adapted to this API response.' },
 }
 
+const weatherPreviewMeta: Record<WeatherPreviewVariant, { icon: string; eyebrow: string; title: string; description: string }> = {
+  current: previewMeta['weather-dashboard'],
+  'four-day': { icon: '☂', eyebrow: 'Live response · Daily forecast', title: '4-day outlook', description: 'Daily conditions, temperature ranges, humidity, and wind values mapped directly from the forecast response.' },
+  'twenty-four-hour': { icon: '◒', eyebrow: 'Live response · Regional forecast', title: '24-hour forecast', description: 'A full-day outlook with general conditions and time-based forecasts for every Singapore region.' },
+  'area-forecast': { icon: '⌖', eyebrow: 'Live response · Neighbourhood forecast', title: '2-hour area forecast', description: 'Short-range conditions grouped by named Singapore neighbourhoods.' },
+  'station-readings': { icon: '◉', eyebrow: 'Live response · Sensor network', title: 'Station readings', description: 'Live measurements joined with station names, units, coordinates, and network statistics.' },
+  'regional-air-quality': { icon: '≋', eyebrow: 'Live response · Air quality', title: 'Regional air quality', description: 'PSI and particulate readings compared across Singapore’s five reporting regions.' },
+  'uv-index': { icon: '☀', eyebrow: 'Live response · UV monitoring', title: 'UV index', description: 'The latest ultraviolet exposure level and its reporting timeline.' },
+}
+
 export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown }) {
   const layout = selectPreviewLayout(api)
-  const meta = previewMeta[layout]
+  const weatherVariant = layout === 'weather-dashboard' ? selectWeatherPreviewVariant(api) : undefined
+  const meta = weatherVariant ? weatherPreviewMeta[weatherVariant] : previewMeta[layout]
   let content: ReactNode
   if (layout === 'weather-dashboard') content = <WeatherPreview data={data} api={api}/>
   else if (layout === 'country-profile') content = <CountryPreview data={data} api={api}/>
@@ -365,9 +556,9 @@ export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown
   else content = <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`
-  return <section className={`demo-preview preview-${layout}`} aria-labelledby={headingId} aria-live="polite" data-webmcp-surface="api-demo-preview" data-preview-layout={layout} data-api-id={api.id}>
+  return <section className={`demo-preview preview-${layout}`} aria-labelledby={headingId} aria-live="polite" data-webmcp-surface="api-demo-preview" data-preview-layout={layout} data-preview-variant={weatherVariant} data-api-id={api.id}>
     <div className="demo-preview-head"><span aria-hidden="true">{meta.icon}</span><div><small>{meta.eyebrow}</small><h2 id={headingId}>{meta.title}</h2><p>{meta.description}</p></div><em><span aria-hidden="true">✓</span> Adaptive UI</em></div>
     {content}
-    <p className="demo-preview-note">Generated only from the live JSON response · Layout: {layout}</p>
+    <p className="demo-preview-note">Generated only from the live JSON response · Layout: {weatherVariant ?? layout}</p>
   </section>
 }
