@@ -527,7 +527,6 @@ function App() {
         <header className="topbar">
           <button className="menu-button" type="button" onClick={() => setMobileNav(true)} aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded={mobileNav}><Icon name="menu" /></button>
           <div className="page-title"><h1>{activePage.title}</h1><p>{activePage.subtitle}</p></div>
-          {currentPage === 'catalog' ? <label className="global-search"><Icon name="search" size={17} /><span className="sr-only">Search APIs</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search APIs, tags, providers…" /><kbd>⌘ K</kbd></label> : <div className="topbar-spacer" />}
           <button className="icon-button" type="button" aria-label="Help" onClick={() => navigatePage('documentation')}><Icon name="help" /></button>
         </header>
 

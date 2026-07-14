@@ -65,16 +65,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* Header */
 .admin-main { min-width: 0; }
-.topbar { height: 78px; padding: 0 22px; display: grid; grid-template-columns: minmax(230px, 1fr) minmax(240px, 390px) auto; gap: 14px; align-items: center; position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
+.topbar { height: 78px; padding: 0 22px; display: grid; grid-template-columns: minmax(230px, 1fr) auto; gap: 14px; align-items: center; position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
 .menu-button { display: none; }
 .page-title h1 { margin: 0; font-size: 19px; line-height: 1.15; letter-spacing: -.035em; }
 .page-title p { margin: 4px 0 0; color: #71809c; font-size: 10px; }
-.global-search, .module-search { display: flex; align-items: center; color: #8995aa; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-.global-search { height: 39px; padding: 0 10px; gap: 8px; }
-.topbar-spacer { min-width: 0; }
-.global-search input, .module-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #22304c; background: transparent; font-size: 10px; }
-.global-search input::placeholder, .module-search input::placeholder { color: #9aa5b8; }
-.global-search kbd { min-width: 38px; height: 24px; flex: 0 0 auto; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e5eaf2; border-radius: 5px; color: #76839a; background: #f4f6fa; box-shadow: inset 0 -1px 0 #dfe5ee; font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.module-search { display: flex; align-items: center; color: #8995aa; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.module-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #22304c; background: transparent; font-size: 10px; }
+.module-search input::placeholder { color: #9aa5b8; }
 .icon-button { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 8px; color: #62708c; background: transparent; cursor: pointer; position: relative; }
 .icon-button:hover { background: #f2f5fa; }
 
@@ -307,7 +304,7 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
   .metric-card { padding: 12px; gap: 9px; }
   .metric-icon { width: 32px; height: 32px; }
   .metric-card strong { font-size: 18px; }
-  .topbar { grid-template-columns: minmax(210px, 1fr) minmax(210px, 320px) auto; }
+  .topbar { grid-template-columns: minmax(210px, 1fr) auto; }
 }
 
 @media (max-width: 1180px) {
@@ -318,11 +315,11 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
   .detail-panel { width: 380px; max-width: 100%; position: fixed; right: 0; top: 0; z-index: 50; transform: translateX(105%); box-shadow: -20px 0 50px rgba(32,53,88,.14); transition: transform 180ms ease; }
   .detail-panel.mobile-open { transform: translateX(0); }
   .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .topbar { grid-template-columns: minmax(200px, 1fr) minmax(210px, 320px) auto; }
+  .topbar { grid-template-columns: minmax(200px, 1fr) auto; }
 }
 
 @media (max-width: 920px) {
-  .topbar { grid-template-columns: minmax(190px, 1fr) minmax(200px, 300px) auto; }
+  .topbar { grid-template-columns: minmax(190px, 1fr) auto; }
   .lab-grid, .agent-section { grid-template-columns: 1fr; }
   .launch-grid { grid-template-columns: 1fr; }
   .agent-section { gap: 24px; }
@@ -351,8 +348,6 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
   .menu-button { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 7px; color: #586781; background: #fff; }
   .page-title h1 { font-size: 16px; }
   .page-title p { display: none; }
-  .global-search { grid-column: 1 / -1; grid-row: 2; }
-  .topbar-spacer { display: none; }
   .dashboard { padding: 13px 12px 55px; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .metric-card { min-height: 78px; padding: 11px; }
