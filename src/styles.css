@@ -74,7 +74,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .topbar-spacer { min-width: 0; }
 .global-search input, .module-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #22304c; background: transparent; font-size: 10px; }
 .global-search input::placeholder, .module-search input::placeholder { color: #9aa5b8; }
-.global-search kbd { padding: 3px 5px; border-radius: 4px; color: #8994aa; background: #f2f5f9; font: 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.global-search kbd { min-width: 38px; height: 24px; flex: 0 0 auto; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e5eaf2; border-radius: 5px; color: #76839a; background: #f4f6fa; box-shadow: inset 0 -1px 0 #dfe5ee; font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .icon-button { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 8px; color: #62708c; background: transparent; cursor: pointer; position: relative; }
 .icon-button:hover { background: #f2f5fa; }
 
@@ -122,14 +122,15 @@ thead th:nth-child(8) { width: 13%; }
 tbody tr { border-bottom: 1px solid #edf0f5; transition: background 120ms ease, box-shadow 120ms ease; }
 tbody tr:hover { background: #fafcff; }
 tbody tr.selected { background: #f4f8ff; box-shadow: inset 2px 0 var(--blue), inset -2px 0 var(--blue); }
-tbody td { height: 56px; padding: 7px 8px; color: #54617a; font-size: 8px; vertical-align: middle; }
+tbody td { height: 60px; padding: 8px; color: #54617a; font-size: 8px; vertical-align: middle; }
 tbody td:first-child { text-align: center; }
 tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue); }
 .api-identity { width: 100%; min-width: 0; padding: 0; display: grid; grid-template-columns: 27px minmax(0, 1fr); align-items: center; gap: 8px; border: 0; color: inherit; background: transparent; cursor: pointer; text-align: left; }
 .api-identity > span, .active-api > span, .detail-title > span { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 6px; color: color-mix(in srgb, var(--api-color) 72%, #0e1932); background: color-mix(in srgb, var(--api-color) 14%, white); border: 1px solid color-mix(in srgb, var(--api-color) 32%, white); font: 750 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .api-identity > div, .provider-cell { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.api-identity b, .provider-cell b { overflow: hidden; color: #15203a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.api-identity small { overflow: hidden; color: #7f8ba1; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
+.api-identity b { overflow: hidden; color: #15203a; font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.provider-cell b { overflow: hidden; color: #15203a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.api-identity small { overflow: hidden; color: #75839b; font-size: 9px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .provider-cell a { display: inline-flex; align-items: center; gap: 4px; overflow: hidden; color: #5f6d87; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
 .provider-cell a:hover { color: var(--blue); }
 .tag { width: max-content; padding: 3px 6px; display: inline-flex; align-items: center; border-radius: 9px; font-size: 7px; font-weight: 650; white-space: nowrap; }
