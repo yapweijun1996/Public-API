@@ -12,13 +12,29 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(58)
+    expect(apiCatalog).toHaveLength(64)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
-    for (const provider of ['Open-Meteo', 'Random User', 'Dog CEO', 'JSONPlaceholder', 'Nager.Date']) {
+    for (const provider of ['Random User', 'Dog CEO', 'JSONPlaceholder', 'Nager.Date']) {
       expect(apiCatalog.filter((api) => api.provider === provider), provider).toHaveLength(1)
     }
+  })
+
+  it('builds the six new keyless interactive API requests', () => {
+    const urls = Object.fromEntries(['geocoding-search', 'open-meteo-air-quality', 'sunrise-sunset', 'nasa-eonet-events', 'mbta-transit-routes', 'open-trivia'].map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['geocoding-search'].searchParams.get('name')).toBe('Singapore')
+    expect(urls['open-meteo-air-quality'].searchParams.get('current')).toContain('us_aqi')
+    expect(urls['sunrise-sunset'].pathname).toBe('/v2')
+    expect(urls['nasa-eonet-events'].searchParams.get('status')).toBe('open')
+    expect(urls['mbta-transit-routes'].searchParams.get('filter[type]')).toBe('0,1')
+    expect(urls['open-trivia'].searchParams.get('type')).toBe('multiple')
   })
 
   it('builds the requested long-history market demos', () => {

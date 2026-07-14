@@ -8,9 +8,13 @@ export type PreviewLayout =
   | 'media-gallery'
   | 'location-map'
   | 'calendar-timeline'
+  | 'solar-cycle'
+  | 'natural-events'
+  | 'transit-board'
+  | 'trivia-game'
   | 'result-list'
 
-export type WeatherPreviewVariant = 'current' | 'four-day' | 'twenty-four-hour' | 'area-forecast' | 'station-readings' | 'regional-air-quality' | 'uv-index'
+export type WeatherPreviewVariant = 'current' | 'four-day' | 'twenty-four-hour' | 'area-forecast' | 'station-readings' | 'regional-air-quality' | 'air-quality-forecast' | 'uv-index'
 
 export type DemoPreviewItem = {
   title: string
@@ -98,13 +102,17 @@ export const buildDemoPreview = (data: unknown): DemoPreviewItem[] => {
   })
 }
 
-const weatherIds = ['weather', 'data-gov-24hr-forecast', 'data-gov-4day-forecast', 'data-gov-air-temperature', 'data-gov-forecast-2hr', 'data-gov-pm25', 'data-gov-psi', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-uv-index', 'data-gov-wind-direction', 'data-gov-wind-speed']
+const weatherIds = ['weather', 'open-meteo-air-quality', 'data-gov-24hr-forecast', 'data-gov-4day-forecast', 'data-gov-air-temperature', 'data-gov-forecast-2hr', 'data-gov-pm25', 'data-gov-psi', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-uv-index', 'data-gov-wind-direction', 'data-gov-wind-speed']
 const stationWeatherIds = ['data-gov-air-temperature', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-wind-direction', 'data-gov-wind-speed']
 const mapIds = ['data-gov-carpark', 'data-gov-taxi', 'postcodes-io', 'usgs', 'nhtsa-vpic']
 const galleryIds = ['dogs', 'people', 'data-gov-traffic-images', 'met-museum-object-detail', 'met-museum-search', 'art-institute-search', 'pokeapi', 'tvmaze-search', 'open-food-facts', 'gbif-species-search']
 
 export function selectPreviewLayout(api: Pick<ApiDemo, 'id' | 'category'>): PreviewLayout {
   if (api.id === 'countries') return 'country-profile'
+  if (api.id === 'sunrise-sunset') return 'solar-cycle'
+  if (api.id === 'nasa-eonet-events') return 'natural-events'
+  if (api.id === 'mbta-transit-routes') return 'transit-board'
+  if (api.id === 'open-trivia') return 'trivia-game'
   if (['nws-weather', 'carbon-intensity-gb'].includes(api.id)) return 'result-list'
   if (weatherIds.includes(api.id) || api.category === 'Weather') return 'weather-dashboard'
   if (api.category === 'Finance' || api.category === 'Economy') return 'market-chart'
@@ -115,6 +123,7 @@ export function selectPreviewLayout(api: Pick<ApiDemo, 'id' | 'category'>): Prev
 }
 
 export function selectWeatherPreviewVariant(api: Pick<ApiDemo, 'id'>): WeatherPreviewVariant {
+  if (api.id === 'open-meteo-air-quality') return 'air-quality-forecast'
   if (api.id === 'data-gov-4day-forecast') return 'four-day'
   if (api.id === 'data-gov-24hr-forecast') return 'twenty-four-hour'
   if (api.id === 'data-gov-forecast-2hr') return 'area-forecast'
@@ -150,7 +159,16 @@ const findByKey = (value: unknown, keys: string[], depth = 0): unknown => {
 
 const formatNumber = (value: number, digits = 1) => new Intl.NumberFormat('en', { maximumFractionDigits: digits }).format(value)
 const compactNumber = (value: number) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
-const cleanText = (value: unknown) => textValue(value)?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+const decodeHtml = (value: string) => value.replace(/&(#x[\da-f]+|#\d+|quot|apos|amp|lt|gt);/gi, (entity, code: string) => {
+  const named: Record<string, string> = { quot: '"', apos: "'", amp: '&', lt: '<', gt: '>' }
+  if (code[0] !== '#') return named[code.toLowerCase()] ?? entity
+  const numeric = Number.parseInt(code[1].toLowerCase() === 'x' ? code.slice(2) : code.slice(1), code[1].toLowerCase() === 'x' ? 16 : 10)
+  return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : entity
+})
+const cleanText = (value: unknown) => {
+  const text = textValue(value)
+  return text ? decodeHtml(text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()) : undefined
+}
 
 const weatherCondition = (code: number | undefined) => {
   if (code === undefined) return { label: 'Live conditions', icon: '◌' }
@@ -348,6 +366,22 @@ function RegionalAirQualityPreview({ data, api }: { data: unknown; api: ApiDemo 
   </div>
 }
 
+function AirQualityForecastPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const current = isRecord(root.current) ? root.current : {}
+  const units = isRecord(root.current_units) ? root.current_units : {}
+  const aqi = numberValue(current.us_aqi)
+  if (aqi === undefined) return <div className="weather-empty"><strong>Air-quality reading unavailable</strong><span>The response did not include a current U.S. AQI value.</span></div>
+  const status = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Sensitive groups' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Very unhealthy' : 'Hazardous'
+  const metrics = [
+    { label: 'PM2.5', key: 'pm2_5' }, { label: 'PM10', key: 'pm10' }, { label: 'Nitrogen dioxide', key: 'nitrogen_dioxide' }, { label: 'Ozone', key: 'ozone' },
+  ]
+  return <div className="weather-preview global-air-preview" data-weather-view="air-quality-forecast">
+    <div className="global-air-hero"><div><span>⌖ {textValue(root.timezone)?.replace('_', ' ') ?? 'Selected coordinates'}</span><strong>{formatNumber(aqi)}</strong><b>U.S. AQI · {status}</b><small>Updated {textValue(current.time)?.replace('T', ' ') ?? 'now'}</small></div><div className="air-orbit" aria-hidden="true"><i/><i/><i/></div></div>
+    <div className="global-air-metrics">{metrics.map((metric) => <article key={metric.key}><small>{metric.label}</small><strong>{numberValue(current[metric.key]) === undefined ? '—' : formatNumber(numberValue(current[metric.key]) as number)}</strong><span>{textValue(units[metric.key]) ?? 'µg/m³'}</span></article>)}</div>
+  </div>
+}
+
 function UvIndexPreview({ data }: { data: unknown }) {
   const item = firstResponseItem(data)
   const indexes = item && Array.isArray(item.index) ? item.index.filter(isRecord) : []
@@ -365,6 +399,7 @@ function WeatherPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   if (variant === 'area-forecast') return <AreaForecastPreview data={data}/>
   if (variant === 'station-readings') return <StationReadingsPreview data={data} api={api}/>
   if (variant === 'regional-air-quality') return <RegionalAirQualityPreview data={data} api={api}/>
+  if (variant === 'air-quality-forecast') return <AirQualityForecastPreview data={data}/>
   if (variant === 'uv-index') return <UvIndexPreview data={data}/>
   return <CurrentConditionsPreview data={data} api={api}/>
 }
@@ -517,6 +552,62 @@ function CalendarPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   })}</ol>
 }
 
+function SolarCyclePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const sunrise = textValue(root.sunrise)
+  const sunset = textValue(root.sunset)
+  if (!sunrise || !sunset) return <div className="weather-empty"><strong>Solar data unavailable</strong><span>The response did not include sunrise and sunset times.</span></div>
+  const dayLength = numberValue(root.day_length)
+  const duration = dayLength === undefined ? '—' : `${Math.floor(dayLength / 3600)}h ${Math.round((dayLength % 3600) / 60)}m`
+  const moments = [
+    { label: 'First light', value: root.first_light, icon: '◔' }, { label: 'Sunrise', value: root.sunrise, icon: '↑' },
+    { label: 'Solar noon', value: root.solar_noon, icon: '☀' }, { label: 'Sunset', value: root.sunset, icon: '↓' }, { label: 'Last light', value: root.last_light, icon: '◕' },
+  ]
+  return <div className="solar-preview">
+    <div className="solar-hero"><div><span>{textValue(root.tzid) ?? 'Local solar time'} · {textValue(root.date) ?? 'Selected date'}</span><strong>{timeLabel(sunrise)} <i>→</i> {timeLabel(sunset)}</strong><b>{duration} of daylight</b><small>{formatNumber(Number(root.lat), 3)}, {formatNumber(Number(root.lng), 3)} · {textValue(root.moon_phase) ?? 'Moon data available'}</small></div><span aria-hidden="true">☀</span></div>
+    <ol className="solar-timeline">{moments.map((moment) => <li key={moment.label}><span aria-hidden="true">{moment.icon}</span><div><small>{moment.label}</small><strong>{timeLabel(moment.value)}</strong></div></li>)}</ol>
+  </div>
+}
+
+function NaturalEventsPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const events = Array.isArray(root.events) ? root.events.filter(isRecord).slice(0, 6) : []
+  if (!events.length) return <div className="weather-empty"><strong>No active events found</strong><span>Try a broader category or a longer date range.</span></div>
+  return <div className="natural-events-preview"><div className="event-overview"><div><span>NASA EONET monitor</span><strong>{events.length}</strong><b>active natural events</b></div><div className="event-globe" aria-hidden="true">◎<i/><i/><i/></div></div><div className="event-grid">{events.map((event, index) => {
+    const categories = Array.isArray(event.categories) ? event.categories.filter(isRecord) : []
+    const geometry = Array.isArray(event.geometry) ? event.geometry.filter(isRecord) : []
+    const latest = geometry.at(-1)
+    const coordinates = latest && Array.isArray(latest.coordinates) ? latest.coordinates : []
+    const magnitude = numberValue(latest?.magnitudeValue)
+    return <article key={textValue(event.id) ?? index}><span>{forecastSymbol(textValue(categories[0]?.title))}</span><div><small>{textValue(categories[0]?.title) ?? 'Natural event'} · {timeLabel(latest?.date)}</small><h3>{cleanText(event.title) ?? `Event ${index + 1}`}</h3><p>{coordinates.length >= 2 ? `${formatNumber(Number(coordinates[1]), 3)}, ${formatNumber(Number(coordinates[0]), 3)}` : 'Location tracked by EONET'}{magnitude === undefined ? '' : ` · ${formatNumber(magnitude)} ${textValue(latest?.magnitudeUnit) ?? ''}`}</p></div><em>{event.closed ? 'Closed' : 'Open'}</em></article>
+  })}</div></div>
+}
+
+function TransitBoardPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const routes = Array.isArray(root.data) ? root.data.filter(isRecord).slice(0, 10) : []
+  if (!routes.length) return <div className="weather-empty"><strong>No transit routes found</strong><span>The response did not include MBTA route records.</span></div>
+  return <div className="transit-preview"><div className="transit-summary"><span>Boston network</span><strong>{routes.length}</strong><b>routes in this view</b><small>Live MBTA route catalogue</small></div><div className="transit-routes">{routes.map((route, index) => {
+    const attributes = isRecord(route.attributes) ? route.attributes : {}
+    const colorValue = textValue(attributes.color) ?? '165C96'
+    const color = /^[\da-f]{6}$/i.test(colorValue) ? `#${colorValue}` : '#165c96'
+    const destinations = Array.isArray(attributes.direction_destinations) ? attributes.direction_destinations.map(cleanText).filter(Boolean) : []
+    return <article key={textValue(route.id) ?? index} style={{ '--route-color': color } as CSSProperties}><span>{textValue(attributes.short_name) || textValue(route.id)?.slice(0, 2) || 'T'}</span><div><small>{cleanText(attributes.description) ?? 'MBTA service'}</small><h3>{cleanText(attributes.long_name) ?? textValue(route.id) ?? `Route ${index + 1}`}</h3><p>{destinations.length ? destinations.join(' ↔ ') : 'Destination information available'}</p></div><em>Route</em></article>
+  })}</div></div>
+}
+
+function TriviaGamePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const questions = Array.isArray(root.results) ? root.results.filter(isRecord).slice(0, 6) : []
+  if (!questions.length) return <div className="weather-empty"><strong>No trivia questions found</strong><span>Try a different category or difficulty.</span></div>
+  return <div className="trivia-preview"><div className="trivia-score"><span>Quiz deck</span><strong>{questions.length}</strong><b>questions ready</b><small>Correct answers are highlighted for this developer demo.</small></div><div className="trivia-grid">{questions.map((question, index) => {
+    const correct = cleanText(question.correct_answer) ?? 'Answer unavailable'
+    const incorrect = Array.isArray(question.incorrect_answers) ? question.incorrect_answers.map(cleanText).filter((answer): answer is string => Boolean(answer)) : []
+    const answers = [correct, ...incorrect]
+    return <article key={`${correct}-${index}`}><header><span>{index + 1}</span><div><small>{cleanText(question.category) ?? 'Trivia'} · {cleanText(question.difficulty) ?? 'mixed'}</small><h3>{cleanText(question.question) ?? `Question ${index + 1}`}</h3></div></header><ul>{answers.map((answer, answerIndex) => <li className={answerIndex === 0 ? 'correct' : ''} key={`${answer}-${answerIndex}`}><span>{String.fromCharCode(65 + answerIndex)}</span>{answer}{answerIndex === 0 && <b>Answer</b>}</li>)}</ul></article>
+  })}</div></div>
+}
+
 function ResultListPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const items = buildDemoPreview(data)
   return <div className="demo-preview-grid">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
@@ -529,6 +620,10 @@ const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title:
   'media-gallery': { icon: '▧', eyebrow: 'Live response · Visual layout', title: 'Visual gallery', description: 'An image-led interface using media, profile, or catalogue fields from the response.' },
   'location-map': { icon: '⌖', eyebrow: 'Live response · Location layout', title: 'Location explorer', description: 'A spatial interface that maps coordinates and keeps every location agent-readable.' },
   'calendar-timeline': { icon: '□', eyebrow: 'Live response · Calendar layout', title: 'Event timeline', description: 'A chronological interface built from dates, event names, and regional metadata.' },
+  'solar-cycle': { icon: '☀', eyebrow: 'Live response · Solar layout', title: 'Sun & moon cycle', description: 'A daylight timeline built from local sunrise, sunset, twilight, solar, and lunar data.' },
+  'natural-events': { icon: '◎', eyebrow: 'Live response · Earth monitor', title: 'Natural events monitor', description: 'Near-real-time natural events organized by category, location, status, and observation time.' },
+  'transit-board': { icon: 'T', eyebrow: 'Live response · Transit layout', title: 'Transit route board', description: 'A route-focused interface using MBTA colors, destinations, and service types.' },
+  'trivia-game': { icon: '?', eyebrow: 'Live response · Game layout', title: 'Trivia challenge', description: 'A playable-looking question deck with decoded prompts, answer options, and difficulty labels.' },
   'result-list': { icon: '✦', eyebrow: 'Live response · Results layout', title: 'Result explorer', description: 'A structured result browser adapted to this API response.' },
 }
 
@@ -539,6 +634,7 @@ const weatherPreviewMeta: Record<WeatherPreviewVariant, { icon: string; eyebrow:
   'area-forecast': { icon: '⌖', eyebrow: 'Live response · Neighbourhood forecast', title: '2-hour area forecast', description: 'Short-range conditions grouped by named Singapore neighbourhoods.' },
   'station-readings': { icon: '◉', eyebrow: 'Live response · Sensor network', title: 'Station readings', description: 'Live measurements joined with station names, units, coordinates, and network statistics.' },
   'regional-air-quality': { icon: '≋', eyebrow: 'Live response · Air quality', title: 'Regional air quality', description: 'PSI and particulate readings compared across Singapore’s five reporting regions.' },
+  'air-quality-forecast': { icon: '≋', eyebrow: 'Live response · Air quality', title: 'Current air quality', description: 'Current AQI and pollutant concentrations mapped directly from the selected coordinates.' },
   'uv-index': { icon: '☀', eyebrow: 'Live response · UV monitoring', title: 'UV index', description: 'The latest ultraviolet exposure level and its reporting timeline.' },
 }
 
@@ -553,6 +649,10 @@ export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown
   else if (layout === 'media-gallery') content = <MediaGalleryPreview data={data} api={api}/>
   else if (layout === 'location-map') content = <LocationPreview data={data} api={api}/>
   else if (layout === 'calendar-timeline') content = <CalendarPreview data={data} api={api}/>
+  else if (layout === 'solar-cycle') content = <SolarCyclePreview data={data}/>
+  else if (layout === 'natural-events') content = <NaturalEventsPreview data={data}/>
+  else if (layout === 'transit-board') content = <TransitBoardPreview data={data}/>
+  else if (layout === 'trivia-game') content = <TriviaGamePreview data={data}/>
   else content = <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`

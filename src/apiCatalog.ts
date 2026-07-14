@@ -270,7 +270,8 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
   buildUrl: () => endpoint,
 })
 
-const today = new Date().toISOString().slice(0, 10)
+const localNow = new Date()
+const today = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`
 
 export const yahooSgxSymbols: FieldOption[] = [
   { value: 'D05', label: 'D05 · DBS Group' },
@@ -319,6 +320,105 @@ const parseReaderJson = (text: string): unknown => {
   }
   return JSON.parse(text.slice(markerIndex + marker.length).trim()) as unknown
 }
+
+const additionalInteractiveApis: ApiDemo[] = [
+  {
+    id: 'geocoding-search', name: 'Global Geocoding', provider: 'Open-Meteo', category: 'Geo',
+    description: 'Search worldwide cities and postal codes, then inspect coordinates, timezones, and population.',
+    documentationUrl: 'https://open-meteo.com/en/docs/geocoding-api', accent: '#2563eb', monogram: 'GC',
+    fields: [
+      { id: 'name', label: 'Location', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Enter at least three characters for fuzzy matching.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 matching locations.' },
+    ],
+    buildUrl: ({ name = 'Singapore', count = '6' }) => {
+      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 6))
+      const query = new URLSearchParams({ name: name.trim() || 'Singapore', count: String(safeCount), language: 'en', format: 'json' })
+      return `https://geocoding-api.open-meteo.com/v1/search?${query.toString()}`
+    },
+  },
+  {
+    id: 'open-meteo-air-quality', name: 'Global Air Quality', provider: 'Open-Meteo', category: 'Environment',
+    description: 'Read current AQI, particulate matter, nitrogen dioxide, and ozone for any coordinate.',
+    documentationUrl: 'https://open-meteo.com/en/docs/air-quality-api', accent: '#0f9f8f', monogram: 'AQ',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
+      const query = new URLSearchParams({ latitude, longitude, current: 'us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone', timezone: 'auto' })
+      return `https://air-quality-api.open-meteo.com/v1/air-quality?${query.toString()}`
+    },
+    usageNote: 'Air-quality data requires attribution to Open-Meteo and the Copernicus Atmosphere Monitoring Service (CAMS).',
+  },
+  {
+    id: 'sunrise-sunset', name: 'Sunrise & Sunset', provider: 'Sunrise-Sunset.org', category: 'Calendar',
+    description: 'Calculate sunrise, sunset, twilight, golden hour, solar noon, and moon data for a location.',
+    documentationUrl: 'https://sunrise-sunset.org/api', accent: '#f59e0b', monogram: 'SS',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A latitude from -90 to 90.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A longitude from -180 to 180.' },
+      { id: 'date', label: 'Date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD, today, or tomorrow.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', date = today }) => {
+      const query = new URLSearchParams({ lat: latitude, lng: longitude, date: date.trim() || 'today' })
+      return `https://api.sunrise-sunset.org/v2?${query.toString()}`
+    },
+    usageNote: 'Free and keyless. Display visible attribution to sunrise-sunset.org when using the data.',
+  },
+  {
+    id: 'nasa-eonet-events', name: 'NASA Natural Events', provider: 'NASA EONET', category: 'Nature',
+    description: 'Explore near-real-time wildfires, storms, volcanoes, floods, and other natural events worldwide.',
+    documentationUrl: 'https://eonet.gsfc.nasa.gov/docs/v3', accent: '#e23b3b', monogram: 'NE',
+    fields: [
+      { id: 'category', label: 'Category', type: 'select', defaultValue: 'all', help: 'Filter active events by NASA EONET category.', options: [
+        { label: 'All events', value: 'all' }, { label: 'Wildfires', value: 'wildfires' }, { label: 'Severe storms', value: 'severeStorms' },
+        { label: 'Volcanoes', value: 'volcanoes' }, { label: 'Floods', value: 'floods' }, { label: 'Earthquakes', value: 'earthquakes' },
+      ] },
+      { id: 'days', label: 'Recent days', type: 'number', defaultValue: '30', min: 1, max: 365, help: 'Look back between 1 and 365 days.' },
+      { id: 'limit', label: 'Events', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 active events.' },
+    ],
+    buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
+      const query = new URLSearchParams({ status: 'open', days: String(Math.min(365, Math.max(1, Number.parseInt(days, 10) || 30))), limit: String(Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))) })
+      if (category !== 'all') query.set('category', category)
+      return `https://eonet.gsfc.nasa.gov/api/v3/events?${query.toString()}`
+    },
+  },
+  {
+    id: 'mbta-transit-routes', name: 'MBTA Transit Routes', provider: 'MBTA', category: 'Utility',
+    description: 'Browse Boston subway, commuter rail, bus, and ferry routes from the MBTA v3 service.',
+    documentationUrl: 'https://api-v3.mbta.com/docs/swagger', accent: '#165c96', monogram: 'T',
+    fields: [
+      { id: 'routeType', label: 'Transit mode', type: 'select', defaultValue: '0,1', help: 'Choose a family of MBTA routes.', options: [
+        { label: 'Subway & light rail', value: '0,1' }, { label: 'Commuter rail', value: '2' }, { label: 'Bus', value: '3' }, { label: 'Ferry', value: '4' },
+      ] },
+    ],
+    buildUrl: ({ routeType = '0,1' }) => {
+      const query = new URLSearchParams({ 'filter[type]': routeType || '0,1' })
+      return `https://api-v3.mbta.com/routes?${query.toString()}`
+    },
+    usageNote: 'The MBTA allows keyless experimentation with a lower request allowance; production apps should request a free API key.',
+  },
+  {
+    id: 'open-trivia', name: 'Trivia Challenge', provider: 'Open Trivia DB', category: 'Games',
+    description: 'Generate multiple-choice trivia questions for quiz prototypes and interactive demos.',
+    documentationUrl: 'https://opentdb.com/api_config.php', accent: '#7c3aed', monogram: 'Q',
+    fields: [
+      { id: 'amount', label: 'Questions', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Generate between 1 and 10 questions.' },
+      { id: 'category', label: 'Category', type: 'select', defaultValue: '9', help: 'Choose a trivia category.', options: [
+        { label: 'General knowledge', value: '9' }, { label: 'Books', value: '10' }, { label: 'Film', value: '11' }, { label: 'Science & nature', value: '17' },
+        { label: 'Computers', value: '18' }, { label: 'Geography', value: '22' }, { label: 'History', value: '23' }, { label: 'Sports', value: '21' },
+      ] },
+      { id: 'difficulty', label: 'Difficulty', type: 'select', defaultValue: 'medium', help: 'Choose the question difficulty.', options: [
+        { label: 'Easy', value: 'easy' }, { label: 'Medium', value: 'medium' }, { label: 'Hard', value: 'hard' },
+      ] },
+    ],
+    buildUrl: ({ amount = '6', category = '9', difficulty = 'medium' }) => {
+      const safeAmount = Math.min(10, Math.max(1, Number.parseInt(amount, 10) || 6))
+      const query = new URLSearchParams({ amount: String(safeAmount), category, difficulty, type: 'multiple' })
+      return `https://opentdb.com/api.php?${query.toString()}`
+    },
+  },
+]
 
 const importedRecommendedApis: ApiDemo[] = [
   fixedApi({
@@ -704,7 +804,7 @@ const importedRecommendedApis: ApiDemo[] = [
   },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...importedRecommendedApis]
+export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))

@@ -67,9 +67,52 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'dogs', category: 'Nature' })).toBe('media-gallery')
     expect(selectPreviewLayout({ id: 'usgs', category: 'Geo' })).toBe('location-map')
     expect(selectPreviewLayout({ id: 'holidays', category: 'Calendar' })).toBe('calendar-timeline')
+    expect(selectPreviewLayout({ id: 'sunrise-sunset', category: 'Calendar' })).toBe('solar-cycle')
+    expect(selectPreviewLayout({ id: 'nasa-eonet-events', category: 'Nature' })).toBe('natural-events')
+    expect(selectPreviewLayout({ id: 'mbta-transit-routes', category: 'Utility' })).toBe('transit-board')
+    expect(selectPreviewLayout({ id: 'open-trivia', category: 'Games' })).toBe('trivia-game')
+    expect(selectPreviewLayout({ id: 'geocoding-search', category: 'Geo' })).toBe('location-map')
     expect(selectPreviewLayout({ id: 'carbon-intensity-gb', category: 'Environment' })).toBe('result-list')
     expect(selectPreviewLayout({ id: 'nws-weather', category: 'Weather' })).toBe('result-list')
     expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('result-list')
+  })
+})
+
+describe('new interactive API previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('renders current global air-quality measurements', () => {
+    render(<ResponseDemoPreview api={api('open-meteo-air-quality')} data={{ timezone: 'Asia/Singapore', current_units: { pm2_5: 'μg/m³' }, current: { time: '2026-07-15T07:00', us_aqi: 66, pm2_5: 19.6, pm10: 26.5, nitrogen_dioxide: 12.6, ozone: 56 } }}/> )
+    const preview = screen.getByRole('region', { name: 'Current air quality' })
+    expect(preview).toHaveAttribute('data-preview-variant', 'air-quality-forecast')
+    expect(within(preview).getByText('U.S. AQI · Moderate')).toBeInTheDocument()
+    expect(within(preview).getByText('19.6')).toBeInTheDocument()
+  })
+
+  it('renders a solar timeline from sunrise-sunset v2', () => {
+    render(<ResponseDemoPreview api={api('sunrise-sunset')} data={{ date: '2026-07-15', tzid: 'Asia/Singapore', lat: 1.3521, lng: 103.8198, sunrise: '2026-07-15T07:03:51+08:00', sunset: '2026-07-15T19:17:33+08:00', solar_noon: '2026-07-15T13:10:42+08:00', first_light: '2026-07-15T05:50:49+08:00', last_light: '2026-07-15T20:30:35+08:00', day_length: 44022, moon_phase: 'New Moon' }}/> )
+    const preview = screen.getByRole('region', { name: 'Sun & moon cycle' })
+    expect(within(preview).getByText('12h 14m of daylight')).toBeInTheDocument()
+    expect(within(preview).getByText('New Moon', { exact: false })).toBeInTheDocument()
+  })
+
+  it('renders NASA events, MBTA routes, and decoded trivia content', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('nasa-eonet-events')} data={{ events: [{ id: 'E1', title: 'Pacific Wildfire', closed: null, categories: [{ title: 'Wildfires' }], geometry: [{ date: '2026-07-13T11:54:00Z', coordinates: [-94.39, 46.24], magnitudeValue: 503, magnitudeUnit: 'acres' }] }] }}/> )
+    expect(screen.getByRole('region', { name: 'Natural events monitor' })).toHaveTextContent('Pacific Wildfire')
+
+    rerender(<ResponseDemoPreview api={api('mbta-transit-routes')} data={{ data: [{ id: 'Red', attributes: { color: 'DA291C', description: 'Rapid Transit', long_name: 'Red Line', direction_destinations: ['Ashmont/Braintree', 'Alewife'] } }] }}/> )
+    expect(screen.getByRole('region', { name: 'Transit route board' })).toHaveTextContent('Ashmont/Braintree ↔ Alewife')
+
+    rerender(<ResponseDemoPreview api={api('open-trivia')} data={{ response_code: 0, results: [{ category: 'General Knowledge', difficulty: 'medium', question: 'When did Halley&#039;s Comet appear?', correct_answer: '1986', incorrect_answers: ['2001', '1942', '1909'] }] }}/> )
+    const trivia = screen.getByRole('region', { name: 'Trivia challenge' })
+    expect(trivia).toHaveTextContent("When did Halley's Comet appear?")
+    expect(within(trivia).getByText('1986')).toBeInTheDocument()
   })
 })
 
@@ -129,5 +172,6 @@ describe('data.gov.sg adaptive weather previews', () => {
     expect(selectWeatherPreviewVariant({ id: 'data-gov-rainfall' })).toBe('station-readings')
     expect(selectWeatherPreviewVariant({ id: 'data-gov-pm25' })).toBe('regional-air-quality')
     expect(selectWeatherPreviewVariant({ id: 'data-gov-uv-index' })).toBe('uv-index')
+    expect(selectWeatherPreviewVariant({ id: 'open-meteo-air-quality' })).toBe('air-quality-forecast')
   })
 })
