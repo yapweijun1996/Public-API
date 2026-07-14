@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  apiCategories,
   apiCatalog,
   getDefaultParameters,
   validateParameters,
@@ -53,7 +54,7 @@ type IconName =
   | 'spark'
   | 'x'
 
-const categories: Array<'All' | ApiCategory> = ['All', 'Data', 'Utility', 'People', 'Nature']
+const categories: Array<'All' | ApiCategory> = ['All', ...apiCategories]
 
 const paths: Record<IconName, React.ReactNode> = {
   activity: <><path d="M3 12h4l2-7 4 14 2-7h6" /></>,
@@ -88,8 +89,17 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 
 async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   const url = api.buildUrl(parameters)
+  const method = api.method ?? 'GET'
+  const body = api.buildBody?.(parameters)
   const started = performance.now()
-  const response = await fetch(url, { headers: { Accept: 'application/json' } })
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
   const text = await response.text()
   let data: unknown
   try { data = JSON.parse(text) as unknown } catch { data = text }
@@ -98,7 +108,17 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
 }
 
 const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
-const codeSample = (url: string) => `const response = await fetch('${url}', {\n  headers: { Accept: 'application/json' },\n});\n\nconst data = await response.json();`
+const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
+  const url = api.buildUrl(parameters)
+  const method = api.method ?? 'GET'
+  const body = api.buildBody?.(parameters)
+  const options = [
+    `  method: '${method}',`,
+    `  headers: { Accept: 'application/json'${body === undefined ? '' : ", 'Content-Type': 'application/json'"} },`,
+    ...(body === undefined ? [] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
+  ].join('\n')
+  return `const response = await fetch('${url}', {\n${options}\n});\n\nconst data = await response.json();`
+}
 const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
 
 const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: string }> = {
@@ -124,9 +144,9 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
   collections: {
     icon: 'box', eyebrow: 'Curated workspaces', description: 'Start with a focused set of public APIs instead of searching the full inventory.',
     cards: [
-      { title: 'Keyless starter pack', description: 'All six APIs work without account setup or secret management.', meta: '6 APIs' },
-      { title: 'Data & geography', description: 'Country, content, and planning datasets for dashboard prototypes.', meta: '3 APIs' },
-      { title: 'Utility demos', description: 'Weather and holiday endpoints for practical workflow examples.', meta: '2 APIs' },
+      { title: 'Keyless starter pack', description: 'Every catalog demo works without account setup or secret management.', meta: `${apiCatalog.length} APIs` },
+      { title: 'Singapore open data', description: 'Weather, environment, mobility, and traffic datasets from data.gov.sg.', meta: `${apiCatalog.filter((api) => api.category === 'Singapore').length} APIs` },
+      { title: 'Developer toolbox', description: 'Package, security, community, and repository APIs for engineering demos.', meta: `${apiCatalog.filter((api) => api.category === 'Developer').length} APIs` },
     ],
   },
   providers: {
@@ -136,12 +156,12 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
   tags: {
     icon: 'filter', eyebrow: 'Catalog taxonomy', description: 'Use tags to help people and agents select the right demo module.',
     cards: [
-      { title: 'no-key', description: 'No API key or sign-up is required.', meta: '6 APIs' },
-      { title: 'GET', description: 'Read-only requests that are safe for demonstrations.', meta: '6 APIs' },
-      { title: 'Data', description: 'Structured records for dashboards and content views.', meta: '2 APIs' },
-      { title: 'Utility', description: 'Practical services for weather and scheduling.', meta: '2 APIs' },
-      { title: 'People', description: 'Placeholder identity data for interface prototypes.', meta: '1 API' },
-      { title: 'Nature', description: 'Media content for friendly visual demonstrations.', meta: '1 API' },
+      { title: 'no-key', description: 'No API key or sign-up is required.', meta: `${apiCatalog.length} APIs` },
+      { title: 'GET', description: 'Read-only public requests suitable for demonstrations.', meta: `${apiCatalog.filter((api) => (api.method ?? 'GET') === 'GET').length} APIs` },
+      ...apiCategories.map((category) => {
+        const count = apiCatalog.filter((api) => api.category === category).length
+        return { title: category, description: `Browse public demos in the ${category.toLowerCase()} category.`, meta: `${count} API${count === 1 ? '' : 's'}` }
+      }).filter((card) => !card.meta.startsWith('0 ')),
     ],
   },
   health: {
@@ -326,7 +346,7 @@ function App() {
   }
 
   const copyFetch = async () => {
-    await navigator.clipboard.writeText(codeSample(endpoint))
+    await navigator.clipboard.writeText(codeSample(activeApi, parameters))
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1400)
   }
@@ -388,8 +408,8 @@ function App() {
             {[
               { label: 'Total APIs', value: apiCatalog.length, note: '100% of catalog', icon: 'box' as IconName, tone: 'blue' },
               { label: 'Source linked', value: apiCatalog.length, note: 'Documentation attached', icon: 'link' as IconName, tone: 'blue' },
-              { label: 'Business review', value: 5, note: 'Demo ready', icon: 'shield' as IconName, tone: 'green' },
-              { label: 'Low risk', value: 5, note: 'Keyless GET requests', icon: 'activity' as IconName, tone: 'green' },
+              { label: 'Curated demos', value: apiCatalog.length, note: 'Ready to explore', icon: 'shield' as IconName, tone: 'green' },
+              { label: 'GET requests', value: apiCatalog.filter((api) => (api.method ?? 'GET') === 'GET').length, note: 'Read-only endpoints', icon: 'activity' as IconName, tone: 'green' },
               { label: 'No key', value: apiCatalog.length, note: 'No signup required', icon: 'alert' as IconName, tone: 'orange' },
               { label: 'Agent tools', value: 5, note: 'WebMCP controls', icon: 'agent' as IconName, tone: 'violet' },
             ].map((metric) => (
@@ -433,7 +453,7 @@ function App() {
                       <td data-label="Provider"><div className="provider-cell"><b>{api.provider}</b><a href={api.documentationUrl} target="_blank" rel="noreferrer">Documentation <Icon name="external" size={11} /></a></div></td>
                       <td data-label="Quality"><span className="tag green">verified</span></td>
                       <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> Low</span></td>
-                      <td data-label="Tags"><div className="tags"><span className="tag blue">no-key</span><span className="tag green">GET</span><span className="tag plain">{api.category}</span></div></td>
+                      <td data-label="Tags"><div className="tags"><span className="tag blue">no-key</span><span className="tag green">{api.method ?? 'GET'}</span><span className="tag plain">{api.category}</span></div></td>
                       <td data-label="Reviewed">2026-07-{String(14 - Math.min(index, 5)).padStart(2, '0')}</td>
                       <td data-label="Status"><span className="source-status"><i /> source-linked</span></td>
                     </tr>
@@ -450,8 +470,8 @@ function App() {
             <div className="lab-grid">
               <form className="parameter-card" onSubmit={submitRequest} noValidate>
                 <div className="active-api"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><small>Selected module</small><b>{activeApi.name}</b></div><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Docs <Icon name="external" size={12} /></a></div>
-                <div className="endpoint-box"><span>GET</span><code>{endpoint}</code></div>
-                <div className="parameter-heading"><b>Parameters</b><small>{activeApi.fields.length} required</small></div>
+                <div className="endpoint-box"><span>{activeApi.method ?? 'GET'}</span><code>{endpoint}</code></div>
+                <div className="parameter-heading"><b>Parameters</b><small>{activeApi.fields.length ? `${activeApi.fields.length} required` : 'No input required'}</small></div>
                 <div className="parameter-fields">
                   {activeApi.fields.map((field) => (
                     <label key={field.id}><span>{field.label}<em>required</em></span>
@@ -465,7 +485,7 @@ function App() {
               <div className="response-card">
                 <div className="response-head"><div role="tablist" aria-label="Request output"><button role="tab" aria-selected={outputTab === 'response'} type="button" onClick={() => setOutputTab('response')}>Response</button><button role="tab" aria-selected={outputTab === 'code'} type="button" onClick={() => setOutputTab('code')}>Fetch code</button></div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyFetch}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copied' : 'Copy'}</button></div>
                 <div className="response-body" aria-live="polite">
-                  {outputTab === 'code' ? <pre>{codeSample(endpoint)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>Ready to test</b><p>Configure the parameters and run this API.</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>Contacting {activeApi.provider}</b><p>Waiting for the public endpoint…</p></div> : request.status === 'error' ? <div className="response-error"><Icon name="alert" /><b>Request failed</b><p>{request.message}</p></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
+                  {outputTab === 'code' ? <pre>{codeSample(activeApi, parameters)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>Ready to test</b><p>Configure the parameters and run this API.</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>Contacting {activeApi.provider}</b><p>Waiting for the public endpoint…</p></div> : request.status === 'error' ? <div className="response-error"><Icon name="alert" /><b>Request failed</b><p>{request.message}</p></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
                 </div>
               </div>
             </div>
@@ -509,7 +529,7 @@ function App() {
         <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">no-key</span><span className="tag green">Low risk</span><span className="tag plain">{activeApi.category}</span></div>
         <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
         <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Commercial use</small>Suitable for demonstration and internal prototyping. Review the provider terms before production use.</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
-        <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>GET</b></div><code>{endpoint}</code></section>
+        <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? 'GET'}</b></div><code>{endpoint}</code></section>
         <div className="detail-actions"><button className="primary-action" type="button" onClick={() => { setDetailOpen(false); navigatePage('request-lab') }}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
       </aside>}
     </div>

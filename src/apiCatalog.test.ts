@@ -11,6 +11,16 @@ describe('API catalog', () => {
     }
   })
 
+  it('includes the 39 imported recommendations without duplicating the five existing providers', () => {
+    expect(apiCatalog).toHaveLength(45)
+    expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
+    expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
+    expect(getApiById('usaspending')?.method).toBe('POST')
+    for (const provider of ['Open-Meteo', 'Random User', 'Dog CEO', 'JSONPlaceholder', 'Nager.Date']) {
+      expect(apiCatalog.filter((api) => api.provider === provider), provider).toHaveLength(1)
+    }
+  })
+
   it('finds API demos by ID', () => {
     expect(getApiById('weather')?.provider).toBe('Open-Meteo')
     expect(getApiById('missing')).toBeUndefined()

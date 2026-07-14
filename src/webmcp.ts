@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiCatalog, getApiById, getDefaultParameters, type ApiDemo } from './apiCatalog'
+import { apiCategories, apiCatalog, getApiById, getDefaultParameters, type ApiDemo } from './apiCatalog'
 
 type ToolInput = Record<string, unknown>
 
@@ -122,7 +122,7 @@ export function useWebMcp({
             },
             category: {
               type: 'string',
-              enum: ['All', 'Data', 'Utility', 'People', 'Nature'],
+              enum: ['All', ...apiCategories],
               description: 'Optional catalog category filter.',
             },
           },
@@ -130,7 +130,7 @@ export function useWebMcp({
         annotations: { readOnlyHint: true, untrustedContentHint: false },
         execute: ({ query, category }) => {
           const safeQuery = typeof query === 'string' ? query : ''
-          const safeCategory = typeof category === 'string' ? category : 'All'
+          const safeCategory = typeof category === 'string' && ['All', ...apiCategories].includes(category) ? category : 'All'
           onFilter(safeQuery, safeCategory)
           onNavigate('catalog')
           return { query: safeQuery, category: safeCategory }
