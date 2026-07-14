@@ -102,7 +102,11 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   })
   const text = await response.text()
   let data: unknown
-  try { data = JSON.parse(text) as unknown } catch { data = text }
+  if (api.parseResponse) {
+    data = api.parseResponse(text)
+  } else {
+    try { data = JSON.parse(text) as unknown } catch { data = text }
+  }
   if (!response.ok) throw new Error(`The API returned ${response.status} ${response.statusText}.`)
   return { data, httpStatus: response.status, elapsed: Math.round(performance.now() - started), size: new Blob([text]).size, url }
 }
@@ -117,7 +121,10 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
     `  headers: { Accept: 'application/json'${body === undefined ? '' : ", 'Content-Type': 'application/json'"} },`,
     ...(body === undefined ? [] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
   ].join('\n')
-  return `const response = await fetch('${url}', {\n${options}\n});\n\nconst data = await response.json();`
+  const parse = api.parseResponse
+    ? `const text = await response.text();\nconst marker = 'Markdown Content:';\nconst parsed = text.trim().startsWith('{')\n  ? JSON.parse(text)\n  : JSON.parse(text.slice(text.indexOf(marker) + marker.length).trim());\nconst data = parsed?.data?.content ? JSON.parse(parsed.data.content) : parsed;`
+    : 'const data = await response.json();'
+  return `const response = await fetch('${url}', {\n${options}\n});\n\n${parse}`
 }
 const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
 
@@ -166,7 +173,7 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
   },
   health: {
     icon: 'shield', eyebrow: 'Readiness overview', description: 'Static governance checks for every public endpoint in this demo catalog.',
-    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: 'Low risk' })),
+    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: `${api.risk ?? 'Low'} risk` })),
   },
   documentation: {
     icon: 'book', eyebrow: 'Developer guide', description: 'Use this project as a repeatable starting point for new public API demos.',
@@ -452,7 +459,7 @@ function App() {
                       <td data-label="API"><button className="api-identity" type="button" onClick={() => selectApi(api.id)}><span style={{ '--api-color': api.accent } as React.CSSProperties}>{api.monogram}</span><div><b>{api.name}</b><small>{api.description}</small></div></button></td>
                       <td data-label="Provider"><div className="provider-cell"><b>{api.provider}</b><a href={api.documentationUrl} target="_blank" rel="noreferrer">Documentation <Icon name="external" size={11} /></a></div></td>
                       <td data-label="Quality"><span className="tag green">verified</span></td>
-                      <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> Low</span></td>
+                      <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> {api.risk ?? 'Low'}</span></td>
                       <td data-label="Tags"><div className="tags"><span className="tag blue">no-key</span><span className="tag green">{api.method ?? 'GET'}</span><span className="tag plain">{api.category}</span></div></td>
                       <td data-label="Reviewed">2026-07-{String(14 - Math.min(index, 5)).padStart(2, '0')}</td>
                       <td data-label="Status"><span className="source-status"><i /> source-linked</span></td>
@@ -526,9 +533,9 @@ function App() {
         <div className="detail-head"><span>Selected module</span><button type="button" onClick={() => setDetailOpen(false)} aria-label="Close details"><Icon name="x" /></button></div>
         <div className="detail-title"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><h2>{activeApi.name}</h2><small>DEMO PICK</small></div></div>
         <p className="detail-description">{activeApi.description}</p>
-        <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">no-key</span><span className="tag green">Low risk</span><span className="tag plain">{activeApi.category}</span></div>
+        <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">no-key</span><span className={`tag ${activeApi.risk === 'Review' ? 'plain' : 'green'}`}>{activeApi.risk ?? 'Low'} risk</span><span className="tag plain">{activeApi.category}</span></div>
         <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
-        <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Commercial use</small>Suitable for demonstration and internal prototyping. Review the provider terms before production use.</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
+        <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Important notes</small>{activeApi.usageNote ?? 'Suitable for demonstration and internal prototyping. Review the provider terms before production use.'}</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
         <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? 'GET'}</b></div><code>{endpoint}</code></section>
         <div className="detail-actions"><button className="primary-action" type="button" onClick={() => { setDetailOpen(false); navigatePage('request-lab') }}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
       </aside>}

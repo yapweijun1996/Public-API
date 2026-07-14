@@ -1,16 +1,24 @@
 export const apiCategories = [
+  'Biodiversity',
+  'Books',
   'Calendar',
   'Data',
   'Developer',
   'Economy',
+  'Entertainment',
   'Environment',
   'Finance',
+  'Food',
+  'Games',
   'Geo',
   'Government',
+  'Health',
   'Knowledge',
+  'Language',
   'Media',
   'Nature',
   'People',
+  'Research',
   'Singapore',
   'Utility',
   'Vehicle',
@@ -49,6 +57,9 @@ export type ApiDemo = {
   buildUrl: (parameters: Record<string, string>) => string
   method?: 'GET' | 'POST'
   buildBody?: (parameters: Record<string, string>) => unknown
+  parseResponse?: (text: string) => unknown
+  risk?: 'Low' | 'Review'
+  usageNote?: string
 }
 
 const encode = (value: string) => encodeURIComponent(value.trim())
@@ -258,6 +269,56 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
   fields: [],
   buildUrl: () => endpoint,
 })
+
+const today = new Date().toISOString().slice(0, 10)
+
+export const yahooSgxSymbols: FieldOption[] = [
+  { value: 'D05', label: 'D05 · DBS Group' },
+  { value: 'O39', label: 'O39 · OCBC Bank' },
+  { value: 'U11', label: 'U11 · UOB' },
+  { value: 'Z74', label: 'Z74 · Singtel' },
+  { value: 'C6L', label: 'C6L · Singapore Airlines' },
+  { value: 'S68', label: 'S68 · Singapore Exchange' },
+  { value: 'A17U', label: 'A17U · CapitaLand Ascendas REIT' },
+  { value: 'C38U', label: 'C38U · CapitaLand Integrated Commercial Trust' },
+  { value: 'M44U', label: 'M44U · Mapletree Logistics Trust' },
+  { value: 'N2IU', label: 'N2IU · Mapletree Pan Asia Commercial Trust' },
+  { value: 'ME8U', label: 'ME8U · Mapletree Industrial Trust' },
+  { value: 'AJBU', label: 'AJBU · Keppel DC REIT' },
+  { value: 'BN4', label: 'BN4 · Keppel' },
+  { value: 'F34', label: 'F34 · Wilmar International' },
+  { value: 'G13', label: 'G13 · Genting Singapore' },
+  { value: 'C52', label: 'C52 · ComfortDelGro' },
+  { value: 'S63', label: 'S63 · ST Engineering' },
+  { value: 'Y92', label: 'Y92 · Thai Beverage' },
+  { value: 'V03', label: 'V03 · Venture Corporation' },
+  { value: 'U14', label: 'U14 · UOL Group' },
+  { value: 'BS6', label: 'BS6 · Yangzijiang Shipbuilding' },
+  { value: 'S58', label: 'S58 · SATS' },
+]
+
+const parseReaderJson = (text: string): unknown => {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+      const data = (parsed as { data?: unknown }).data
+      if (data && typeof data === 'object' && 'content' in data) {
+        const content = (data as { content?: unknown }).content
+        if (typeof content === 'string') return JSON.parse(content) as unknown
+      }
+    }
+    return parsed
+  }
+
+  const marker = 'Markdown Content:'
+  const markerIndex = text.indexOf(marker)
+  if (markerIndex === -1) {
+    const preview = trimmed.replace(/\s+/g, ' ').slice(0, 120)
+    throw new Error(`The compatibility relay returned an unexpected response${preview ? `: ${preview}` : '.'}`)
+  }
+  return JSON.parse(text.slice(markerIndex + marker.length).trim()) as unknown
+}
 
 const importedRecommendedApis: ApiDemo[] = [
   fixedApi({
@@ -507,6 +568,140 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures', endpoint: 'https://api.worldbank.org/v2/country/SGP/indicator/SP.POP.TOTL?format=json&per_page=8',
     accent: '#005a9c', monogram: 'POP',
   }),
+  {
+    id: 'frankfurter-sgd-myr-history', name: 'SGD/MYR FX History', provider: 'Frankfurter · ECB', category: 'Finance',
+    description: 'Explore monthly SGD/MYR reference rates from the euro-era starting point in 1999.',
+    documentationUrl: 'https://frankfurter.dev/', accent: '#0f766e', monogram: 'FX',
+    fields: [
+      { id: 'from', label: 'Start date', type: 'text', defaultValue: '1999-01-04', placeholder: 'YYYY-MM-DD', help: 'ECB history begins at the euro-era starting point.' },
+      { id: 'to', label: 'End date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use an ISO date up to today.' },
+      { id: 'group', label: 'Grouping', type: 'select', defaultValue: 'month', help: 'Monthly grouping keeps the long history compact.', options: [{ label: 'Monthly', value: 'month' }, { label: 'Weekly', value: 'week' }] },
+    ],
+    buildUrl: ({ from = '1999-01-04', to = today, group = 'month' }) => {
+      const query = new URLSearchParams({ from, to, base: 'SGD', quotes: 'MYR', providers: 'ECB', group })
+      return `https://api.frankfurter.dev/v2/rates?${query.toString()}`
+    },
+  },
+  {
+    id: 'open-library-search', name: 'Open Library Search', provider: 'Internet Archive', category: 'Books',
+    description: 'Search books, authors, and publication years in the Open Library catalogue.',
+    documentationUrl: 'https://openlibrary.org/developers/api', accent: '#b45309', monogram: 'OL',
+    usageNote: 'Designed for low-volume, human-facing discovery. Cache results and follow Open Library usage limits.',
+    fields: [
+      { id: 'query', label: 'Book search', type: 'text', defaultValue: 'artificial intelligence', help: 'Search by title, author, subject, or keyword.' },
+      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 books.' },
+    ],
+    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
+      const params = new URLSearchParams({ q: query, limit, fields: 'key,title,author_name,first_publish_year,cover_i' })
+      return `https://openlibrary.org/search.json?${params.toString()}`
+    },
+  },
+  {
+    id: 'free-dictionary', name: 'Free Dictionary', provider: 'Free Dictionary API', category: 'Language',
+    description: 'Look up English definitions, pronunciations, examples, synonyms, and antonyms.',
+    documentationUrl: 'https://dictionaryapi.dev/', accent: '#7c3aed', monogram: 'DI',
+    fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', help: 'Enter one English word.' }],
+    buildUrl: ({ word = 'hello' }) => `https://api.dictionaryapi.dev/api/v2/entries/en/${encode(word || 'hello')}`,
+  },
+  {
+    id: 'pokeapi', name: 'PokéAPI Explorer', provider: 'PokéAPI', category: 'Games',
+    description: 'Explore a Pokémon profile, abilities, types, sprites, and game statistics.',
+    documentationUrl: 'https://pokeapi.co/docs', accent: '#eab308', monogram: 'PK',
+    fields: [{ id: 'pokemon', label: 'Pokémon', type: 'text', defaultValue: 'pikachu', help: 'Use a Pokémon name or Pokédex number.' }],
+    buildUrl: ({ pokemon = 'pikachu' }) => `https://pokeapi.co/api/v2/pokemon/${encode(pokemon || 'pikachu').toLowerCase()}`,
+  },
+  {
+    id: 'art-institute-search', name: 'Art Institute Search', provider: 'Art Institute of Chicago', category: 'Media',
+    description: 'Search artwork records with artist and IIIF image identifiers.',
+    documentationUrl: 'https://api.artic.edu/docs/', accent: '#dc2626', monogram: 'AI',
+    usageNote: 'Anonymous access is rate-limited. Review image rights and use public-domain media for demonstrations.',
+    fields: [
+      { id: 'query', label: 'Artwork search', type: 'text', defaultValue: 'monet', help: 'Search artwork titles, artists, or subjects.' },
+      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 artworks.' },
+    ],
+    buildUrl: ({ query = 'monet', limit = '8' }) => {
+      const params = new URLSearchParams({ q: query, limit, fields: 'id,title,artist_title,date_display,image_id' })
+      return `https://api.artic.edu/api/v1/artworks/search?${params.toString()}`
+    },
+  },
+  {
+    id: 'tvmaze-search', name: 'TVmaze Show Search', provider: 'TVmaze', category: 'Entertainment',
+    description: 'Search television shows with schedules, genres, ratings, and image metadata.',
+    documentationUrl: 'https://www.tvmaze.com/api', accent: '#ec4899', monogram: 'TV',
+    usageNote: 'TVmaze data requires source attribution and ShareAlike compliance.',
+    fields: [{ id: 'show', label: 'Show title', type: 'text', defaultValue: 'severance', help: 'Search for a television series.' }],
+    buildUrl: ({ show = 'severance' }) => `https://api.tvmaze.com/search/shows?q=${encode(show || 'severance')}`,
+  },
+  {
+    id: 'open-food-facts', name: 'Open Food Facts', provider: 'Open Food Facts', category: 'Food',
+    description: 'Look up ingredients, nutrition, labels, and product images by barcode.',
+    documentationUrl: 'https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/', accent: '#65a30d', monogram: 'OF',
+    fields: [{ id: 'barcode', label: 'Barcode', type: 'text', defaultValue: '3017620422003', help: 'Enter an EAN or UPC product barcode.' }],
+    buildUrl: ({ barcode = '3017620422003' }) => `https://world.openfoodfacts.org/api/v3/product/${encode(barcode || '3017620422003')}.json`,
+  },
+  {
+    id: 'gbif-species-search', name: 'GBIF Species Search', provider: 'GBIF', category: 'Biodiversity',
+    description: 'Search scientific names, taxonomy, vernacular names, and species records.',
+    documentationUrl: 'https://techdocs.gbif.org/en/openapi/v1/species', accent: '#16a34a', monogram: 'GB',
+    fields: [{ id: 'query', label: 'Species search', type: 'text', defaultValue: 'panthera', help: 'Search by scientific or common name.' }],
+    buildUrl: ({ query = 'panthera' }) => `https://api.gbif.org/v1/species/search?q=${encode(query || 'panthera')}&limit=8`,
+  },
+  {
+    id: 'clinical-trials-search', name: 'ClinicalTrials.gov Search', provider: 'U.S. National Library of Medicine', category: 'Health',
+    description: 'Search public clinical study records by condition or disease.',
+    documentationUrl: 'https://clinicaltrials.gov/data-about-studies/learn-about-api', accent: '#0284c7', monogram: 'CT', risk: 'Review',
+    usageNote: 'For research demonstrations only. Do not use API results as medical advice or a substitute for professional care.',
+    fields: [{ id: 'condition', label: 'Condition', type: 'text', defaultValue: 'Diabetes', help: 'Search a condition or disease name.' }],
+    buildUrl: ({ condition = 'Diabetes' }) => {
+      const params = new URLSearchParams({ 'query.cond': condition, pageSize: '8', format: 'json' })
+      return `https://clinicaltrials.gov/api/v2/studies?${params.toString()}`
+    },
+  },
+  {
+    id: 'europe-pmc-search', name: 'Europe PMC Search', provider: 'Europe PMC', category: 'Research',
+    description: 'Search life-sciences papers, preprints, citations, and open-access literature.',
+    documentationUrl: 'https://europepmc.org/RestfulWebService', accent: '#2563eb', monogram: 'EP',
+    fields: [{ id: 'query', label: 'Literature search', type: 'text', defaultValue: 'OPEN_ACCESS:Y AND machine learning', help: 'Use Europe PMC search syntax.' }],
+    buildUrl: ({ query = 'OPEN_ACCESS:Y AND machine learning' }) => {
+      const params = new URLSearchParams({ query, format: 'json', pageSize: '8' })
+      return `https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params.toString()}`
+    },
+  },
+  {
+    id: 'openfda-drug-labels', name: 'openFDA Drug Labels', provider: 'U.S. Food and Drug Administration', category: 'Health',
+    description: 'Search public drug-label records by brand name and inspect regulated product metadata.',
+    documentationUrl: 'https://open.fda.gov/apis/drug/label/', accent: '#0369a1', monogram: 'FD', risk: 'Review',
+    usageNote: 'For informational demonstrations only. Labels may be incomplete or outdated; never use this response for medical decisions.',
+    fields: [{ id: 'brand', label: 'Brand name', type: 'text', defaultValue: 'Advil', help: 'Search a drug brand name indexed by openFDA.' }],
+    buildUrl: ({ brand = 'Advil' }) => {
+      const params = new URLSearchParams({ search: `openfda.brand_name:${brand}`, limit: '8' })
+      return `https://api.fda.gov/drug/label.json?${params.toString()}`
+    },
+  },
+  {
+    id: 'coinpaprika-ticker', name: 'CoinPaprika Ticker', provider: 'CoinPaprika', category: 'Finance',
+    description: 'Inspect current cryptocurrency price, market capitalization, volume, and percentage changes.',
+    documentationUrl: 'https://docs.coinpaprika.com/', accent: '#f59e0b', monogram: 'CP', risk: 'Review',
+    usageNote: 'Market data is informational, not investment advice. Display CoinPaprika attribution when publishing results.',
+    fields: [{ id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'btc-bitcoin', help: 'Select a public ticker.', options: [{ label: 'Bitcoin', value: 'btc-bitcoin' }, { label: 'Ethereum', value: 'eth-ethereum' }, { label: 'Solana', value: 'sol-solana' }, { label: 'Tether', value: 'usdt-tether' }] }],
+    buildUrl: ({ coin = 'btc-bitcoin' }) => `https://api.coinpaprika.com/v1/tickers/${encode(coin || 'btc-bitcoin')}`,
+  },
+  {
+    id: 'yahoo-finance-sgx-history', name: 'Yahoo Finance SGX History', provider: 'Yahoo Finance', category: 'Finance',
+    description: 'Explore maximum available history for 22 SGX blue-chip and large-cap listings, including D05 from 2000.',
+    documentationUrl: 'https://help.yahoo.com/kb/finance-for-web/download-historical-data-yahoo-finance-sln2311.html', accent: '#6f2dbd', monogram: 'YF', risk: 'Review',
+    usageNote: 'Yahoo does not publish this chart route as a supported public API and blocks browser CORS. This demo uses a read-only Jina Reader compatibility relay; do not use it for trading or production workloads.',
+    fields: [
+      { id: 'symbol', label: 'SGX symbol', type: 'select', defaultValue: 'D05', help: 'Choose one of 22 verified Yahoo Finance .SI listings.', options: yahooSgxSymbols },
+      { id: 'interval', label: 'History interval', type: 'select', defaultValue: '1mo', help: 'Monthly data is recommended for maximum history.', options: [{ label: 'Weekly', value: '1wk' }, { label: 'Monthly', value: '1mo' }, { label: 'Quarterly', value: '3mo' }] },
+    ],
+    buildUrl: ({ symbol = 'D05', interval = '1mo' }) => {
+      const safeSymbol = encode(symbol || 'D05').toUpperCase()
+      const safeInterval = ['1wk', '1mo', '3mo'].includes(interval) ? interval : '1mo'
+      return `https://r.jina.ai/http://query1.finance.yahoo.com/v8/finance/chart/${safeSymbol}.SI?range=max&interval=${safeInterval}&events=history&includeAdjustedClose=true`
+    },
+    parseResponse: parseReaderJson,
+  },
 ]
 
 export const apiCatalog: ApiDemo[] = [...coreApis, ...importedRecommendedApis]
