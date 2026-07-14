@@ -362,8 +362,18 @@ function App() {
     <div className={`admin-shell ${currentPage === 'catalog' ? 'has-detail' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside id="primary-navigation" className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNav ? 'mobile-open' : ''}`} aria-label="Primary navigation" aria-hidden={viewport.mobile && !mobileNav} inert={viewport.mobile && !mobileNav ? true : undefined}>
         <div className="sidebar-brand">
-          <span className="logo-cube"><i /></span>
-          <div><b>API Console</b><small>Govern • Discover • Operate</small></div>
+          <button
+            className="sidebar-brand-toggle"
+            type="button"
+            onClick={() => viewport.mobile ? setMobileNav(false) : setSidebarCollapsed((current) => !current)}
+            aria-controls="primary-navigation"
+            aria-expanded={viewport.mobile ? mobileNav : !sidebarCollapsed}
+            aria-label={viewport.mobile ? 'Close navigation' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={viewport.mobile ? 'Close navigation' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <span className="logo-cube"><i /></span>
+            <span className="sidebar-brand-copy"><b>API Console</b><small>Govern • Discover • Operate</small></span>
+          </button>
           <button className="mobile-close" type="button" onClick={() => setMobileNav(false)} aria-label="Close navigation"><Icon name="x" /></button>
         </div>
         <nav aria-label="Admin navigation">
@@ -386,16 +396,6 @@ function App() {
             </div>
           ))}
         </nav>
-        <button
-          className="sidebar-toggle"
-          type="button"
-          onClick={() => setSidebarCollapsed((current) => !current)}
-          aria-expanded={!sidebarCollapsed}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <Icon name="chevron" size={16} /><span>{sidebarCollapsed ? 'Expand' : 'Collapse'}</span>
-        </button>
         <div className="sidebar-version">API Console v1.0.0</div>
       </aside>
 
