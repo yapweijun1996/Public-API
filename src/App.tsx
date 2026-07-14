@@ -126,6 +126,116 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
     : 'const data = await response.json();'
   return `const response = await fetch('${url}', {\n${options}\n});\n\n${parse}`
 }
+
+type DemoPreviewItem = {
+  title: string
+  fields: Array<{ label: string; value: string }>
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+const previewTitleKeys = ['name', 'title', 'label', 'commonname', 'country', 'city', 'id', 'code']
+const previewCollectionKeys = ['results', 'items', 'records', 'data', 'features', 'entries', 'result']
+
+const previewLabel = (key: string) => key
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .replace(/[_-]+/g, ' ')
+  .split(' ')
+  .filter(Boolean)
+  .map((word) => ['id', 'url', 'api', 'iso'].includes(word.toLowerCase()) ? word.toUpperCase() : `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+  .join(' ')
+
+const previewValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'number') return new Intl.NumberFormat('en').format(value)
+  if (typeof value === 'string') return value.length > 90 ? `${value.slice(0, 87)}…` : value
+  if (Array.isArray(value)) {
+    const scalars = value.filter((item) => ['string', 'number', 'boolean'].includes(typeof item))
+    return scalars.length === value.length ? scalars.slice(0, 4).map(previewValue).join(', ') : `${value.length} items`
+  }
+  if (isRecord(value)) {
+    for (const key of ['value', 'name', 'title', 'label', 'id', 'code']) {
+      if (key in value && !isRecord(value[key]) && !Array.isArray(value[key])) return previewValue(value[key])
+    }
+    return `${Object.keys(value).length} properties`
+  }
+  return String(value)
+}
+
+const findPreviewRecords = (value: unknown, depth = 0): Array<Record<string, unknown>> => {
+  if (depth > 5) return []
+  if (Array.isArray(value)) {
+    const directRecords = value.filter(isRecord)
+    if (directRecords.length && directRecords.length === value.length) return directRecords
+    for (const item of value) {
+      const nested = findPreviewRecords(item, depth + 1)
+      if (nested.length) return nested
+    }
+    return directRecords
+  }
+  if (!isRecord(value)) return []
+
+  for (const key of previewCollectionKeys) {
+    if (key in value) {
+      const nested = findPreviewRecords(value[key], depth + 1)
+      if (nested.length) return nested
+    }
+  }
+  for (const item of Object.values(value)) {
+    if (!Array.isArray(item) && !isRecord(item)) continue
+    const nested = findPreviewRecords(item, depth + 1)
+    if (nested.length) return nested
+  }
+  return depth === 0 ? [value] : []
+}
+
+export const buildDemoPreview = (data: unknown): DemoPreviewItem[] => {
+  const records = findPreviewRecords(data)
+  if (!records.length) {
+    if (Array.isArray(data)) {
+      return data.slice(0, 6).map((value, index) => ({
+        title: `Result ${index + 1}`,
+        fields: [{ label: 'Value', value: previewValue(value) }],
+      }))
+    }
+    return [{ title: 'Response value', fields: [{ label: 'Value', value: previewValue(data) }] }]
+  }
+
+  return records.slice(0, 6).map((record, index) => {
+    const entries = Object.entries(record)
+    let titleEntry: [string, unknown] | undefined
+    for (const preferredKey of previewTitleKeys) {
+      titleEntry = entries.find(([key, value]) => key.toLowerCase() === preferredKey && ['string', 'number'].includes(typeof value))
+      if (titleEntry) break
+    }
+    const fields = entries
+      .filter(([key, value]) => key !== titleEntry?.[0] && value !== undefined)
+      .slice(0, 6)
+      .map(([key, value]) => ({ label: previewLabel(key), value: previewValue(value) }))
+    return {
+      title: titleEntry ? previewValue(titleEntry[1]) : `Result ${index + 1}`,
+      fields: fields.length ? fields : [{ label: 'Value', value: previewValue(record) }],
+    }
+  })
+}
+
+function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown }) {
+  const items = buildDemoPreview(data)
+  return <section className="demo-preview" aria-labelledby="demo-preview-heading" aria-live="polite" data-webmcp-surface="api-demo-preview">
+    <div className="demo-preview-head">
+      <span><Icon name="spark" size={19} /></span>
+      <div><small>Generated from the live response</small><h2 id="demo-preview-heading">Demo preview</h2><p>A sample interface developers can build from this JSON. Its semantic cards and fields are also readable by browser agents.</p></div>
+      <em><Icon name="check" size={13} /> JSON mapped to UI</em>
+    </div>
+    <div className="demo-preview-grid">
+      {items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}>
+        <div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as React.CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div>
+        <dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl>
+      </article>)}
+    </div>
+    <p className="demo-preview-note">Showing up to 6 records and 6 fields per record from the live response.</p>
+  </section>
+}
 const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
 
 const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: string }> = {
@@ -508,6 +618,7 @@ function App() {
                 </div>
               </div>
             </div>
+            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} />}
           </section>}
 
           {currentPage === 'agent-tools' && <section className="agent-section page-section" aria-labelledby="agent-heading">
