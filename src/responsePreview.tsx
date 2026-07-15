@@ -398,6 +398,61 @@ function CountryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 }
 
 function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
+  if (api.id === 'open-meteo-history' && isRecord(data)) {
+    const daily = isRecord(data.daily) ? data.daily : {}
+    const units = isRecord(data.daily_units) ? data.daily_units : {}
+    const highs = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max.map(numberValue).filter((value): value is number => value !== undefined) : []
+    const lows = Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min.map(numberValue).filter((value): value is number => value !== undefined) : []
+    const rain = Array.isArray(daily.precipitation_sum) ? daily.precipitation_sum.map(numberValue).filter((value): value is number => value !== undefined) : []
+    const dates = Array.isArray(daily.time) ? daily.time.map((value) => textValue(value) ?? '') : []
+    const latest = highs.at(-1) ?? 0
+    return {
+      label: `${textValue(data.timezone)?.replace(/_/g, ' ') ?? 'Historical climate'} · Daily high (${textValue(units.temperature_2m_max) ?? '°C'})`, value: latest,
+      points: highs, dates,
+      metrics: [
+        { label: 'Average high', value: highs.length ? `${formatNumber(highs.reduce((sum, value) => sum + value, 0) / highs.length)}°` : '—' },
+        { label: 'Average low', value: lows.length ? `${formatNumber(lows.reduce((sum, value) => sum + value, 0) / lows.length)}°` : '—' },
+        { label: 'Total rain', value: `${formatNumber(rain.reduce((sum, value) => sum + value, 0))} ${textValue(units.precipitation_sum) ?? 'mm'}` },
+      ],
+    }
+  }
+  if (api.id === 'kraken-public-ticker' && isRecord(data)) {
+    const result = isRecord(data.result) ? data.result : {}
+    const ticker = Object.values(result).find(isRecord) ?? {}
+    const last = numberValue(Array.isArray(ticker.c) ? ticker.c[0] : undefined) ?? 0
+    const open = numberValue(ticker.o) ?? last
+    const low = numberValue(Array.isArray(ticker.l) ? ticker.l[1] ?? ticker.l[0] : undefined)
+    const high = numberValue(Array.isArray(ticker.h) ? ticker.h[1] ?? ticker.h[0] : undefined)
+    const volume = numberValue(Array.isArray(ticker.v) ? ticker.v[1] ?? ticker.v[0] : undefined)
+    const bid = numberValue(Array.isArray(ticker.b) ? ticker.b[0] : undefined)
+    const ask = numberValue(Array.isArray(ticker.a) ? ticker.a[0] : undefined)
+    return {
+      label: Object.keys(result)[0] ?? 'Kraken spot market', value: last, currency: 'USD', points: [open, low, high, last].filter((value): value is number => value !== undefined), dates: ['Open', 'Low', 'High', 'Last'],
+      metrics: [
+        { label: 'Bid / ask', value: `${bid === undefined ? '—' : formatNumber(bid, 2)} / ${ask === undefined ? '—' : formatNumber(ask, 2)}` },
+        { label: '24h high / low', value: `${high === undefined ? '—' : formatNumber(high, 2)} / ${low === undefined ? '—' : formatNumber(low, 2)}` },
+        { label: '24h volume', value: volume === undefined ? '—' : compactNumber(volume) },
+      ],
+    }
+  }
+  if (api.id === 'wikimedia-pageviews' && isRecord(data)) {
+    const items = recordArray(data.items)
+    const points = items.map((item) => numberValue(item.views)).filter((value): value is number => value !== undefined)
+    const dates = items.map((item) => {
+      const stamp = textValue(item.timestamp) ?? ''
+      return stamp.length >= 8 ? `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}` : stamp
+    })
+    const latest = points.at(-1) ?? 0
+    const total = points.reduce((sum, value) => sum + value, 0)
+    return {
+      label: `${textValue(items[0]?.article)?.replace(/_/g, ' ') ?? api.name} · Daily readers`, value: latest, points, dates,
+      metrics: [
+        { label: 'Total views', value: compactNumber(total) },
+        { label: 'Daily average', value: points.length ? compactNumber(total / points.length) : '—' },
+        { label: 'Peak day', value: points.length ? compactNumber(Math.max(...points)) : '—' },
+      ],
+    }
+  }
   if (api.id === 'yahoo-finance-sgx-history' && isRecord(data)) {
     const chart = isRecord(data.chart) ? data.chart : {}
     const result = Array.isArray(chart.result) && isRecord(chart.result[0]) ? chart.result[0] : {}
@@ -582,6 +637,20 @@ const collectImageUrls = (value: unknown, found: string[] = [], depth = 0): stri
 function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
   if (api.id === 'dogs' && isRecord(data) && Array.isArray(data.message)) return data.message.filter((item): item is string => typeof item === 'string').slice(0, 6).map((image, index) => ({ image, title: `Dog ${index + 1}`, subtitle: 'Random Dog gallery' }))
   if (api.id === 'people' && isRecord(data) && Array.isArray(data.results)) return data.results.filter(isRecord).slice(0, 6).map((person, index) => ({ image: textValue(recordValue(person.picture, 'large') ?? recordValue(person.picture, 'medium')) ?? '', title: isRecord(person.name) ? `${textValue(person.name.first) ?? ''} ${textValue(person.name.last) ?? ''}`.trim() : `Person ${index + 1}`, subtitle: textValue(person.email) })).filter((item) => item.image)
+  if (api.id === 'wikipedia-search' && isRecord(data)) {
+    const query = isRecord(data.query) ? data.query : {}
+    const pages = isRecord(query.pages) ? Object.values(query.pages).filter(isRecord) : []
+    return pages.slice(0, 8).map((page) => ({
+      image: textValue(recordValue(page.thumbnail, 'source')) ?? '',
+      title: cleanText(page.title) ?? 'Wikipedia article',
+      subtitle: cleanText(page.extract) ?? `Page ID ${previewValue(page.pageid)}`,
+    })).filter((item) => item.image)
+  }
+  if (api.id === 'rick-morty-characters' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((character) => ({
+    image: textValue(character.image) ?? '',
+    title: cleanText(character.name) ?? 'Character',
+    subtitle: `${previewValue(character.status)} · ${previewValue(character.species)} · ${previewValue(recordValue(character.location, 'name'))}`,
+  })).filter((item) => item.image)
   if (api.id === 'art-institute-search' && isRecord(data)) {
     const base = isRecord(data.config) ? textValue(data.config.iiif_url) : undefined
     if (base && Array.isArray(data.data)) return data.data.filter(isRecord).filter((item) => item.image_id).slice(0, 6).map((item) => ({ image: `${base}/2/${item.image_id}/full/500,/0/default.jpg`, title: textValue(item.title) ?? 'Artwork', subtitle: textValue(item.artist_title) }))
@@ -601,7 +670,23 @@ function MediaGalleryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   return <div className={`media-preview ${items.length === 1 ? 'single' : ''}`}>{items.map((item, index) => <article key={`${item.image}-${index}`}><img src={item.image} alt="" loading="lazy"/><div><small>{api.category}</small><h3>{item.title}</h3>{item.subtitle && <p>{item.subtitle}</p>}</div></article>)}</div>
 }
 
-function locationPoints(data: unknown): LocationPoint[] {
+function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint[] {
+  if (api?.id === 'uk-police-street-crime') return recordArray(data).slice(0, 8).map((crime, index) => {
+    const location = isRecord(crime.location) ? crime.location : {}
+    const street = isRecord(location.street) ? location.street : {}
+    return {
+      latitude: numberValue(location.latitude) ?? 0,
+      longitude: numberValue(location.longitude) ?? 0,
+      label: cleanText(street.name) ?? `Anonymised location ${index + 1}`,
+      detail: `${previewLabel(cleanText(crime.category) ?? 'Street crime')} · ${previewValue(crime.month)}`,
+    }
+  }).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  if (api?.id === 'open-brewery-directory') return recordArray(data).slice(0, 8).map((brewery, index) => ({
+    latitude: numberValue(brewery.latitude) ?? 0,
+    longitude: numberValue(brewery.longitude) ?? 0,
+    label: cleanText(brewery.name) ?? `Brewery ${index + 1}`,
+    detail: `${previewLabel(cleanText(brewery.brewery_type) ?? 'Brewery')} · ${cleanText(brewery.city) ?? cleanText(brewery.country) ?? 'Location available'}`,
+  })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
   const points: LocationPoint[] = []
   const visit = (value: unknown, depth = 0) => {
     if (depth > 7 || points.length >= 8) return
@@ -622,7 +707,7 @@ function locationPoints(data: unknown): LocationPoint[] {
 }
 
 function LocationPreview({ data, api }: { data: unknown; api: ApiDemo }) {
-  const points = locationPoints(data)
+  const points = locationPoints(data, api)
   if (!points.length) return <ResultListPreview data={data} api={api}/>
   const lats = points.map((point) => point.latitude)
   const lons = points.map((point) => point.longitude)
@@ -657,6 +742,62 @@ function SolarCyclePreview({ data }: { data: unknown }) {
     <div className="solar-hero"><div><span>{textValue(root.tzid) ?? 'Local solar time'} · {textValue(root.date) ?? 'Selected date'}</span><strong>{timeLabel(sunrise)} <i>→</i> {timeLabel(sunset)}</strong><b>{duration} of daylight</b><small>{formatNumber(Number(root.lat), 3)}, {formatNumber(Number(root.lng), 3)} · {textValue(root.moon_phase) ?? 'Moon data available'}</small></div><span aria-hidden="true">☀</span></div>
     <ol className="solar-timeline">{moments.map((moment) => <li key={moment.label}><span aria-hidden="true">{moment.icon}</span><div><small>{moment.label}</small><strong>{timeLabel(moment.value)}</strong></div></li>)}</ol>
   </div>
+}
+
+function SpaceWeatherPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const current = isRecord(root['0']) ? root['0'] : {}
+  const scales = [
+    { key: 'R', label: 'Radio blackout', icon: 'R' },
+    { key: 'S', label: 'Solar radiation', icon: 'S' },
+    { key: 'G', label: 'Geomagnetic storm', icon: 'G' },
+  ].map((scale) => {
+    const candidate = current[scale.key]
+    const reading: Record<string, unknown> = isRecord(candidate) ? candidate : {}
+    return { ...scale, value: numberValue(reading.Scale) ?? 0, text: cleanText(reading.Text) ?? 'None', probability: numberValue(reading.Prob ?? reading.MinorProb) }
+  })
+  const forecasts = ['1', '2', '3'].map((key) => isRecord(root[key]) ? root[key] : {}).filter((entry) => Object.keys(entry).length)
+  if (!Object.keys(current).length) return <div className="weather-empty"><strong>Space-weather scales unavailable</strong><span>NOAA did not return the current R, S, and G scales.</span></div>
+  const peak = Math.max(...scales.map((scale) => scale.value))
+  return <div className="weather-preview regional-air-preview" data-weather-view="space-weather">
+    <div className="air-quality-summary"><div><span>NOAA operational scales</span><strong>{peak === 0 ? 'Quiet' : `Level ${peak}`}</strong><b>{peak === 0 ? 'No current storm-scale activity' : 'Space-weather activity detected'}</b><small>Updated {previewValue(current.DateStamp)} · {previewValue(current.TimeStamp)} UTC</small></div><em className={peak === 0 ? 'good' : 'elevated'}>R · S · G</em></div>
+    <div className="regional-reading-grid">{scales.map((scale) => <article key={scale.key}><span>{scale.icon}</span><div><small>{scale.label}</small><strong>{scale.value === 0 ? '0' : scale.value}</strong><b>{scale.text}</b></div><em>{scale.probability === undefined ? 'Current' : `${scale.probability}%`}</em></article>)}</div>
+    {forecasts.length ? <div className="forecast-days">{forecasts.map((forecast, index) => {
+      const geomagnetic = isRecord(forecast.G) ? forecast.G : {}
+      return <article key={`${forecast.DateStamp}-${index}`}><div><span>{dateParts(forecast.DateStamp).weekday}</span><small>{dateParts(forecast.DateStamp).full}</small></div><b aria-hidden="true">◎</b><strong>G{previewValue(geomagnetic.Scale)}</strong><p>{cleanText(geomagnetic.Text) ?? 'No storm expected'}</p><em>NOAA forecast</em></article>
+    })}</div> : null}
+  </div>
+}
+
+function FloodForecastPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const daily = isRecord(root.daily) ? root.daily : {}
+  const units = isRecord(root.daily_units) ? root.daily_units : {}
+  const times = Array.isArray(daily.time) ? daily.time.map((value) => textValue(value) ?? '') : []
+  const discharge = Array.isArray(daily.river_discharge) ? daily.river_discharge.map(numberValue).filter((value): value is number => value !== undefined) : []
+  const means = Array.isArray(daily.river_discharge_mean) ? daily.river_discharge_mean.map(numberValue).filter((value): value is number => value !== undefined) : []
+  const maxima = Array.isArray(daily.river_discharge_max) ? daily.river_discharge_max.map(numberValue).filter((value): value is number => value !== undefined) : []
+  if (!discharge.length) return <div className="weather-empty"><strong>Flood forecast unavailable</strong><span>No daily river-discharge values were returned.</span></div>
+  const unit = textValue(units.river_discharge) ?? 'm³/s'
+  const peak = Math.max(...maxima, ...discharge)
+  const peakIndex = maxima.indexOf(Math.max(...maxima))
+  return <div className="market-preview flood-preview">
+    <div className="market-summary"><div><span>River discharge · {formatNumber(numberValue(root.latitude) ?? 0, 3)}, {formatNumber(numberValue(root.longitude) ?? 0, 3)}</span><strong>{formatNumber(discharge[0], 2)} {unit}</strong><small>Current modelled discharge · peak {formatNumber(peak, 2)} {unit}</small></div><div className="market-range"><span>{times[0] ?? 'Today'}</span><span>{times.at(-1) ?? 'Forecast end'}</span></div></div>
+    <Sparkline values={discharge}/>
+    <div className="market-metrics"><article><small>Forecast peak</small><strong>{formatNumber(peak, 2)} {unit}</strong></article><article><small>Peak date</small><strong>{times[peakIndex] ?? '—'}</strong></article><article><small>Mean discharge</small><strong>{means.length ? `${formatNumber(means.reduce((sum, value) => sum + value, 0) / means.length, 2)} ${unit}` : '—'}</strong></article></div>
+  </div>
+}
+
+function FederalRegisterPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const documents = recordArray(root.results).slice(0, 8)
+  if (!documents.length) return <div className="weather-empty"><strong>Federal documents unavailable</strong><span>No matching Federal Register documents were returned.</span></div>
+  return <ol className="calendar-preview federal-register-preview">{documents.map((document, index) => {
+    const dateText = textValue(document.publication_date) ?? ''
+    const date = new Date(dateText)
+    const agencies = recordArray(document.agencies).map((agency) => cleanText(agency.name)).filter(Boolean)
+    return <li key={`${document.document_number}-${index}`}><time dateTime={dateText}><strong>{Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en', { day: '2-digit' })}</strong><span>{Number.isNaN(date.getTime()) ? 'FR' : date.toLocaleDateString('en', { month: 'short' })}</span></time><div><small>{cleanText(document.type) ?? 'Federal document'} · {agencies[0] ?? 'U.S. Government'}</small><h3>{cleanText(document.title) ?? `Document ${index + 1}`}</h3><p>{cleanText(document.abstract) ?? `Document ${previewValue(document.document_number)}`}</p></div></li>
+  })}</ol>
 }
 
 function NaturalEventsPreview({ data }: { data: unknown }) {
@@ -725,6 +866,18 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   if (api.id === 'posts') cards = [root].filter((record) => Object.keys(record).length > 0).map((record) => ({ title: cleanText(record.title) ?? 'Post', eyebrow: 'JSONPlaceholder post', description: cleanText(record.body), metrics: [{ label: 'Post ID', value: previewValue(record.id) }, { label: 'User ID', value: previewValue(record.userId) }] }))
   else if (api.id === 'devto') cards = recordArray(data).map((record) => ({ title: cleanText(record.title) ?? 'DEV article', eyebrow: cleanText(record.readable_publish_date) ?? 'Published article', description: cleanText(record.description), badge: `${previewValue(record.public_reactions_count)} reactions`, metrics: [{ label: 'Comments', value: previewValue(record.comments_count) }, { label: 'Reading time', value: `${previewValue(record.reading_time_minutes)} min` }], tags: textArray(record.tag_list) }))
   else if (api.id === 'github') cards = recordArray(data).map((record) => ({ title: cleanText(record.full_name ?? record.name) ?? 'Repository', eyebrow: cleanText(record.language) ?? 'GitHub repository', description: cleanText(record.description) ?? 'Public source repository', badge: record.archived ? 'Archived' : 'Active', metrics: [{ label: 'Stars', value: previewValue(record.stargazers_count) }, { label: 'Forks', value: previewValue(record.forks_count) }, { label: 'Issues', value: previewValue(record.open_issues_count) }], tags: textArray(record.topics) }))
+  else if (api.id === 'gitlab-public-projects') cards = recordArray(data).map((record) => ({
+    title: cleanText(record.path_with_namespace ?? record.name) ?? 'GitLab project',
+    eyebrow: `${cleanText(record.language) ?? 'Public repository'} · updated ${dateParts(record.last_activity_at).full || 'recently'}`,
+    description: cleanText(record.description) ?? 'Public GitLab project',
+    badge: `${compactNumber(numberValue(record.star_count) ?? 0)} stars`,
+    metrics: [
+      { label: 'Forks', value: compactNumber(numberValue(record.forks_count) ?? 0) },
+      { label: 'Issues', value: record.open_issues_count === undefined ? '—' : previewValue(record.open_issues_count) },
+      { label: 'Visibility', value: previewValue(record.visibility) },
+    ],
+    tags: textArray(record.topics ?? record.tag_list),
+  }))
   else if (api.id === 'hacker-news') cards = [root].map((record) => ({ title: cleanText(record.title) ?? 'Hacker News item', eyebrow: `${previewValue(record.type)} by ${previewValue(record.by)}`, badge: `${previewValue(record.score)} points`, metrics: [{ label: 'Comments', value: previewValue(record.descendants) }, { label: 'Published', value: epochDate(record.time) ?? '—' }, { label: 'Item ID', value: previewValue(record.id) }] }))
   else if (api.id === 'npm-search') cards = recordArray(root.objects).map((record) => {
     const pkg = isRecord(record.package) ? record.package : {}
@@ -741,7 +894,25 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 function SecurityCenterPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let cards: SemanticCard[] = []
-  if (api.id === 'nvd-cpe-search') cards = recordArray(root.products).map((product) => {
+  if (api.id === 'osv-vulnerability') {
+    const affected = recordArray(root.affected)
+    const packageNames = affected.map((entry) => cleanText(recordValue(entry.package, 'name'))).filter((value): value is string => Boolean(value))
+    const ecosystems = affected.map((entry) => cleanText(recordValue(entry.package, 'ecosystem'))).filter((value): value is string => Boolean(value))
+    const severity = recordArray(root.severity)[0]
+    cards = Object.keys(root).length ? [{
+      title: cleanText(root.id) ?? 'OSV advisory',
+      eyebrow: 'Open Source Vulnerability database',
+      description: cleanText(root.summary ?? root.details),
+      badge: cleanText(severity?.type) ?? (root.withdrawn ? 'Withdrawn' : 'Active'),
+      metrics: [
+        { label: 'Affected packages', value: packageNames.length ? packageNames.slice(0, 3).join(', ') : '—' },
+        { label: 'Ecosystems', value: [...new Set(ecosystems)].join(', ') || '—' },
+        { label: 'Published', value: dateParts(root.published).full || previewValue(root.published) },
+        { label: 'Modified', value: dateParts(root.modified).full || previewValue(root.modified) },
+      ],
+      tags: [...textArray(root.aliases), ...textArray(root.related)].slice(0, 5),
+    }] : []
+  } else if (api.id === 'nvd-cpe-search') cards = recordArray(root.products).map((product) => {
     const cpe = isRecord(product.cpe) ? product.cpe : product
     const titles = recordArray(cpe.titles)
     return { title: cleanText(titles[0]?.title) ?? cleanText(cpe.cpeName) ?? 'CPE product', eyebrow: 'NVD product dictionary', badge: cpe.deprecated ? 'Deprecated' : 'Active', metrics: [{ label: 'CPE name', value: previewValue(cpe.cpeName) }, { label: 'Created', value: dateParts(cpe.created).full }, { label: 'Modified', value: dateParts(cpe.lastModified).full }] }
@@ -906,6 +1077,18 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'nobel-prizes': defineApiPreview('nobel-prizes', ({ data }) => <NobelPrizePreview data={data}/>),
   'chess-player-stats': defineApiPreview('chess-player-stats', ({ data }) => <ChessRatingsPreview data={data}/>),
   'crossref-works': defineApiPreview('crossref-works', ({ data }) => <CrossrefWorksPreview data={data}/>),
+  'noaa-space-weather': defineApiPreview('noaa-space-weather', ({ data }) => <SpaceWeatherPreview data={data}/>),
+  'osv-vulnerability': defineApiPreview('osv-vulnerability', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'federal-register-documents': defineApiPreview('federal-register-documents', ({ data }) => <FederalRegisterPreview data={data}/>),
+  'wikipedia-search': defineApiPreview('wikipedia-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'open-meteo-flood': defineApiPreview('open-meteo-flood', ({ data }) => <FloodForecastPreview data={data}/>),
+  'open-meteo-history': defineApiPreview('open-meteo-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'kraken-public-ticker': defineApiPreview('kraken-public-ticker', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'gitlab-public-projects': defineApiPreview('gitlab-public-projects', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'uk-police-street-crime': defineApiPreview('uk-police-street-crime', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'open-brewery-directory': defineApiPreview('open-brewery-directory', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'rick-morty-characters': defineApiPreview('rick-morty-characters', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'wikimedia-pageviews': defineApiPreview('wikimedia-pageviews', ({ api, data }) => <MarketPreview api={api} data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)

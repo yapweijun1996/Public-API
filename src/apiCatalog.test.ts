@@ -24,7 +24,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(69)
+    expect(apiCatalog).toHaveLength(81)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -81,6 +81,33 @@ describe('API catalog', () => {
     expect(urls['nobel-prizes'].searchParams.get('nobelPrizeCategory')).toBe('phy')
     expect(urls['chess-player-stats'].pathname).toBe('/pub/player/hikaru/stats')
     expect(urls['crossref-works'].searchParams.get('select')).toContain('DOI')
+  })
+
+  it('builds the next twelve browser-ready keyless API requests', () => {
+    const ids = [
+      'noaa-space-weather', 'osv-vulnerability', 'federal-register-documents', 'wikipedia-search',
+      'open-meteo-flood', 'open-meteo-history', 'kraken-public-ticker', 'gitlab-public-projects',
+      'uk-police-street-crime', 'open-brewery-directory', 'rick-morty-characters', 'wikimedia-pageviews',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['noaa-space-weather'].pathname).toBe('/products/noaa-scales.json')
+    expect(urls['osv-vulnerability'].pathname).toContain('/v1/vulns/GHSA-jfh8-c2jp-5v3q')
+    expect(urls['federal-register-documents'].searchParams.get('conditions[term]')).toBe('artificial intelligence')
+    expect(urls['wikipedia-search'].searchParams.get('generator')).toBe('search')
+    expect(urls['open-meteo-flood'].searchParams.get('daily')).toContain('river_discharge')
+    expect(urls['open-meteo-history'].searchParams.get('daily')).toContain('temperature_2m_max')
+    expect(urls['kraken-public-ticker'].searchParams.get('pair')).toBe('XBTUSD')
+    expect(urls['gitlab-public-projects'].searchParams.get('visibility')).toBe('public')
+    expect(urls['uk-police-street-crime'].pathname).toContain('/burglary')
+    expect(urls['open-brewery-directory'].searchParams.get('by_country')).toBe('united_states')
+    expect(urls['rick-morty-characters'].searchParams.get('name')).toBe('Rick')
+    expect(urls['wikimedia-pageviews'].pathname).toContain('/Singapore/daily/')
   })
 
   it('finds API demos by ID', () => {

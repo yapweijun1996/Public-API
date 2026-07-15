@@ -80,14 +80,14 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 
-  it('registers 69 distinct React component functions with no shared identity', () => {
+  it('registers 81 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(69)
-    expect(new Set(components).size).toBe(69)
-    expect(new Set(components.map((component) => component.name)).size).toBe(69)
+    expect(components).toHaveLength(81)
+    expect(new Set(components).size).toBe(81)
+    expect(new Set(components.map((component) => component.name)).size).toBe(81)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -101,7 +101,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(69)
+    expect(new Set(visualSignatures).size).toBe(81)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })
@@ -202,6 +202,73 @@ describe('new specialist API previews', () => {
     expect(within(preview).getByText('Enterprise Agentic AI')).toBeInTheDocument()
     expect(within(preview).getByText('Sumit Ranjan · Apress')).toBeInTheDocument()
     expect(within(preview).getByText('10.1007/demo')).toBeInTheDocument()
+  })
+})
+
+describe('next keyless API previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('adapts space weather, flood, climate, and crypto market responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('noaa-space-weather')} data={{
+      0: { DateStamp: '2026-07-15', TimeStamp: '06:37:00', R: { Scale: '0', Text: 'none' }, S: { Scale: '0', Text: 'none' }, G: { Scale: '1', Text: 'minor' } },
+      1: { DateStamp: '2026-07-16', G: { Scale: '1', Text: 'minor' } },
+    }}/>)
+    expect(screen.getByRole('region', { name: 'NOAA Space Weather' })).toHaveTextContent('Geomagnetic storm')
+    expect(screen.getByRole('region', { name: 'NOAA Space Weather' })).toHaveTextContent('Level 1')
+
+    rerender(<ResponseDemoPreview api={api('open-meteo-flood')} data={{ latitude: 1.37, longitude: 103.82, daily_units: { river_discharge: 'm³/s' }, daily: { time: ['2026-07-15', '2026-07-16'], river_discharge: [1, 1.2], river_discharge_mean: [0.99, 1.3], river_discharge_max: [1.86, 2.17] } }}/>)
+    expect(screen.getByRole('region', { name: 'Global Flood Forecast' })).toHaveTextContent('Forecast peak')
+    expect(screen.getByRole('region', { name: 'Global Flood Forecast' })).toHaveTextContent('2.17 m³/s')
+
+    rerender(<ResponseDemoPreview api={api('open-meteo-history')} data={{ timezone: 'Asia/Singapore', daily_units: { temperature_2m_max: '°C', precipitation_sum: 'mm' }, daily: { time: ['2025-01-01', '2025-01-02'], temperature_2m_max: [31, 32], temperature_2m_min: [24, 25], precipitation_sum: [1.2, 4.8] } }}/>)
+    expect(screen.getByRole('region', { name: 'Historical Weather' })).toHaveTextContent('Average high')
+    expect(screen.getByRole('region', { name: 'Historical Weather' })).toHaveTextContent('Total rain')
+
+    rerender(<ResponseDemoPreview api={api('kraken-public-ticker')} data={{ result: { XXBTZUSD: { a: ['65010'], b: ['64990'], c: ['65000'], v: ['100', '2500'], l: ['63000', '62000'], h: ['65500', '66000'], o: '64000' } } }}/>)
+    expect(screen.getByRole('region', { name: 'Kraken Market Ticker' })).toHaveTextContent('USD 65,000')
+    expect(screen.getByRole('region', { name: 'Kraken Market Ticker' })).toHaveTextContent('Bid / ask')
+  })
+
+  it('adapts security, regulation, Wikipedia search, and readership responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('osv-vulnerability')} data={{ id: 'GHSA-demo-1234', summary: 'Demo dependency vulnerability', published: '2026-07-01', modified: '2026-07-12', aliases: ['CVE-2026-1000'], affected: [{ package: { ecosystem: 'npm', name: 'demo-package' } }] }}/>)
+    expect(screen.getByRole('region', { name: 'OSV Vulnerability' })).toHaveTextContent('GHSA-demo-1234')
+    expect(screen.getByRole('region', { name: 'OSV Vulnerability' })).toHaveTextContent('demo-package')
+
+    rerender(<ResponseDemoPreview api={api('federal-register-documents')} data={{ count: 1, results: [{ document_number: '2026-10001', publication_date: '2026-07-15', type: 'Proposed Rule', title: 'Artificial Intelligence Safety Framework', abstract: 'A proposed federal framework.', agencies: [{ name: 'Science Office' }] }] }}/>)
+    expect(screen.getByRole('region', { name: 'Federal Register Documents' })).toHaveTextContent('Artificial Intelligence Safety Framework')
+    expect(screen.getByRole('region', { name: 'Federal Register Documents' })).toHaveTextContent('Science Office')
+
+    rerender(<ResponseDemoPreview api={api('wikipedia-search')} data={{ query: { pages: { 1: { pageid: 1, title: 'Singapore', extract: 'A city-state in Southeast Asia.', thumbnail: { source: 'https://upload.wikimedia.org/demo.jpg' } } } } }}/>)
+    expect(screen.getByRole('region', { name: 'Wikipedia Search' })).toHaveTextContent('Singapore')
+    expect(screen.getByRole('region', { name: 'Wikipedia Search' })).toHaveTextContent('A city-state in Southeast Asia.')
+
+    rerender(<ResponseDemoPreview api={api('wikimedia-pageviews')} data={{ items: [{ article: 'Singapore', timestamp: '2026070100', views: 12000 }, { article: 'Singapore', timestamp: '2026070200', views: 15000 }] }}/>)
+    expect(screen.getByRole('region', { name: 'Wikimedia Pageviews' })).toHaveTextContent('Total views')
+    expect(screen.getByRole('region', { name: 'Wikimedia Pageviews' })).toHaveTextContent('27K')
+  })
+
+  it('adapts GitLab, UK crime, brewery, and character directory responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('gitlab-public-projects')} data={[{ path_with_namespace: 'demo/agent-console', description: 'An agent-ready developer console.', star_count: 420, forks_count: 30, open_issues_count: 4, visibility: 'public', topics: ['agents', 'vite'], last_activity_at: '2026-07-14T10:00:00Z' }]}/>)
+    expect(screen.getByRole('region', { name: 'GitLab Public Projects' })).toHaveTextContent('demo/agent-console')
+    expect(screen.getByRole('region', { name: 'GitLab Public Projects' })).toHaveTextContent('420 stars')
+
+    rerender(<ResponseDemoPreview api={api('uk-police-street-crime')} data={[{ category: 'burglary', month: '2026-05', location: { latitude: '51.5074', longitude: '-0.1278', street: { name: 'On or near Whitehall' } } }]}/>)
+    expect(screen.getByRole('region', { name: 'UK Street Crime' })).toHaveTextContent('On or near Whitehall')
+    expect(screen.getByRole('region', { name: 'UK Street Crime' })).toHaveTextContent('Burglary')
+
+    rerender(<ResponseDemoPreview api={api('open-brewery-directory')} data={[{ id: 'brew-1', name: 'Demo Brewing Co', brewery_type: 'micro', city: 'Austin', country: 'United States', latitude: '30.2672', longitude: '-97.7431' }]}/>)
+    expect(screen.getByRole('region', { name: 'Open Brewery Directory' })).toHaveTextContent('Demo Brewing Co')
+    expect(screen.getByRole('region', { name: 'Open Brewery Directory' })).toHaveTextContent('Micro · Austin')
+
+    rerender(<ResponseDemoPreview api={api('rick-morty-characters')} data={{ results: [{ id: 1, name: 'Rick Sanchez', status: 'Alive', species: 'Human', image: 'https://rickandmortyapi.com/api/character/avatar/1.jpeg', location: { name: 'Citadel of Ricks' } }] }}/>)
+    expect(screen.getByRole('region', { name: 'Rick and Morty Characters' })).toHaveTextContent('Rick Sanchez')
+    expect(screen.getByRole('region', { name: 'Rick and Morty Characters' })).toHaveTextContent('Alive · Human · Citadel of Ricks')
   })
 })
 

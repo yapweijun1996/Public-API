@@ -96,6 +96,18 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['nobel-prizes', 'awards-timeline', 'Nobel laureate and discovery timeline'],
   ['chess-player-stats', 'chess-ratings', 'Chess performance rating board'],
   ['crossref-works', 'scholarly-search', 'DOI and scholarly works explorer'],
+  ['noaa-space-weather', 'weather-dashboard', 'NOAA space-weather operations cockpit'],
+  ['osv-vulnerability', 'security-center', 'Open-source vulnerability dossier'],
+  ['federal-register-documents', 'calendar-timeline', 'Federal rulemaking publication timeline'],
+  ['wikipedia-search', 'media-gallery', 'Wikipedia visual knowledge explorer'],
+  ['open-meteo-flood', 'weather-dashboard', 'Global river-discharge forecast panel'],
+  ['open-meteo-history', 'market-chart', 'Historical climate trend comparison'],
+  ['kraken-public-ticker', 'market-chart', 'Kraken public market terminal'],
+  ['gitlab-public-projects', 'developer-feed', 'GitLab public project discovery feed'],
+  ['uk-police-street-crime', 'location-map', 'UK anonymised street-crime map'],
+  ['open-brewery-directory', 'location-map', 'Global brewery location directory'],
+  ['rick-morty-characters', 'media-gallery', 'Character and episode gallery'],
+  ['wikimedia-pageviews', 'market-chart', 'Wikipedia readership trend chart'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)

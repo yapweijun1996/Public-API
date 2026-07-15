@@ -272,6 +272,12 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
 
 const localNow = new Date()
 const today = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`
+const compactDate = (date: Date) => `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
+const daysAgo = (days: number) => {
+  const date = new Date(localNow)
+  date.setDate(date.getDate() - days)
+  return date
+}
 
 export const yahooSgxSymbols: FieldOption[] = [
   { value: 'D05', label: 'D05 · DBS Group' },
@@ -882,7 +888,170 @@ const importedRecommendedApis: ApiDemo[] = [
   },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis]
+const nextKeylessApis: ApiDemo[] = [
+  fixedApi({
+    id: 'noaa-space-weather', name: 'NOAA Space Weather', provider: 'NOAA SWPC', category: 'Environment',
+    description: 'Monitor current radio blackouts, solar radiation storms, and geomagnetic storm scales.',
+    documentationUrl: 'https://www.spaceweather.gov/content/data-access', endpoint: 'https://services.swpc.noaa.gov/products/noaa-scales.json',
+    accent: '#0b5cab', monogram: 'SW', usageNote: 'Official NOAA operational data. Treat forecasts as guidance and retain NOAA attribution.',
+  }),
+  {
+    id: 'osv-vulnerability', name: 'OSV Vulnerability', provider: 'Google Open Source Security', category: 'Developer',
+    description: 'Inspect an open-source vulnerability, affected packages, ecosystem ranges, aliases, and references.',
+    documentationUrl: 'https://google.github.io/osv.dev/api/', accent: '#b42318', monogram: 'OS',
+    fields: [{ id: 'vulnerabilityId', label: 'OSV or GHSA ID', type: 'text', defaultValue: 'GHSA-jfh8-c2jp-5v3q', placeholder: 'e.g. GHSA-jfh8-c2jp-5v3q', help: 'Enter a public OSV, CVE, or GitHub Security Advisory identifier.' }],
+    buildUrl: ({ vulnerabilityId = 'GHSA-jfh8-c2jp-5v3q' }) => `https://api.osv.dev/v1/vulns/${encode(vulnerabilityId || 'GHSA-jfh8-c2jp-5v3q')}`,
+  },
+  {
+    id: 'federal-register-documents', name: 'Federal Register Documents', provider: 'U.S. Federal Register', category: 'Government',
+    description: 'Search recent U.S. rules, notices, proposed rules, presidential documents, and agency publications.',
+    documentationUrl: 'https://www.federalregister.gov/developers/documentation/api/v1', accent: '#344054', monogram: 'FR',
+    fields: [
+      { id: 'query', label: 'Search term', type: 'text', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search document titles and indexed Federal Register content.' },
+      { id: 'limit', label: 'Documents', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 recent documents.' },
+    ],
+    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
+      const safeLimit = Math.min(20, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const params = new URLSearchParams({ per_page: String(safeLimit), order: 'newest', 'conditions[term]': query.trim() || 'artificial intelligence' })
+      return `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
+    },
+  },
+  {
+    id: 'wikipedia-search', name: 'Wikipedia Search', provider: 'Wikimedia Foundation', category: 'Knowledge',
+    description: 'Search Wikipedia and return article extracts, thumbnails, page identifiers, and canonical titles.',
+    documentationUrl: 'https://www.mediawiki.org/wiki/API:Search', accent: '#202122', monogram: 'WP',
+    fields: [
+      { id: 'query', label: 'Article search', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Search English Wikipedia titles and article text.' },
+      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 12, help: 'Return between 1 and 12 matching pages.' },
+    ],
+    buildUrl: ({ query = 'Singapore', limit = '8' }) => {
+      const safeLimit = Math.min(12, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const params = new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim() || 'Singapore', gsrlimit: String(safeLimit), prop: 'pageimages|extracts', exintro: '1', explaintext: '1', piprop: 'thumbnail', pithumbsize: '480', format: 'json', origin: '*' })
+      return `https://en.wikipedia.org/w/api.php?${params.toString()}`
+    },
+  },
+  {
+    id: 'open-meteo-flood', name: 'Global Flood Forecast', provider: 'Open-Meteo', category: 'Environment',
+    description: 'Inspect forecast river discharge and recent hydrological conditions for any coordinate.',
+    documentationUrl: 'https://open-meteo.com/en/docs/flood-api', accent: '#0284c7', monogram: 'FL', risk: 'Review',
+    usageNote: 'Hydrological model guidance only. Do not use this demo for emergency or life-safety decisions.',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '7', min: 1, max: 30, help: 'Return between 1 and 30 daily discharge values.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '7' }) => {
+      const safeDays = Math.min(30, Math.max(1, Number.parseInt(days, 10) || 7))
+      const params = new URLSearchParams({ latitude, longitude, daily: 'river_discharge,river_discharge_mean,river_discharge_max', forecast_days: String(safeDays) })
+      return `https://flood-api.open-meteo.com/v1/flood?${params.toString()}`
+    },
+  },
+  {
+    id: 'open-meteo-history', name: 'Historical Weather', provider: 'Open-Meteo', category: 'Weather',
+    description: 'Compare historical daily temperature and precipitation series for a selected place and date range.',
+    documentationUrl: 'https://open-meteo.com/en/docs/historical-weather-api', accent: '#2563eb', monogram: 'HW',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      { id: 'startDate', label: 'Start date', type: 'text', defaultValue: '2025-01-01', placeholder: 'YYYY-MM-DD', help: 'Use an ISO date supported by the historical archive.' },
+      { id: 'endDate', label: 'End date', type: 'text', defaultValue: '2025-01-14', placeholder: 'YYYY-MM-DD', help: 'Choose an end date on or after the start date.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = '2025-01-01', endDate = '2025-01-14' }) => {
+      const params = new URLSearchParams({ latitude, longitude, start_date: startDate.trim() || '2025-01-01', end_date: endDate.trim() || '2025-01-14', daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum', timezone: 'auto' })
+      return `https://archive-api.open-meteo.com/v1/archive?${params.toString()}`
+    },
+  },
+  {
+    id: 'kraken-public-ticker', name: 'Kraken Market Ticker', provider: 'Kraken', category: 'Finance',
+    description: 'Read live cryptocurrency bid, ask, last trade, volume, high, and low market data.',
+    documentationUrl: 'https://docs.kraken.com/api/docs/rest-api/get-ticker-information', accent: '#5741d9', monogram: 'KR', risk: 'Review',
+    usageNote: 'Public market data only. This demo does not provide trading or financial advice.',
+    fields: [{ id: 'pair', label: 'Market pair', type: 'select', defaultValue: 'XBTUSD', help: 'Choose a public Kraken spot market.', options: [
+      { label: 'BTC / USD', value: 'XBTUSD' }, { label: 'ETH / USD', value: 'ETHUSD' }, { label: 'SOL / USD', value: 'SOLUSD' }, { label: 'BTC / EUR', value: 'XBTEUR' },
+    ] }],
+    buildUrl: ({ pair = 'XBTUSD' }) => `https://api.kraken.com/0/public/Ticker?${new URLSearchParams({ pair: pair || 'XBTUSD' }).toString()}`,
+  },
+  {
+    id: 'gitlab-public-projects', name: 'GitLab Public Projects', provider: 'GitLab', category: 'Developer',
+    description: 'Discover public GitLab projects and compare stars, forks, activity, topics, and programming language.',
+    documentationUrl: 'https://docs.gitlab.com/api/projects/', accent: '#fc6d26', monogram: 'GL',
+    fields: [
+      { id: 'query', label: 'Project search', type: 'text', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search public project names, paths, and descriptions.' },
+      { id: 'limit', label: 'Projects', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 public projects.' },
+    ],
+    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
+      const safeLimit = Math.min(20, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const params = new URLSearchParams({ visibility: 'public', search: query.trim() || 'artificial intelligence', order_by: 'star_count', sort: 'desc', per_page: String(safeLimit) })
+      return `https://gitlab.com/api/v4/projects?${params.toString()}`
+    },
+  },
+  {
+    id: 'uk-police-street-crime', name: 'UK Street Crime', provider: 'UK Home Office', category: 'Government',
+    description: 'Explore recent anonymised street-level crime categories around a selected UK coordinate.',
+    documentationUrl: 'https://data.police.uk/docs/method/crime-street/', accent: '#1d4f91', monogram: 'UK', risk: 'Review',
+    usageNote: 'Locations are anonymised by the source. Present the data as area-level context, not individual-level evidence.',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '51.5074', min: 49, max: 61, help: 'Choose a coordinate within the United Kingdom.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '-0.1278', min: -9, max: 3, help: 'Choose a coordinate within the United Kingdom.' },
+      { id: 'category', label: 'Crime category', type: 'select', defaultValue: 'burglary', help: 'Filter the street-level dataset by category. A focused default keeps the demo response lightweight.', options: [
+        { label: 'All crime', value: 'all-crime' }, { label: 'Anti-social behaviour', value: 'anti-social-behaviour' }, { label: 'Burglary', value: 'burglary' }, { label: 'Vehicle crime', value: 'vehicle-crime' }, { label: 'Violence and sexual offences', value: 'violent-crime' },
+      ] },
+    ],
+    buildUrl: ({ latitude = '51.5074', longitude = '-0.1278', category = 'burglary' }) => `https://data.police.uk/api/crimes-street/${encode(category || 'burglary')}?${new URLSearchParams({ lat: latitude, lng: longitude }).toString()}`,
+  },
+  {
+    id: 'open-brewery-directory', name: 'Open Brewery Directory', provider: 'Open Brewery DB', category: 'Food',
+    description: 'Browse brewery locations, business types, websites, cities, states, and countries.',
+    documentationUrl: 'https://www.openbrewerydb.org/documentation', accent: '#b7791f', monogram: 'BR',
+    fields: [
+      { id: 'country', label: 'Country', type: 'select', defaultValue: 'united_states', help: 'Filter the public brewery directory by country.', options: [
+        { label: 'United States', value: 'united_states' }, { label: 'Ireland', value: 'ireland' }, { label: 'France', value: 'france' }, { label: 'South Korea', value: 'south_korea' },
+      ] },
+      { id: 'type', label: 'Brewery type', type: 'select', defaultValue: 'all', help: 'Optionally filter the business model.', options: [
+        { label: 'All types', value: 'all' }, { label: 'Micro', value: 'micro' }, { label: 'Brewpub', value: 'brewpub' }, { label: 'Regional', value: 'regional' }, { label: 'Contract', value: 'contract' },
+      ] },
+    ],
+    buildUrl: ({ country = 'united_states', type = 'all' }) => {
+      const params = new URLSearchParams({ by_country: country || 'united_states', per_page: '8' })
+      if (type !== 'all') params.set('by_type', type)
+      return `https://api.openbrewerydb.org/v1/breweries?${params.toString()}`
+    },
+  },
+  {
+    id: 'rick-morty-characters', name: 'Rick and Morty Characters', provider: 'Rick and Morty API', category: 'Entertainment',
+    description: 'Search characters and inspect species, status, origin, current location, images, and episode counts.',
+    documentationUrl: 'https://rickandmortyapi.com/documentation/#character', accent: '#22a2bd', monogram: 'RM',
+    fields: [
+      { id: 'name', label: 'Character name', type: 'text', defaultValue: 'Rick', placeholder: 'e.g. Rick', help: 'Search character names using a partial match.' },
+      { id: 'status', label: 'Status', type: 'select', defaultValue: 'all', help: 'Optionally filter characters by life status.', options: [
+        { label: 'All statuses', value: 'all' }, { label: 'Alive', value: 'alive' }, { label: 'Dead', value: 'dead' }, { label: 'Unknown', value: 'unknown' },
+      ] },
+    ],
+    buildUrl: ({ name = 'Rick', status = 'all' }) => {
+      const params = new URLSearchParams({ name: name.trim() || 'Rick' })
+      if (status !== 'all') params.set('status', status)
+      return `https://rickandmortyapi.com/api/character?${params.toString()}`
+    },
+  },
+  {
+    id: 'wikimedia-pageviews', name: 'Wikimedia Pageviews', provider: 'Wikimedia Foundation', category: 'Knowledge',
+    description: 'Chart daily Wikipedia article traffic across desktop, mobile web, and app access.',
+    documentationUrl: 'https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/reference/page-views.html', accent: '#6366f1', monogram: 'PV',
+    fields: [
+      { id: 'article', label: 'Article title', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Use an English Wikipedia article title.' },
+      { id: 'days', label: 'History days', type: 'number', defaultValue: '14', min: 7, max: 90, help: 'Chart between 7 and 90 completed days.' },
+    ],
+    buildUrl: ({ article = 'Singapore', days = '14' }) => {
+      const safeDays = Math.min(90, Math.max(7, Number.parseInt(days, 10) || 14))
+      const end = daysAgo(1)
+      const start = daysAgo(safeDays)
+      const title = encode((article.trim() || 'Singapore').replace(/\s+/g, '_'))
+      return `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia.org/all-access/user/${title}/daily/${compactDate(start)}/${compactDate(end)}`
+    },
+  },
+]
+
+export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))
