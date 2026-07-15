@@ -1,18 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { ApiDemo } from './apiCatalog'
+import { getPreviewProfile, type PreviewLayout } from './previewProfiles'
 
-export type PreviewLayout =
-  | 'weather-dashboard'
-  | 'country-profile'
-  | 'market-chart'
-  | 'media-gallery'
-  | 'location-map'
-  | 'calendar-timeline'
-  | 'solar-cycle'
-  | 'natural-events'
-  | 'transit-board'
-  | 'trivia-game'
-  | 'result-list'
+export type { PreviewLayout } from './previewProfiles'
 
 export type WeatherPreviewVariant = 'current' | 'four-day' | 'twenty-four-hour' | 'area-forecast' | 'station-readings' | 'regional-air-quality' | 'air-quality-forecast' | 'uv-index'
 
@@ -102,24 +92,10 @@ export const buildDemoPreview = (data: unknown): DemoPreviewItem[] => {
   })
 }
 
-const weatherIds = ['weather', 'open-meteo-air-quality', 'data-gov-24hr-forecast', 'data-gov-4day-forecast', 'data-gov-air-temperature', 'data-gov-forecast-2hr', 'data-gov-pm25', 'data-gov-psi', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-uv-index', 'data-gov-wind-direction', 'data-gov-wind-speed']
 const stationWeatherIds = ['data-gov-air-temperature', 'data-gov-rainfall', 'data-gov-relative-humidity', 'data-gov-wind-direction', 'data-gov-wind-speed']
-const mapIds = ['data-gov-carpark', 'data-gov-taxi', 'postcodes-io', 'usgs', 'nhtsa-vpic']
-const galleryIds = ['dogs', 'people', 'data-gov-traffic-images', 'met-museum-object-detail', 'met-museum-search', 'art-institute-search', 'pokeapi', 'tvmaze-search', 'open-food-facts', 'gbif-species-search']
 
 export function selectPreviewLayout(api: Pick<ApiDemo, 'id' | 'category'>): PreviewLayout {
-  if (api.id === 'countries') return 'country-profile'
-  if (api.id === 'sunrise-sunset') return 'solar-cycle'
-  if (api.id === 'nasa-eonet-events') return 'natural-events'
-  if (api.id === 'mbta-transit-routes') return 'transit-board'
-  if (api.id === 'open-trivia') return 'trivia-game'
-  if (['nws-weather', 'carbon-intensity-gb'].includes(api.id)) return 'result-list'
-  if (weatherIds.includes(api.id) || api.category === 'Weather') return 'weather-dashboard'
-  if (api.category === 'Finance' || api.category === 'Economy') return 'market-chart'
-  if (galleryIds.includes(api.id) || ['Media', 'Nature', 'People', 'Food', 'Games', 'Entertainment', 'Biodiversity'].includes(api.category)) return 'media-gallery'
-  if (mapIds.includes(api.id) || ['Geo', 'Vehicle'].includes(api.category)) return 'location-map'
-  if (api.category === 'Calendar' || api.id === 'holidays') return 'calendar-timeline'
-  return 'result-list'
+  return getPreviewProfile(api.id)?.layout ?? 'result-list'
 }
 
 export function selectWeatherPreviewVariant(api: Pick<ApiDemo, 'id'>): WeatherPreviewVariant {
@@ -608,6 +584,113 @@ function TriviaGamePreview({ data }: { data: unknown }) {
   })}</div></div>
 }
 
+type SemanticCard = {
+  title: string
+  eyebrow: string
+  description?: string
+  badge?: string
+  metrics: Array<{ label: string; value: string }>
+  tags?: string[]
+}
+
+const recordArray = (value: unknown) => Array.isArray(value) ? value.filter(isRecord) : []
+const textArray = (value: unknown) => Array.isArray(value) ? value.map(cleanText).filter((item): item is string => Boolean(item)) : []
+const epochDate = (value: unknown) => {
+  const seconds = numberValue(value)
+  return seconds === undefined ? undefined : new Date(seconds * 1000).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function SemanticCards({ cards, emptyTitle }: { cards: SemanticCard[]; emptyTitle: string }) {
+  if (!cards.length) return <div className="weather-empty"><strong>{emptyTitle}</strong><span>The response did not include records for this demo layout.</span></div>
+  return <div className="semantic-card-grid">{cards.slice(0, 8).map((card, index) => <article key={`${card.title}-${index}`}><header><span>{index + 1}</span><div><small>{card.eyebrow}</small><h3>{card.title}</h3></div>{card.badge && <em>{card.badge}</em>}</header>{card.description && <p>{card.description}</p>}<dl>{card.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl>{card.tags?.length ? <footer>{card.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer> : null}</article>)}</div>
+}
+
+function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const root = isRecord(data) ? data : {}
+  let cards: SemanticCard[] = []
+  if (api.id === 'posts') cards = [root].filter((record) => Object.keys(record).length > 0).map((record) => ({ title: cleanText(record.title) ?? 'Post', eyebrow: 'JSONPlaceholder post', description: cleanText(record.body), metrics: [{ label: 'Post ID', value: previewValue(record.id) }, { label: 'User ID', value: previewValue(record.userId) }] }))
+  else if (api.id === 'devto') cards = recordArray(data).map((record) => ({ title: cleanText(record.title) ?? 'DEV article', eyebrow: cleanText(record.readable_publish_date) ?? 'Published article', description: cleanText(record.description), badge: `${previewValue(record.public_reactions_count)} reactions`, metrics: [{ label: 'Comments', value: previewValue(record.comments_count) }, { label: 'Reading time', value: `${previewValue(record.reading_time_minutes)} min` }], tags: textArray(record.tag_list) }))
+  else if (api.id === 'github') cards = recordArray(data).map((record) => ({ title: cleanText(record.full_name ?? record.name) ?? 'Repository', eyebrow: cleanText(record.language) ?? 'GitHub repository', description: cleanText(record.description) ?? 'Public source repository', badge: record.archived ? 'Archived' : 'Active', metrics: [{ label: 'Stars', value: previewValue(record.stargazers_count) }, { label: 'Forks', value: previewValue(record.forks_count) }, { label: 'Issues', value: previewValue(record.open_issues_count) }], tags: textArray(record.topics) }))
+  else if (api.id === 'hacker-news') cards = [root].map((record) => ({ title: cleanText(record.title) ?? 'Hacker News item', eyebrow: `${previewValue(record.type)} by ${previewValue(record.by)}`, badge: `${previewValue(record.score)} points`, metrics: [{ label: 'Comments', value: previewValue(record.descendants) }, { label: 'Published', value: epochDate(record.time) ?? '—' }, { label: 'Item ID', value: previewValue(record.id) }] }))
+  else if (api.id === 'npm-search') cards = recordArray(root.objects).map((record) => {
+    const pkg = isRecord(record.package) ? record.package : {}
+    const downloads = isRecord(record.downloads) ? record.downloads : {}
+    return { title: cleanText(pkg.name) ?? 'npm package', eyebrow: `v${previewValue(pkg.version)}`, description: cleanText(pkg.description), badge: `${compactNumber(numberValue(downloads.weekly) ?? 0)} weekly`, metrics: [{ label: 'Publisher', value: previewValue(recordValue(pkg.publisher, 'username')) }, { label: 'Updated', value: dateParts(pkg.date).full }, { label: 'Score', value: formatNumber((numberValue(record.searchScore) ?? 0) * 100, 0) }], tags: textArray(pkg.keywords) }
+  })
+  else if (api.id === 'pypi-json') {
+    const info = isRecord(root.info) ? root.info : {}
+    cards = [{ title: cleanText(info.name) ?? 'Python package', eyebrow: `Python · v${previewValue(info.version)}`, description: cleanText(info.summary), badge: previewValue(info.license_expression ?? info.license), metrics: [{ label: 'Requires Python', value: previewValue(info.requires_python) }, { label: 'Maintainer', value: previewValue(info.maintainer ?? info.author) }, { label: 'Releases', value: String(Object.keys(isRecord(root.releases) ? root.releases : {}).length) }], tags: textArray(info.keywords?.toString().split(',')) }]
+  } else if (api.id === 'stack-exchange') cards = recordArray(root.items).map((record) => ({ title: cleanText(record.title) ?? 'Stack Overflow question', eyebrow: epochDate(record.creation_date) ?? 'Active question', badge: record.is_answered ? 'Answered' : 'Open', metrics: [{ label: 'Score', value: previewValue(record.score) }, { label: 'Answers', value: previewValue(record.answer_count) }, { label: 'Views', value: compactNumber(numberValue(record.view_count) ?? 0) }], tags: textArray(record.tags) }))
+  return <SemanticCards cards={cards} emptyTitle="Developer records unavailable"/>
+}
+
+function SecurityCenterPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const root = isRecord(data) ? data : {}
+  let cards: SemanticCard[] = []
+  if (api.id === 'nvd-cpe-search') cards = recordArray(root.products).map((product) => {
+    const cpe = isRecord(product.cpe) ? product.cpe : product
+    const titles = recordArray(cpe.titles)
+    return { title: cleanText(titles[0]?.title) ?? cleanText(cpe.cpeName) ?? 'CPE product', eyebrow: 'NVD product dictionary', badge: cpe.deprecated ? 'Deprecated' : 'Active', metrics: [{ label: 'CPE name', value: previewValue(cpe.cpeName) }, { label: 'Created', value: dateParts(cpe.created).full }, { label: 'Modified', value: dateParts(cpe.lastModified).full }] }
+  })
+  else cards = recordArray(root.vulnerabilities).map((entry) => {
+    const cve = isRecord(entry.cve) ? entry.cve : entry
+    const descriptions = recordArray(cve.descriptions)
+    const metrics = isRecord(cve.metrics) ? cve.metrics : {}
+    const cvss = recordArray(metrics.cvssMetricV31)[0] ?? recordArray(metrics.cvssMetricV30)[0] ?? recordArray(metrics.cvssMetricV2)[0]
+    const cvssData = cvss && isRecord(cvss.cvssData) ? cvss.cvssData : {}
+    return { title: cleanText(cve.id) ?? 'CVE advisory', eyebrow: 'NIST vulnerability record', description: cleanText(descriptions.find((item) => item.lang === 'en')?.value ?? descriptions[0]?.value), badge: cleanText(cvssData.baseSeverity) ?? cleanText(cve.vulnStatus) ?? 'Reviewed', metrics: [{ label: 'CVSS score', value: previewValue(cvssData.baseScore) }, { label: 'Published', value: dateParts(cve.published).full }, { label: 'Modified', value: dateParts(cve.lastModified).full }] }
+  })
+  return <SemanticCards cards={cards} emptyTitle="Security records unavailable"/>
+}
+
+function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const root = isRecord(data) ? data : {}
+  let cards: SemanticCard[] = []
+  if (api.id === 'open-library-search') cards = recordArray(root.docs).map((book) => ({ title: cleanText(book.title) ?? 'Book', eyebrow: textArray(book.author_name).join(', ') || 'Open Library', badge: previewValue(book.first_publish_year), metrics: [{ label: 'Authors', value: String(textArray(book.author_name).length || 1) }, { label: 'First published', value: previewValue(book.first_publish_year) }, { label: 'Edition key', value: previewValue(book.key) }] }))
+  else if (api.id === 'clinical-trials-search') cards = recordArray(root.studies).map((study) => {
+    const protocol = isRecord(study.protocolSection) ? study.protocolSection : {}
+    const identification = isRecord(protocol.identificationModule) ? protocol.identificationModule : {}
+    const status = isRecord(protocol.statusModule) ? protocol.statusModule : {}
+    const design = isRecord(protocol.designModule) ? protocol.designModule : {}
+    return { title: cleanText(identification.briefTitle ?? identification.officialTitle) ?? 'Clinical study', eyebrow: cleanText(identification.nctId) ?? 'ClinicalTrials.gov', badge: cleanText(status.overallStatus) ?? 'Study', metrics: [{ label: 'Study type', value: previewValue(design.studyType) }, { label: 'Start date', value: previewValue(recordValue(status.startDateStruct, 'date')) }, { label: 'Has results', value: study.hasResults ? 'Yes' : 'No' }] }
+  })
+  else if (api.id === 'europe-pmc-search') {
+    const list = isRecord(root.resultList) ? root.resultList : {}
+    cards = recordArray(list.result).map((paper) => ({ title: cleanText(paper.title) ?? 'Research paper', eyebrow: cleanText(paper.authorString) ?? 'Europe PMC', description: cleanText(paper.journalTitle), badge: previewValue(paper.pubYear), metrics: [{ label: 'Citations', value: previewValue(paper.citedByCount) }, { label: 'Open access', value: paper.isOpenAccess === 'Y' ? 'Yes' : 'No' }, { label: 'Identifier', value: previewValue(paper.doi ?? paper.pmid ?? paper.id) }] }))
+  }
+  return <SemanticCards cards={cards} emptyTitle="Research records unavailable"/>
+}
+
+function DictionaryEntryPreview({ data }: { data: unknown }) {
+  const entry = recordArray(data)[0]
+  if (!entry) return <div className="weather-empty"><strong>Dictionary entry unavailable</strong><span>No word entry was returned.</span></div>
+  const phonetics = recordArray(entry.phonetics)
+  const meanings = recordArray(entry.meanings)
+  const phonetic = cleanText(entry.phonetic) ?? cleanText(phonetics.find((item) => item.text)?.text) ?? 'Pronunciation unavailable'
+  return <div className="dictionary-preview"><div className="dictionary-hero"><div><span>English dictionary</span><strong>{cleanText(entry.word) ?? 'Word'}</strong><b>{phonetic}</b></div><span aria-hidden="true">Aa</span></div><div className="dictionary-meanings">{meanings.map((meaning, index) => {
+    const definitions = recordArray(meaning.definitions)
+    return <section key={`${meaning.partOfSpeech}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(meaning.partOfSpeech) ?? 'Meaning'}</h3></header><ol>{definitions.slice(0, 3).map((definition, definitionIndex) => <li key={definitionIndex}><p>{cleanText(definition.definition) ?? 'Definition unavailable'}</p>{cleanText(definition.example) && <blockquote>“{cleanText(definition.example)}”</blockquote>}</li>)}</ol>{textArray(meaning.synonyms).length ? <footer><b>Synonyms</b>{textArray(meaning.synonyms).slice(0, 6).map((word) => <span key={word}>{word}</span>)}</footer> : null}</section>
+  })}</div></div>
+}
+
+function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const root = isRecord(data) ? data : {}
+  let records: Array<Record<string, unknown>> = []
+  if (api.id === 'carbon-intensity-gb') records = recordArray(root.data).map((record) => ({ title: 'GB carbon intensity', status: recordValue(record.intensity, 'index'), value: recordValue(record.intensity, 'actual') ?? recordValue(record.intensity, 'forecast'), unit: 'gCO₂/kWh', updated: record.from }))
+  else if (api.id === 'ipify-public-ip') records = [{ title: 'Detected public address', value: root.ip, status: String(root.ip ?? '').includes(':') ? 'IPv6' : 'IPv4', source: 'Network response' }]
+  else if (api.id === 'nws-weather') records = recordArray(root.features).map((feature) => isRecord(feature.properties) ? feature.properties : feature)
+  else if (api.id === 'usaspending') records = recordArray(root.results)
+  else if (api.id === 'wikidata-sparql') records = recordArray(recordValue(recordValue(root.results, 'bindings'), 'items') ?? recordValue(root.results, 'bindings')).map((binding) => Object.fromEntries(Object.entries(binding).map(([key, value]) => [key, recordValue(value, 'value') ?? value])))
+  else if (api.id === 'openfda-drug-labels') records = recordArray(root.results).map((record) => ({ title: textArray(record.openfda && recordValue(record.openfda, 'brand_name'))[0] ?? textArray(record.spl_product_data_elements)[0] ?? 'Drug label', purpose: textArray(record.purpose)[0], warnings: textArray(record.warnings)[0], active_ingredient: textArray(record.active_ingredient)[0] }))
+  else records = findPreviewRecords(data)
+  const cards = records.map((record, index) => {
+    const entries = Object.entries(record).filter(([, value]) => value !== undefined).slice(0, 6)
+    const titleEntry = entries.find(([key]) => ['title', 'name', 'recipient name', 'award id'].includes(key.toLowerCase()))
+    return { title: cleanText(titleEntry?.[1]) ?? `${api.name} record ${index + 1}`, eyebrow: api.provider, badge: cleanText(record.status ?? record.severity ?? record.event) ?? undefined, description: cleanText(record.description ?? record.summary ?? record.warnings), metrics: entries.filter(([key]) => key !== titleEntry?.[0] && !['description', 'summary', 'warnings'].includes(key.toLowerCase())).slice(0, 4).map(([key, value]) => ({ label: previewLabel(key), value: previewValue(value) })) }
+  })
+  return <SemanticCards cards={cards} emptyTitle="Structured records unavailable"/>
+}
+
 function ResultListPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const items = buildDemoPreview(data)
   return <div className="demo-preview-grid">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
@@ -624,6 +707,11 @@ const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title:
   'natural-events': { icon: '◎', eyebrow: 'Live response · Earth monitor', title: 'Natural events monitor', description: 'Near-real-time natural events organized by category, location, status, and observation time.' },
   'transit-board': { icon: 'T', eyebrow: 'Live response · Transit layout', title: 'Transit route board', description: 'A route-focused interface using MBTA colors, destinations, and service types.' },
   'trivia-game': { icon: '?', eyebrow: 'Live response · Game layout', title: 'Trivia challenge', description: 'A playable-looking question deck with decoded prompts, answer options, and difficulty labels.' },
+  'developer-feed': { icon: '</>', eyebrow: 'Live response · Developer layout', title: 'Developer workspace', description: 'Repositories, packages, posts, and community activity translated into actionable cards.' },
+  'security-center': { icon: '◇', eyebrow: 'Live response · Security layout', title: 'Security advisory center', description: 'Vulnerability and product records organized by severity, identifiers, and review dates.' },
+  'research-library': { icon: '▤', eyebrow: 'Live response · Research layout', title: 'Research library', description: 'Books, papers, and clinical studies presented with authorship, status, and identifiers.' },
+  'dictionary-entry': { icon: 'Aa', eyebrow: 'Live response · Language layout', title: 'Dictionary entry', description: 'Definitions, parts of speech, examples, and synonyms mapped from the word response.' },
+  'data-table': { icon: '▦', eyebrow: 'Live response · Data layout', title: 'Structured data view', description: 'Purpose-built records that expose the most useful values from this response.' },
   'result-list': { icon: '✦', eyebrow: 'Live response · Results layout', title: 'Result explorer', description: 'A structured result browser adapted to this API response.' },
 }
 
@@ -653,6 +741,11 @@ export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown
   else if (layout === 'natural-events') content = <NaturalEventsPreview data={data}/>
   else if (layout === 'transit-board') content = <TransitBoardPreview data={data}/>
   else if (layout === 'trivia-game') content = <TriviaGamePreview data={data}/>
+  else if (layout === 'developer-feed') content = <DeveloperFeedPreview data={data} api={api}/>
+  else if (layout === 'security-center') content = <SecurityCenterPreview data={data} api={api}/>
+  else if (layout === 'research-library') content = <ResearchLibraryPreview data={data} api={api}/>
+  else if (layout === 'dictionary-entry') content = <DictionaryEntryPreview data={data}/>
+  else if (layout === 'data-table') content = <DataTablePreview data={data} api={api}/>
   else content = <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`

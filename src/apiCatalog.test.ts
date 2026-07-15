@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { apiCatalog, getApiById, getDefaultParameters, validateParameters, yahooSgxSymbols } from './apiCatalog'
+import { previewProfileIds, previewProfiles } from './previewProfiles'
 
 describe('API catalog', () => {
   it('has unique IDs and builds valid HTTPS URLs from defaults', () => {
@@ -9,6 +10,16 @@ describe('API catalog', () => {
       const url = new URL(api.buildUrl(getDefaultParameters(api)))
       expect(url.protocol).toBe('https:')
     }
+  })
+
+  it('assigns one intentional demo preview profile to every catalog API', () => {
+    const catalogIds = apiCatalog.map((api) => api.id).sort()
+    const profileIds = [...previewProfileIds].sort()
+
+    expect(new Set(previewProfileIds).size).toBe(previewProfileIds.length)
+    expect(profileIds).toEqual(catalogIds)
+    expect(Object.keys(previewProfiles).sort()).toEqual(catalogIds)
+    expect(Object.values(previewProfiles).every((profile) => profile.layout !== 'result-list')).toBe(true)
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {

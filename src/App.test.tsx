@@ -72,9 +72,12 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'mbta-transit-routes', category: 'Utility' })).toBe('transit-board')
     expect(selectPreviewLayout({ id: 'open-trivia', category: 'Games' })).toBe('trivia-game')
     expect(selectPreviewLayout({ id: 'geocoding-search', category: 'Geo' })).toBe('location-map')
-    expect(selectPreviewLayout({ id: 'carbon-intensity-gb', category: 'Environment' })).toBe('result-list')
-    expect(selectPreviewLayout({ id: 'nws-weather', category: 'Weather' })).toBe('result-list')
-    expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('result-list')
+    expect(selectPreviewLayout({ id: 'carbon-intensity-gb', category: 'Environment' })).toBe('data-table')
+    expect(selectPreviewLayout({ id: 'nws-weather', category: 'Weather' })).toBe('data-table')
+    expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('developer-feed')
+    expect(selectPreviewLayout({ id: 'nvd-cves', category: 'Developer' })).toBe('security-center')
+    expect(selectPreviewLayout({ id: 'europe-pmc-search', category: 'Research' })).toBe('research-library')
+    expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 })
 
@@ -113,6 +116,39 @@ describe('new interactive API previews', () => {
     const trivia = screen.getByRole('region', { name: 'Trivia challenge' })
     expect(trivia).toHaveTextContent("When did Halley's Comet appear?")
     expect(within(trivia).getByText('1986')).toBeInTheDocument()
+  })
+})
+
+describe('catalog-wide semantic previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('turns nested dictionary meanings into definitions, examples, and synonyms', () => {
+    render(<ResponseDemoPreview api={api('free-dictionary')} data={[{ word: 'hello', phonetic: '/həˈləʊ/', meanings: [{ partOfSpeech: 'noun', synonyms: ['greeting', 'salutation'], definitions: [{ definition: 'An expression of greeting.', example: 'Hello, how are you?' }] }] }]}/> )
+    const preview = screen.getByRole('region', { name: 'Dictionary entry' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'dictionary-entry')
+    expect(within(preview).getByText('An expression of greeting.')).toBeInTheDocument()
+    expect(within(preview).getByText('greeting')).toBeInTheDocument()
+    expect(within(preview).queryByText('3 items')).not.toBeInTheDocument()
+  })
+
+  it('maps developer, security, research, and structured data families to semantic cards', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('github')} data={[{ full_name: 'octocat/Hello-World', language: 'JavaScript', description: 'Example repository', stargazers_count: 42, forks_count: 8, open_issues_count: 2, topics: ['demo'] }]}/> )
+    expect(screen.getByRole('region', { name: 'Developer workspace' })).toHaveTextContent('octocat/Hello-World')
+
+    rerender(<ResponseDemoPreview api={api('nvd-cves')} data={{ vulnerabilities: [{ cve: { id: 'CVE-2026-1234', published: '2026-07-01', lastModified: '2026-07-10', descriptions: [{ lang: 'en', value: 'A representative security issue.' }], metrics: { cvssMetricV31: [{ cvssData: { baseScore: 8.1, baseSeverity: 'HIGH' } }] } } }] }}/> )
+    expect(screen.getByRole('region', { name: 'Security advisory center' })).toHaveTextContent('CVE-2026-1234')
+
+    rerender(<ResponseDemoPreview api={api('europe-pmc-search')} data={{ resultList: { result: [{ title: 'Agentic systems in practice', authorString: 'A. Developer', pubYear: '2026', journalTitle: 'Demo Journal', citedByCount: 12, isOpenAccess: 'Y', doi: '10.1/demo' }] } }}/> )
+    expect(screen.getByRole('region', { name: 'Research library' })).toHaveTextContent('Agentic systems in practice')
+
+    rerender(<ResponseDemoPreview api={api('ipify-public-ip')} data={{ ip: '203.0.113.10' }}/> )
+    expect(screen.getByRole('region', { name: 'Structured data view' })).toHaveTextContent('203.0.113.10')
   })
 })
 
