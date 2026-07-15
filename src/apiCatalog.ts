@@ -17,9 +17,11 @@ export const apiCategories = [
   'Language',
   'Media',
   'Nature',
+  'News',
   'People',
   'Research',
   'Singapore',
+  'Sports',
   'Utility',
   'Vehicle',
   'Weather',
@@ -1051,7 +1053,138 @@ const nextKeylessApis: ApiDemo[] = [
   },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis]
+const verifiedKeylessApis: ApiDemo[] = [
+  {
+    id: 'openf1-historical', name: 'OpenF1 Race Sessions', provider: 'OpenF1', category: 'Sports',
+    description: 'Explore completed Formula 1 race sessions, circuits, meeting names, dates, and session identifiers.',
+    documentationUrl: 'https://openf1.org/docs/', accent: '#e10600', monogram: 'F1', risk: 'Review',
+    usageNote: 'Historical sessions from 2023 onward are keyless. Real-time data requires a paid authenticated plan.',
+    fields: [
+      { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed season available to anonymous users.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
+      { id: 'country', label: 'Grand Prix country', type: 'select', defaultValue: 'Singapore', help: 'Filter the race-session calendar by country.', options: [{ label: 'Singapore', value: 'Singapore' }, { label: 'Monaco', value: 'Monaco' }, { label: 'Great Britain', value: 'Great Britain' }, { label: 'Japan', value: 'Japan' }, { label: 'Australia', value: 'Australia' }] },
+    ],
+    buildUrl: ({ season = '2025', country = 'Singapore' }) => `https://api.openf1.org/v1/sessions?${new URLSearchParams({ year: season || '2025', country_name: country || 'Singapore', session_name: 'Race' }).toString()}`,
+  },
+  {
+    id: 'irail-liveboard', name: 'Belgian Rail Liveboard', provider: 'iRail', category: 'Utility',
+    description: 'Read live Belgian train departures or arrivals with platforms, delays, cancellations, and destinations.',
+    documentationUrl: 'https://docs.irail.be/', accent: '#1257a6', monogram: 'IR',
+    usageNote: 'Public community service. Keep requests user-driven and retain a modest refresh interval.',
+    fields: [
+      { id: 'station', label: 'Station', type: 'select', defaultValue: 'Brussels-South', help: 'Choose a Belgian railway station.', options: [{ label: 'Brussels-South', value: 'Brussels-South' }, { label: 'Gent-Sint-Pieters', value: 'Gent-Sint-Pieters' }, { label: 'Antwerpen-Centraal', value: 'Antwerpen-Centraal' }, { label: 'Brugge', value: 'Brugge' }] },
+      { id: 'direction', label: 'Board direction', type: 'select', defaultValue: 'departure', help: 'Show departing or arriving services.', options: [{ label: 'Departures', value: 'departure' }, { label: 'Arrivals', value: 'arrival' }] },
+    ],
+    buildUrl: ({ station = 'Brussels-South', direction = 'departure' }) => `https://api.irail.be/liveboard/?${new URLSearchParams({ station: station || 'Brussels-South', format: 'json', lang: 'en', arrdep: direction || 'departure', alerts: 'false' }).toString()}`,
+  },
+  {
+    id: 'spaceflight-news', name: 'Spaceflight News', provider: 'The Space Devs', category: 'News',
+    description: 'Browse recent spaceflight reporting with publishers, summaries, images, publication dates, and related missions.',
+    documentationUrl: 'https://api.spaceflightnewsapi.net/v4/docs/', accent: '#4f46e5', monogram: 'SN',
+    fields: [
+      { id: 'query', label: 'News search', type: 'text', defaultValue: 'NASA', placeholder: 'e.g. NASA', help: 'Search titles and summaries from indexed spaceflight publishers.' },
+      { id: 'limit', label: 'Articles', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recent articles.' },
+    ],
+    buildUrl: ({ query = 'NASA', limit = '6' }) => {
+      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))
+      return `https://api.spaceflightnewsapi.net/v4/articles/?${new URLSearchParams({ search: query.trim() || 'NASA', limit: String(safeLimit), ordering: '-published_at' }).toString()}`
+    },
+  },
+  {
+    id: 'launch-library-upcoming', name: 'Upcoming Space Launches', provider: 'The Space Devs', category: 'Calendar',
+    description: 'Track upcoming rocket launches with mission, provider, pad, status, image, and scheduled launch time.',
+    documentationUrl: 'https://thespacedevs.com/llapi', accent: '#0f766e', monogram: 'LL',
+    usageNote: 'The anonymous service is limited to 15 requests per hour; avoid automatic polling.',
+    fields: [
+      { id: 'query', label: 'Launch search', type: 'text', defaultValue: 'SpaceX', placeholder: 'e.g. SpaceX', help: 'Filter upcoming launches by mission, rocket, or provider text.' },
+      { id: 'limit', label: 'Launches', type: 'number', defaultValue: '4', min: 1, max: 6, help: 'Return between 1 and 6 upcoming launches.' },
+    ],
+    buildUrl: ({ query = 'SpaceX', limit = '4' }) => {
+      const safeLimit = Math.min(6, Math.max(1, Number.parseInt(limit, 10) || 4))
+      return `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?${new URLSearchParams({ search: query.trim() || 'SpaceX', limit: String(safeLimit), ordering: 'net' }).toString()}`
+    },
+  },
+  {
+    id: 'wiktionary-entry', name: 'Wiktionary Definitions', provider: 'Wikimedia Foundation', category: 'Language',
+    description: 'Look up structured English definitions, parts of speech, examples, related words, and language information.',
+    documentationUrl: 'https://en.wiktionary.org/api/rest_v1/', accent: '#7c3aed', monogram: 'WK',
+    fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', placeholder: 'e.g. serendipity', help: 'Enter one English Wiktionary headword.' }],
+    buildUrl: ({ word = 'hello' }) => `https://en.wiktionary.org/api/rest_v1/page/definition/${encode(word || 'hello')}`,
+  },
+  {
+    id: 'animechan-random-quote', name: 'Anime Quote Generator', provider: 'AnimeChan', category: 'Entertainment',
+    description: 'Generate an anime quote with its character and series metadata for cards, prompts, and entertainment demos.',
+    documentationUrl: 'https://animechan.io/docs', accent: '#2e51a2', monogram: 'AQ',
+    usageNote: 'Public community service. Keep requests user-driven and avoid automated high-frequency refreshes.',
+    fields: [],
+    buildUrl: () => 'https://api.animechan.io/v1/quotes/random',
+  },
+  {
+    id: 'jokeapi-safe', name: 'Safe Joke Generator', provider: 'JokeAPI', category: 'Games',
+    description: 'Generate a safe joke with category, language, delivery style, and moderation flags.',
+    documentationUrl: 'https://v2.jokeapi.dev/', accent: '#9333ea', monogram: 'JA',
+    usageNote: 'Safe mode is always enabled. The anonymous service permits up to 120 requests per minute.',
+    fields: [
+      { id: 'category', label: 'Category', type: 'select', defaultValue: 'Programming', help: 'Choose a safe joke category.', options: [{ label: 'Programming', value: 'Programming' }, { label: 'Pun', value: 'Pun' }, { label: 'Miscellaneous', value: 'Misc' }, { label: 'Christmas', value: 'Christmas' }] },
+      { id: 'type', label: 'Joke format', type: 'select', defaultValue: 'twopart', help: 'Return a one-line or setup-and-delivery joke.', options: [{ label: 'Setup and delivery', value: 'twopart' }, { label: 'Single line', value: 'single' }] },
+    ],
+    buildUrl: ({ category = 'Programming', type = 'twopart' }) => `https://v2.jokeapi.dev/joke/${encode(category || 'Programming')}?${new URLSearchParams({ safe_mode: '', type: type || 'twopart', amount: '1' }).toString().replace('safe_mode=', 'safe-mode')}`,
+  },
+  {
+    id: 'dummyjson-recipes', name: 'Recipe Explorer', provider: 'DummyJSON', category: 'Food',
+    description: 'Prototype a recipe application using structured ingredients, instructions, cuisine, ratings, and food imagery.',
+    documentationUrl: 'https://dummyjson.com/docs/recipes', accent: '#ea580c', monogram: 'RE',
+    usageNote: 'Synthetic test data intended for prototypes, demonstrations, and UI development.',
+    fields: [
+      { id: 'query', label: 'Recipe search', type: 'text', defaultValue: 'pasta', placeholder: 'e.g. pasta', help: 'Search recipe names and indexed recipe text.' },
+      { id: 'limit', label: 'Recipes', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recipes.' },
+    ],
+    buildUrl: ({ query = 'pasta', limit = '6' }) => {
+      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))
+      return `https://dummyjson.com/recipes/search?${new URLSearchParams({ q: query.trim() || 'pasta', limit: String(safeLimit) }).toString()}`
+    },
+  },
+  {
+    id: 'brasilapi-postcode', name: 'Brazil Postcode Explorer', provider: 'BrasilAPI', category: 'Geo',
+    description: 'Resolve a Brazilian CEP into address, neighbourhood, city, state, timezone, provider, and coordinates.',
+    documentationUrl: 'https://brasilapi.com.br/docs#tag/CEP-V2', accent: '#16a34a', monogram: 'BR',
+    usageNote: 'User-driven lookups only. BrasilAPI prohibits automated crawling and full-range scans.',
+    fields: [{ id: 'postcode', label: 'Brazilian CEP', type: 'text', defaultValue: '01310930', placeholder: 'e.g. 01310-930', help: 'Enter exactly eight digits, with or without a hyphen.' }],
+    buildUrl: ({ postcode = '01310930' }) => `https://brasilapi.com.br/api/cep/v2/${encode((postcode || '01310930').replace(/\D/g, ''))}`,
+  },
+  {
+    id: 'poetrydb-poems', name: 'PoetryDB Reader', provider: 'PoetryDB', category: 'Books',
+    description: 'Read a small random selection of public-domain poems from a selected author with titles and full lines.',
+    documentationUrl: 'https://github.com/thundercomb/poetrydb', accent: '#9f1239', monogram: 'PO',
+    fields: [
+      { id: 'author', label: 'Poet', type: 'select', defaultValue: 'Emily Dickinson', help: 'Choose a poet represented in PoetryDB.', options: [{ label: 'Emily Dickinson', value: 'Emily Dickinson' }, { label: 'William Shakespeare', value: 'William Shakespeare' }, { label: 'William Blake', value: 'William Blake' }, { label: 'Edgar Allan Poe', value: 'Edgar Allan Poe' }] },
+      { id: 'count', label: 'Poems', type: 'number', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' },
+    ],
+    buildUrl: ({ author = 'Emily Dickinson', count = '3' }) => {
+      const safeCount = Math.min(4, Math.max(1, Number.parseInt(count, 10) || 3))
+      return `https://poetrydb.org/author,random/${encode(author || 'Emily Dickinson')};${safeCount}/title,author,lines,linecount`
+    },
+  },
+  {
+    id: 'coingecko-keyless-market', name: 'CoinGecko Keyless Market', provider: 'CoinGecko', category: 'Finance',
+    description: 'Read a keyless cryptocurrency price snapshot with market cap, 24-hour volume, and daily change.',
+    documentationUrl: 'https://docs.coingecko.com/docs/keyless-public-api', accent: '#75b798', monogram: 'CG', risk: 'Review',
+    usageNote: 'Shared public pool for light, non-commercial experimentation. Handle 429 responses with backoff.',
+    fields: [
+      { id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'bitcoin', help: 'Choose one CoinGecko asset identifier.', options: [{ label: 'Bitcoin', value: 'bitcoin' }, { label: 'Ethereum', value: 'ethereum' }, { label: 'Solana', value: 'solana' }, { label: 'Dogecoin', value: 'dogecoin' }] },
+      { id: 'currency', label: 'Quote currency', type: 'select', defaultValue: 'usd', help: 'Choose a supported quote currency.', options: [{ label: 'USD', value: 'usd' }, { label: 'SGD', value: 'sgd' }, { label: 'EUR', value: 'eur' }] },
+    ],
+    buildUrl: ({ coin = 'bitcoin', currency = 'usd' }) => `https://api.coingecko.com/api/v3/simple/price?${new URLSearchParams({ ids: coin || 'bitcoin', vs_currencies: currency || 'usd', include_market_cap: 'true', include_24hr_vol: 'true', include_24hr_change: 'true', include_last_updated_at: 'true' }).toString()}`,
+  },
+  {
+    id: 'swapi-people', name: 'Star Wars People', provider: 'SWAPI', category: 'Entertainment',
+    description: 'Search Star Wars characters and inspect species-era profile fields including birth year, homeworld, and films.',
+    documentationUrl: 'https://swapi.dev/documentation', accent: '#ca8a04', monogram: 'SW',
+    fields: [{ id: 'query', label: 'Character search', type: 'text', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' }],
+    buildUrl: ({ query = 'Luke' }) => `https://swapi.dev/api/people/?${new URLSearchParams({ search: query.trim() || 'Luke' }).toString()}`,
+  },
+]
+
+export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))

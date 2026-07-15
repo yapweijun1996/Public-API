@@ -24,7 +24,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(81)
+    expect(apiCatalog).toHaveLength(93)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -108,6 +108,38 @@ describe('API catalog', () => {
     expect(urls['open-brewery-directory'].searchParams.get('by_country')).toBe('united_states')
     expect(urls['rick-morty-characters'].searchParams.get('name')).toBe('Rick')
     expect(urls['wikimedia-pageviews'].pathname).toContain('/Singapore/daily/')
+  })
+
+  it('builds the twelve newly verified keyless API requests', () => {
+    const ids = [
+      'openf1-historical', 'irail-liveboard', 'spaceflight-news', 'launch-library-upcoming',
+      'wiktionary-entry', 'animechan-random-quote', 'jokeapi-safe', 'dummyjson-recipes',
+      'brasilapi-postcode', 'poetrydb-poems', 'coingecko-keyless-market', 'swapi-people',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['openf1-historical'].pathname).toBe('/v1/sessions')
+    expect(urls['openf1-historical'].searchParams.get('country_name')).toBe('Singapore')
+    expect(urls['irail-liveboard'].pathname).toBe('/liveboard/')
+    expect(urls['irail-liveboard'].searchParams.get('arrdep')).toBe('departure')
+    expect(urls['spaceflight-news'].pathname).toBe('/v4/articles/')
+    expect(urls['spaceflight-news'].searchParams.get('limit')).toBe('6')
+    expect(urls['launch-library-upcoming'].pathname).toBe('/2.2.0/launch/upcoming/')
+    expect(urls['launch-library-upcoming'].searchParams.get('limit')).toBe('4')
+    expect(urls['wiktionary-entry'].pathname).toBe('/api/rest_v1/page/definition/hello')
+    expect(urls['animechan-random-quote'].pathname).toBe('/v1/quotes/random')
+    expect(urls['jokeapi-safe'].pathname).toBe('/joke/Programming')
+    expect(urls['jokeapi-safe'].search).toContain('safe-mode')
+    expect(urls['dummyjson-recipes'].pathname).toBe('/recipes/search')
+    expect(urls['brasilapi-postcode'].pathname).toBe('/api/cep/v2/01310930')
+    expect(decodeURIComponent(urls['poetrydb-poems'].pathname)).toContain('/Emily Dickinson;3/')
+    expect(urls['coingecko-keyless-market'].searchParams.get('ids')).toBe('bitcoin')
+    expect(urls['swapi-people'].searchParams.get('search')).toBe('Luke')
   })
 
   it('finds API demos by ID', () => {

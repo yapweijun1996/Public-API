@@ -108,6 +108,18 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['open-brewery-directory', 'location-map', 'Global brewery location directory'],
   ['rick-morty-characters', 'media-gallery', 'Character and episode gallery'],
   ['wikimedia-pageviews', 'market-chart', 'Wikipedia readership trend chart'],
+  ['openf1-historical', 'data-table', 'Formula 1 race-session command board'],
+  ['irail-liveboard', 'transit-board', 'Belgian railway live departure board'],
+  ['spaceflight-news', 'media-gallery', 'Spaceflight newsroom briefing wall'],
+  ['launch-library-upcoming', 'calendar-timeline', 'Upcoming mission launch countdown'],
+  ['wiktionary-entry', 'dictionary-entry', 'Wiktionary structured language entry'],
+  ['animechan-random-quote', 'data-table', 'Anime quote character stage'],
+  ['jokeapi-safe', 'trivia-game', 'Safe interactive joke stage'],
+  ['dummyjson-recipes', 'media-gallery', 'Prototype recipe discovery grid'],
+  ['brasilapi-postcode', 'location-map', 'Brazilian postcode location profile'],
+  ['poetrydb-poems', 'research-library', 'Public-domain poetry reading room'],
+  ['coingecko-keyless-market', 'market-chart', 'Keyless cryptocurrency market snapshot'],
+  ['swapi-people', 'data-table', 'Star Wars character dossier'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)

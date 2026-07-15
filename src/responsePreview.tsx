@@ -398,6 +398,23 @@ function CountryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 }
 
 function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
+  if (api.id === 'coingecko-keyless-market' && isRecord(data)) {
+    const [coinId, quote] = Object.entries(data).find(([, value]) => isRecord(value)) ?? ['Cryptocurrency', {}]
+    const market = isRecord(quote) ? quote : {}
+    const currencyKey = Object.keys(market).find((key) => !key.includes('_')) ?? 'usd'
+    const price = numberValue(market[currencyKey]) ?? 0
+    const change = numberValue(market[`${currencyKey}_24h_change`]) ?? 0
+    const previous = change === -100 ? price : price / (1 + (change / 100))
+    return {
+      label: `${previewLabel(coinId)} · Keyless public market`, value: price, currency: currencyKey.toUpperCase(),
+      points: [previous, price], dates: ['24 hours ago', 'Latest'],
+      metrics: [
+        { label: '24h change', value: `${change >= 0 ? '+' : ''}${formatNumber(change, 2)}%` },
+        { label: 'Market cap', value: compactNumber(numberValue(market[`${currencyKey}_market_cap`]) ?? 0) },
+        { label: '24h volume', value: compactNumber(numberValue(market[`${currencyKey}_24h_vol`]) ?? 0) },
+      ],
+    }
+  }
   if (api.id === 'open-meteo-history' && isRecord(data)) {
     const daily = isRecord(data.daily) ? data.daily : {}
     const units = isRecord(data.daily_units) ? data.daily_units : {}
@@ -651,6 +668,16 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
     title: cleanText(character.name) ?? 'Character',
     subtitle: `${previewValue(character.status)} · ${previewValue(character.species)} · ${previewValue(recordValue(character.location, 'name'))}`,
   })).filter((item) => item.image)
+  if (api.id === 'spaceflight-news' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((article) => ({
+    image: textValue(article.image_url) ?? '',
+    title: cleanText(article.title) ?? 'Spaceflight report',
+    subtitle: `${cleanText(article.news_site) ?? 'Spaceflight News'} · ${dateParts(article.published_at).full || 'Recently published'}`,
+  })).filter((item) => item.image)
+  if (api.id === 'dummyjson-recipes' && isRecord(data)) return recordArray(data.recipes).slice(0, 8).map((recipe) => ({
+    image: textValue(recipe.image) ?? '',
+    title: cleanText(recipe.name) ?? 'Recipe',
+    subtitle: `${cleanText(recipe.cuisine) ?? 'Global cuisine'} · ★ ${previewValue(recipe.rating)} · ${previewValue(recipe.difficulty)}`,
+  })).filter((item) => item.image)
   if (api.id === 'art-institute-search' && isRecord(data)) {
     const base = isRecord(data.config) ? textValue(data.config.iiif_url) : undefined
     if (base && Array.isArray(data.data)) return data.data.filter(isRecord).filter((item) => item.image_id).slice(0, 6).map((item) => ({ image: `${base}/2/${item.image_id}/full/500,/0/default.jpg`, title: textValue(item.title) ?? 'Artwork', subtitle: textValue(item.artist_title) }))
@@ -671,6 +698,19 @@ function MediaGalleryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 }
 
 function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint[] {
+  if (api?.id === 'brasilapi-postcode' && isRecord(data)) {
+    const location = isRecord(data.location) ? data.location : {}
+    const coordinates = isRecord(location.coordinates) ? location.coordinates : {}
+    const latitude = numberValue(coordinates.latitude)
+    const longitude = numberValue(coordinates.longitude)
+    if (latitude === undefined || longitude === undefined) return []
+    return [{
+      latitude,
+      longitude,
+      label: [cleanText(data.street), cleanText(data.neighborhood)].filter(Boolean).join(' · ') || cleanText(data.cep) || 'Brazilian postcode',
+      detail: `${cleanText(data.city) ?? 'City'} · ${cleanText(data.state) ?? 'State'} · ${cleanText(data.timezoneName) ?? 'Brazil'}`,
+    }]
+  }
   if (api?.id === 'uk-police-street-crime') return recordArray(data).slice(0, 8).map((crime, index) => {
     const location = isRecord(crime.location) ? crime.location : {}
     const street = isRecord(location.street) ? location.street : {}
@@ -816,6 +856,18 @@ function NaturalEventsPreview({ data }: { data: unknown }) {
 
 function TransitBoardPreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
+  if (isRecord(root.departures)) {
+    const departures = recordArray(root.departures.departure).slice(0, 10)
+    const station = cleanText(recordValue(root.stationinfo, 'name') ?? root.station) ?? 'Belgian railway station'
+    if (!departures.length) return <div className="weather-empty"><strong>No train services found</strong><span>The iRail liveboard did not include departures or arrivals.</span></div>
+    return <div className="transit-preview"><div className="transit-summary"><span>Belgian rail liveboard</span><strong>{departures.length}</strong><b>services at {station}</b><small>Live platform and delay information</small></div><div className="transit-routes">{departures.map((departure, index) => {
+      const delay = numberValue(departure.delay) ?? 0
+      const departureEpoch = numberValue(departure.time)
+      const time = departureEpoch === undefined ? undefined : new Date(departureEpoch * 1000).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' })
+      const vehicle = cleanText(departure.vehicle) ?? `Service ${index + 1}`
+      return <article key={`${vehicle}-${departure.time}-${index}`} style={{ '--route-color': departure.canceled === '1' ? '#b42318' : delay > 0 ? '#d97706' : '#16805b' } as CSSProperties}><span>{previewValue(departure.platform)}</span><div><small>{delay > 0 ? `Delayed ${Math.round(delay / 60)} min` : 'On schedule'}</small><h3>{cleanText(departure.station) ?? 'Destination unavailable'}</h3><p>{vehicle.replace('BE.NMBS.', '')} · {time ?? previewValue(departure.time)}</p></div><em>{departure.canceled === '1' ? 'Cancelled' : 'Train'}</em></article>
+    })}</div></div>
+  }
   const routes = Array.isArray(root.data) ? root.data.filter(isRecord).slice(0, 10) : []
   if (!routes.length) return <div className="weather-empty"><strong>No transit routes found</strong><span>The response did not include MBTA route records.</span></div>
   return <div className="transit-preview"><div className="transit-summary"><span>Boston network</span><strong>{routes.length}</strong><b>routes in this view</b><small>Live MBTA route catalogue</small></div><div className="transit-routes">{routes.map((route, index) => {
@@ -829,7 +881,13 @@ function TransitBoardPreview({ data }: { data: unknown }) {
 
 function TriviaGamePreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
-  const questions = Array.isArray(root.results) ? root.results.filter(isRecord).slice(0, 6) : []
+  const questions = root.error === false && (root.joke || root.setup) ? [{
+    category: root.category,
+    difficulty: 'safe mode',
+    question: root.setup ?? root.joke,
+    correct_answer: root.delivery ?? root.joke,
+    incorrect_answers: [],
+  }] : Array.isArray(root.results) ? root.results.filter(isRecord).slice(0, 6) : []
   if (!questions.length) return <div className="weather-empty"><strong>No trivia questions found</strong><span>Try a different category or difficulty.</span></div>
   return <div className="trivia-preview"><div className="trivia-score"><span>Quiz deck</span><strong>{questions.length}</strong><b>questions ready</b><small>Correct answers are highlighted for this developer demo.</small></div><div className="trivia-grid">{questions.map((question, index) => {
     const correct = cleanText(question.correct_answer) ?? 'Answer unavailable'
@@ -956,6 +1014,110 @@ function DictionaryEntryPreview({ data }: { data: unknown }) {
     const definitions = recordArray(meaning.definitions)
     return <section key={`${meaning.partOfSpeech}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(meaning.partOfSpeech) ?? 'Meaning'}</h3></header><ol>{definitions.slice(0, 3).map((definition, definitionIndex) => <li key={definitionIndex}><p>{cleanText(definition.definition) ?? 'Definition unavailable'}</p>{cleanText(definition.example) && <blockquote>“{cleanText(definition.example)}”</blockquote>}</li>)}</ol>{textArray(meaning.synonyms).length ? <footer><b>Synonyms</b>{textArray(meaning.synonyms).slice(0, 6).map((word) => <span key={word}>{word}</span>)}</footer> : null}</section>
   })}</div></div>
+}
+
+function OpenF1SessionsPreview({ data }: { data: unknown }) {
+  const cards: SemanticCard[] = recordArray(data).map((session) => ({
+    title: cleanText(session.meeting_name) ?? cleanText(session.circuit_short_name) ?? 'Formula 1 session',
+    eyebrow: `${cleanText(session.country_name) ?? 'Grand Prix'} · ${cleanText(session.location) ?? 'Circuit'}`,
+    badge: cleanText(session.session_name) ?? 'Race',
+    description: `Completed ${cleanText(session.session_type) ?? 'race'} session in the OpenF1 historical archive.`,
+    metrics: [
+      { label: 'Session start', value: dateParts(session.date_start).full || previewValue(session.date_start) },
+      { label: 'Circuit', value: cleanText(session.circuit_short_name) ?? '—' },
+      { label: 'Session key', value: previewValue(session.session_key) },
+      { label: 'Meeting key', value: previewValue(session.meeting_key) },
+    ],
+    tags: [cleanText(session.country_code), cleanText(session.gmt_offset)].filter((value): value is string => Boolean(value)),
+  }))
+  return <SemanticCards cards={cards} emptyTitle="Formula 1 sessions unavailable"/>
+}
+
+function LaunchSchedulePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const launches = recordArray(root.results).slice(0, 8)
+  if (!launches.length) return <div className="weather-empty"><strong>Upcoming launches unavailable</strong><span>No matching mission records were returned.</span></div>
+  return <ol className="calendar-preview launch-schedule-preview">{launches.map((launch, index) => {
+    const dateText = textValue(launch.net) ?? textValue(launch.window_start) ?? ''
+    const parsed = new Date(dateText)
+    const provider = cleanText(recordValue(launch.launch_service_provider, 'name')) ?? 'Launch provider'
+    const pad = isRecord(launch.pad) ? launch.pad : {}
+    const location = cleanText(recordValue(pad.location, 'name') ?? pad.name) ?? 'Launch site pending'
+    const mission = isRecord(launch.mission) ? launch.mission : {}
+    return <li key={`${launch.id}-${index}`}><time dateTime={dateText}><strong>{Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('en', { day: '2-digit' })}</strong><span>{Number.isNaN(parsed.getTime()) ? 'TBD' : parsed.toLocaleDateString('en', { month: 'short' })}</span></time><div><small>{provider} · {cleanText(recordValue(launch.status, 'name')) ?? 'Scheduled'}</small><h3>{cleanText(launch.name) ?? cleanText(mission.name) ?? `Launch ${index + 1}`}</h3><p>{location} · {Number.isNaN(parsed.getTime()) ? 'Time pending' : parsed.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</p></div></li>
+  })}</ol>
+}
+
+function WiktionaryEntryPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const languageEntries: Array<Record<string, unknown> & { languageCode: string }> = Object.entries(root).flatMap(([languageCode, value]) => recordArray(value).map((entry) => ({ ...entry, languageCode })))
+  if (!languageEntries.length) return <div className="weather-empty"><strong>Wiktionary entry unavailable</strong><span>No structured language definitions were returned.</span></div>
+  const primary = languageEntries[0]
+  return <div className="dictionary-preview wiktionary-preview"><div className="dictionary-hero"><div><span>{cleanText(primary.language) ?? previewLabel(primary.languageCode)} Wiktionary</span><strong>Definition entry</strong><b>{languageEntries.length} part{languageEntries.length === 1 ? '' : 's'} of speech</b></div><span aria-hidden="true">W</span></div><div className="dictionary-meanings">{languageEntries.slice(0, 8).map((entry, index) => {
+    const definitions = recordArray(entry.definitions)
+    const synonyms = [...textArray(entry.synonyms), ...definitions.flatMap((definition) => textArray(definition.synonyms))]
+    return <section key={`${entry.languageCode}-${entry.partOfSpeech}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(entry.partOfSpeech) ?? 'Meaning'}</h3></header><ol>{definitions.slice(0, 4).map((definition, definitionIndex) => {
+      const examples = textArray(definition.examples)
+      return <li key={definitionIndex}><p>{cleanText(definition.definition) ?? 'Definition unavailable'}</p>{examples[0] && <blockquote>“{examples[0]}”</blockquote>}</li>
+    })}</ol>{synonyms.length ? <footer><b>Related words</b>{[...new Set(synonyms)].slice(0, 6).map((word) => <span key={word}>{word}</span>)}</footer> : null}</section>
+  })}</div></div>
+}
+
+function PoetryReaderPreview({ data }: { data: unknown }) {
+  const poems = recordArray(data).slice(0, 4)
+  if (!poems.length) return <div className="weather-empty"><strong>Poems unavailable</strong><span>PoetryDB did not return a poem for this author.</span></div>
+  const first = poems[0]
+  return <div className="dictionary-preview poetry-preview"><div className="dictionary-hero"><div><span>Public-domain reading room</span><strong>{cleanText(first.author) ?? 'Selected poet'}</strong><b>{poems.length} poem{poems.length === 1 ? '' : 's'} in this reading</b></div><span aria-hidden="true">¶</span></div><div className="dictionary-meanings">{poems.map((poem, index) => <section key={`${poem.title}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(poem.title) ?? `Poem ${index + 1}`}</h3></header><ol><li><p>{textArray(poem.lines).slice(0, 6).join(' / ') || 'Poem lines unavailable'}</p><blockquote>{previewValue(poem.linecount)} lines · {cleanText(poem.author) ?? 'Unknown author'}</blockquote></li></ol></section>)}</div></div>
+}
+
+function StarWarsPeoplePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const cards: SemanticCard[] = recordArray(root.results).map((person) => ({
+    title: cleanText(person.name) ?? 'Star Wars character',
+    eyebrow: `Born ${previewValue(person.birth_year)} · ${cleanText(person.gender) ?? 'Profile'}`,
+    badge: textArray(person.species).length ? `${textArray(person.species).length} species link` : 'Human / unknown',
+    description: 'Character dossier assembled from SWAPI profile and relationship fields.',
+    metrics: [
+      { label: 'Height', value: person.height === 'unknown' ? 'Unknown' : `${previewValue(person.height)} cm` },
+      { label: 'Mass', value: person.mass === 'unknown' ? 'Unknown' : `${previewValue(person.mass)} kg` },
+      { label: 'Films', value: String(Array.isArray(person.films) ? person.films.length : 0) },
+      { label: 'Homeworld', value: cleanText(person.homeworld)?.split('/').filter(Boolean).at(-1) ?? 'Unknown' },
+    ],
+    tags: [cleanText(person.eye_color), cleanText(person.hair_color), cleanText(person.skin_color)].filter((value): value is string => Boolean(value)),
+  }))
+  return <SemanticCards cards={cards} emptyTitle="Star Wars people unavailable"/>
+}
+
+function AnimeQuotePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const quote = isRecord(root.data) ? root.data : {}
+  const anime = isRecord(quote.anime) ? quote.anime : {}
+  const character = isRecord(quote.character) ? quote.character : {}
+  const content = cleanText(quote.content)
+  if (!content) return <div className="weather-empty"><strong>Anime quote unavailable</strong><span>AnimeChan did not return quote content.</span></div>
+  return <div className="dictionary-preview anime-quote-preview"><div className="dictionary-hero"><div><span>Anime quote stage</span><strong>{cleanText(anime.name) ?? 'Anime series'}</strong><b>{cleanText(character.name) ?? 'Character unavailable'}</b></div><span aria-hidden="true">“</span></div><div className="dictionary-meanings"><section><header><span>AQ</span><h3>{cleanText(character.name) ?? 'Featured quote'}</h3></header><ol><li><p>“{content}”</p><blockquote>{cleanText(anime.altName) ?? cleanText(anime.name) ?? 'AnimeChan public quote'}</blockquote></li></ol></section></div></div>
+}
+
+function BrazilPostcodePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  if (!Object.keys(root).length) return <div className="weather-empty"><strong>Brazilian postcode unavailable</strong><span>No address profile was returned.</span></div>
+  const location = isRecord(root.location) ? root.location : {}
+  const coordinates = isRecord(location.coordinates) ? location.coordinates : {}
+  const coordinateText = coordinates.latitude !== undefined && coordinates.longitude !== undefined ? `${previewValue(coordinates.latitude)}, ${previewValue(coordinates.longitude)}` : 'Not supplied'
+  return <SemanticCards cards={[{
+    title: cleanText(root.street) ?? cleanText(root.cep) ?? 'Brazilian postcode',
+    eyebrow: `CEP ${previewValue(root.cep)} · ${cleanText(root.city) ?? 'Brazil'}`,
+    badge: cleanText(root.state) ?? 'BR',
+    description: [cleanText(root.neighborhood), cleanText(root.city), cleanText(root.state)].filter(Boolean).join(' · '),
+    metrics: [
+      { label: 'City', value: previewValue(root.city) },
+      { label: 'Neighbourhood', value: previewValue(root.neighborhood) },
+      { label: 'Coordinates', value: coordinateText },
+      { label: 'Timezone', value: previewValue(root.timezoneName) },
+      { label: 'Source service', value: previewValue(root.service) },
+    ],
+    tags: ['Address profile', cleanText(location.type)].filter((value): value is string => Boolean(value)),
+  }]} emptyTitle="Brazilian postcode unavailable"/>
 }
 
 function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
@@ -1089,6 +1251,18 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'open-brewery-directory': defineApiPreview('open-brewery-directory', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'rick-morty-characters': defineApiPreview('rick-morty-characters', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'wikimedia-pageviews': defineApiPreview('wikimedia-pageviews', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'openf1-historical': defineApiPreview('openf1-historical', ({ data }) => <OpenF1SessionsPreview data={data}/>),
+  'irail-liveboard': defineApiPreview('irail-liveboard', ({ data }) => <TransitBoardPreview data={data}/>),
+  'spaceflight-news': defineApiPreview('spaceflight-news', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'launch-library-upcoming': defineApiPreview('launch-library-upcoming', ({ data }) => <LaunchSchedulePreview data={data}/>),
+  'wiktionary-entry': defineApiPreview('wiktionary-entry', ({ data }) => <WiktionaryEntryPreview data={data}/>),
+  'animechan-random-quote': defineApiPreview('animechan-random-quote', ({ data }) => <AnimeQuotePreview data={data}/>),
+  'jokeapi-safe': defineApiPreview('jokeapi-safe', ({ data }) => <TriviaGamePreview data={data}/>),
+  'dummyjson-recipes': defineApiPreview('dummyjson-recipes', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'brasilapi-postcode': defineApiPreview('brasilapi-postcode', ({ data }) => <BrazilPostcodePreview data={data}/>),
+  'poetrydb-poems': defineApiPreview('poetrydb-poems', ({ data }) => <PoetryReaderPreview data={data}/>),
+  'coingecko-keyless-market': defineApiPreview('coingecko-keyless-market', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'swapi-people': defineApiPreview('swapi-people', ({ data }) => <StarWarsPeoplePreview data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)

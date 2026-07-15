@@ -80,14 +80,14 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 
-  it('registers 81 distinct React component functions with no shared identity', () => {
+  it('registers 93 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(81)
-    expect(new Set(components).size).toBe(81)
-    expect(new Set(components.map((component) => component.name)).size).toBe(81)
+    expect(components).toHaveLength(93)
+    expect(new Set(components).size).toBe(93)
+    expect(new Set(components.map((component) => component.name)).size).toBe(93)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -101,7 +101,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(81)
+    expect(new Set(visualSignatures).size).toBe(93)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })
@@ -362,5 +362,78 @@ describe('data.gov.sg adaptive weather previews', () => {
     expect(selectWeatherPreviewVariant({ id: 'data-gov-pm25' })).toBe('regional-air-quality')
     expect(selectWeatherPreviewVariant({ id: 'data-gov-uv-index' })).toBe('uv-index')
     expect(selectWeatherPreviewVariant({ id: 'open-meteo-air-quality' })).toBe('air-quality-forecast')
+  })
+})
+
+describe('new verified keyless API previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('adapts Formula 1, Belgian rail, space news, and launch schedule responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('openf1-historical')} data={[{ session_key: 999, meeting_key: 888, meeting_name: 'Singapore Grand Prix', country_name: 'Singapore', location: 'Marina Bay', circuit_short_name: 'Marina Bay', session_name: 'Race', session_type: 'Race', date_start: '2025-10-05T12:00:00Z' }]}/> )
+    expect(screen.getByRole('region', { name: 'OpenF1 Race Sessions' })).toHaveTextContent('Singapore Grand Prix')
+    expect(screen.getByRole('region', { name: 'OpenF1 Race Sessions' })).toHaveTextContent('Marina Bay')
+
+    rerender(<ResponseDemoPreview api={api('irail-liveboard')} data={{ station: 'Brussels-South/Brussels-Midi', stationinfo: { name: 'Brussels-South/Brussels-Midi' }, departures: { departure: [{ time: '1784102400', delay: '300', canceled: '0', vehicle: 'BE.NMBS.IC123', platform: '4', station: 'Antwerpen-Centraal' }] } }}/> )
+    expect(screen.getByRole('region', { name: 'Belgian Rail Liveboard' })).toHaveTextContent('Antwerpen-Centraal')
+    expect(screen.getByRole('region', { name: 'Belgian Rail Liveboard' })).toHaveTextContent('Delayed 5 min')
+
+    rerender(<ResponseDemoPreview api={api('spaceflight-news')} data={{ results: [{ id: 1, title: 'Moon mission prepares for launch', news_site: 'Space News', image_url: 'https://example.com/moon.jpg', published_at: '2026-07-15T06:00:00Z' }] }}/> )
+    expect(screen.getByRole('region', { name: 'Spaceflight News' })).toHaveTextContent('Moon mission prepares for launch')
+
+    rerender(<ResponseDemoPreview api={api('launch-library-upcoming')} data={{ results: [{ id: 'launch-1', name: 'DemoSat Mission', net: '2026-08-01T12:30:00Z', status: { name: 'Go for Launch' }, launch_service_provider: { name: 'SpaceX' }, pad: { name: 'Pad 39A', location: { name: 'Kennedy Space Center' } }, mission: { name: 'DemoSat' } }] }}/> )
+    const launch = screen.getByRole('region', { name: 'Upcoming Space Launches' })
+    expect(launch).toHaveTextContent('DemoSat Mission')
+    expect(launch).toHaveTextContent('Kennedy Space Center')
+  })
+
+  it('adapts Wiktionary, anime quotes, safe jokes, and recipe responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('wiktionary-entry')} data={{ en: [{ language: 'English', partOfSpeech: 'Interjection', definitions: [{ definition: '<i>A greeting</i> used when meeting someone.', examples: ['Hello there.'], synonyms: ['hi'] }] }] }}/> )
+    const dictionary = screen.getByRole('region', { name: 'Wiktionary Definitions' })
+    expect(dictionary).toHaveTextContent('A greeting used when meeting someone.')
+    expect(dictionary).toHaveTextContent('Hello there.')
+
+    rerender(<ResponseDemoPreview api={api('animechan-random-quote')} data={{ status: 'success', data: { content: 'To become Hokage is my dream!', anime: { id: 266, name: 'Naruto', altName: 'ナルト' }, character: { id: 123, name: 'Naruto Uzumaki' } } }}/> )
+    const animeQuote = screen.getByRole('region', { name: 'Anime Quote Generator' })
+    expect(animeQuote).toHaveTextContent('To become Hokage is my dream!')
+    expect(animeQuote).toHaveTextContent('Naruto Uzumaki')
+
+    rerender(<ResponseDemoPreview api={api('jokeapi-safe')} data={{ error: false, category: 'Programming', type: 'twopart', setup: 'Why did the developer cross the road?', delivery: 'To reach the other site.', safe: true }}/> )
+    const joke = screen.getByRole('region', { name: 'Safe Joke Generator' })
+    expect(joke).toHaveTextContent('Why did the developer cross the road?')
+    expect(joke).toHaveTextContent('To reach the other site.')
+
+    rerender(<ResponseDemoPreview api={api('dummyjson-recipes')} data={{ recipes: [{ id: 1, name: 'Pasta Primavera', image: 'https://example.com/pasta.jpg', cuisine: 'Italian', rating: 4.8, difficulty: 'Easy' }] }}/> )
+    expect(screen.getByRole('region', { name: 'Recipe Explorer' })).toHaveTextContent('Pasta Primavera')
+    expect(screen.getByRole('region', { name: 'Recipe Explorer' })).toHaveTextContent('Italian · ★ 4.8 · Easy')
+  })
+
+  it('adapts Brazil postcode, poetry, CoinGecko, and Star Wars responses', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('brasilapi-postcode')} data={{ cep: '01310930', state: 'SP', city: 'São Paulo', neighborhood: 'Bela Vista', street: 'Avenida Paulista', timezoneName: 'America/Sao_Paulo', location: { type: 'Point', coordinates: { longitude: '-46.6558', latitude: '-23.5614' } } }}/> )
+    const postcode = screen.getByRole('region', { name: 'Brazil Postcode Explorer' })
+    expect(postcode).toHaveTextContent('Avenida Paulista')
+    expect(postcode).toHaveTextContent('Bela Vista')
+    expect(postcode).toHaveTextContent('São Paulo · SP')
+
+    rerender(<ResponseDemoPreview api={api('poetrydb-poems')} data={[{ title: 'Hope is the thing with feathers', author: 'Emily Dickinson', lines: ['Hope is the thing with feathers', 'That perches in the soul'], linecount: '12' }]}/> )
+    const poetry = screen.getByRole('region', { name: 'PoetryDB Reader' })
+    expect(poetry).toHaveTextContent('Hope is the thing with feathers')
+    expect(poetry).toHaveTextContent('12 lines')
+
+    rerender(<ResponseDemoPreview api={api('coingecko-keyless-market')} data={{ bitcoin: { usd: 65000, usd_market_cap: 1280000000000, usd_24h_vol: 35000000000, usd_24h_change: 2.5, last_updated_at: 1784102400 } }}/> )
+    const market = screen.getByRole('region', { name: 'CoinGecko Keyless Market' })
+    expect(market).toHaveTextContent('Bitcoin · Keyless public market')
+    expect(market).toHaveTextContent('+2.5%')
+
+    rerender(<ResponseDemoPreview api={api('swapi-people')} data={{ count: 1, results: [{ name: 'Luke Skywalker', birth_year: '19BBY', gender: 'male', height: '172', mass: '77', homeworld: 'https://swapi.dev/api/planets/1/', films: ['1', '2'], species: [], eye_color: 'blue' }] }}/> )
+    const starWars = screen.getByRole('region', { name: 'Star Wars People' })
+    expect(starWars).toHaveTextContent('Luke Skywalker')
+    expect(starWars).toHaveTextContent('172 cm')
+    expect(starWars).toHaveTextContent('2')
   })
 })
