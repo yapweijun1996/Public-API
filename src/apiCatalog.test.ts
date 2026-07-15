@@ -20,6 +20,7 @@ describe('API catalog', () => {
     expect(profileIds).toEqual(catalogIds)
     expect(Object.keys(previewProfiles).sort()).toEqual(catalogIds)
     expect(Object.values(previewProfiles).every((profile) => profile.layout !== 'result-list')).toBe(true)
+    expect(new Set(Object.values(previewProfiles).map((profile) => profile.label)).size).toBe(apiCatalog.length)
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {

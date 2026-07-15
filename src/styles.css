@@ -227,12 +227,18 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
 
 .demo-preview { margin-top: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 15px 38px rgba(28,50,88,.07); }
 .demo-preview-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 13px; }
-.demo-preview-head > span { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 11px; color: var(--violet); background: #f1ecff; font-size: 20px; font-weight: 750; }
+.demo-preview-head > span { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--preview-accent, var(--violet)) 26%, white); border-radius: 11px; color: color-mix(in srgb, var(--preview-accent, var(--violet)) 82%, #17233e); background: color-mix(in srgb, var(--preview-accent, var(--violet)) 12%, white); font-size: 13px; font-weight: 780; }
 .demo-preview-head > div { min-width: 0; }
 .demo-preview-head small { color: #7962ae; font-size: 9px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
 .demo-preview-head h2 { margin: 3px 0 0; color: #17233e; font-size: 19px; letter-spacing: -.025em; }
 .demo-preview-head p { max-width: 720px; margin: 5px 0 0; color: #687891; font-size: 11px; line-height: 1.55; }
 .demo-preview-head em { padding: 7px 10px; display: inline-flex; align-items: center; gap: 5px; border-radius: 16px; color: #087f5b; background: #e8faf3; font-size: 9px; font-style: normal; font-weight: 720; white-space: nowrap; }
+.api-specific-preview { --component-angle: 145deg; --component-radius: 14px; --component-pattern-size: 34px; margin-top: 18px; padding: 1px; position: relative; overflow: hidden; border-radius: var(--component-radius); background: linear-gradient(var(--component-angle), color-mix(in srgb, var(--preview-accent) 72%, white), color-mix(in srgb, var(--preview-accent) 12%, white) 42%, #fff 76%); isolation: isolate; }
+.api-specific-preview::before { content: ""; width: calc(var(--component-pattern-size) * 4); height: calc(var(--component-pattern-size) * 4); position: absolute; z-index: -1; top: calc(var(--component-pattern-size) * -1.8); right: calc(var(--component-pattern-size) * -1.3); border: 1px solid color-mix(in srgb, var(--preview-accent) 28%, transparent); border-radius: 50%; box-shadow: 0 0 0 var(--component-pattern-size) color-mix(in srgb, var(--preview-accent) 6%, transparent), 0 0 0 calc(var(--component-pattern-size) * 2) color-mix(in srgb, var(--preview-accent) 3%, transparent); pointer-events: none; }
+.api-specific-preview > * { margin-top: 0; position: relative; z-index: 1; }
+.api-specific-preview > .weather-empty { margin-top: 0; }
+.api-specific-preview .market-sparkline polyline { stroke: var(--preview-accent); }
+.api-specific-preview .market-sparkline stop:first-child { stop-color: var(--preview-accent); }
 .demo-preview-grid { margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 10px; }
 .demo-preview-card { min-width: 0; padding: 14px; border: 1px solid #e1e7f0; border-radius: 9px; background: linear-gradient(145deg, #fff, #f8faff); }
 .demo-preview-card-title { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px; }
@@ -519,6 +525,7 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
 .preview-research-library .demo-preview-head > span { color: #166a59; background: #e7f7f2; }
 .preview-dictionary-entry .demo-preview-head > span { color: #6741b5; background: #efe9ff; font-size: 13px; }
 .preview-data-table .demo-preview-head > span { color: #3d647c; background: #e9f3f7; }
+.demo-preview[data-api-id] .demo-preview-head > span { color: color-mix(in srgb, var(--preview-accent) 82%, #17233e); background: color-mix(in srgb, var(--preview-accent) 12%, white); font-size: 12px; }
 .semantic-card-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .semantic-card-grid article { min-width: 0; padding: 14px; border: 1px solid #dfe6ef; border-radius: 11px; background: linear-gradient(145deg, #fff, #f8faff); }
 .semantic-card-grid header { display: grid; grid-template-columns: 31px minmax(0, 1fr) auto; align-items: center; gap: 9px; }

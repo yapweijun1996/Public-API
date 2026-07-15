@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { apiCatalog } from './apiCatalog'
-import { buildDemoPreview, ResponseDemoPreview, selectPreviewLayout, selectWeatherPreviewVariant } from './responsePreview'
+import { apiPreviewComponentIds, apiPreviewComponents, buildDemoPreview, ResponseDemoPreview, selectPreviewLayout, selectWeatherPreviewVariant } from './responsePreview'
 
 const matchMedia = (query: string): MediaQueryList => ({
   matches: false,
@@ -46,8 +46,8 @@ describe('catalog live API flow', () => {
     expect(await screen.findByRole('heading', { name: 'Request lab' })).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(await screen.findByText(/"name": "Singapore"/)).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { name: 'Country profile' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Country profile' })).toHaveAttribute('data-preview-layout', 'country-profile')
+    expect(await screen.findByRole('heading', { name: 'Country Explorer' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Country Explorer' })).toHaveAttribute('data-preview-layout', 'country-profile')
     expect(screen.getByRole('heading', { name: 'Singapore' })).toBeInTheDocument()
     expect(screen.getByText('East Asia & Pacific')).toBeInTheDocument()
   })
@@ -79,6 +79,31 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'europe-pmc-search', category: 'Research' })).toBe('research-library')
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
+
+  it('registers 64 distinct React component functions with no shared identity', () => {
+    const catalogIds = apiCatalog.map((api) => api.id).sort()
+    const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
+
+    expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
+    expect(components).toHaveLength(64)
+    expect(new Set(components).size).toBe(64)
+    expect(new Set(components.map((component) => component.name)).size).toBe(64)
+  })
+
+  it('mounts an API-owned visual component for every catalog response', () => {
+    const visualSignatures: string[] = []
+    for (const candidate of apiCatalog) {
+      const { container, unmount } = render(<ResponseDemoPreview api={candidate} data={{}}/>)
+      expect(container.querySelector('[data-webmcp-surface="api-demo-preview"]')).toHaveAttribute('data-preview-component', candidate.id)
+      const component = container.querySelector(`[data-api-preview-component="${candidate.id}"]`)
+      expect(component).toBeInTheDocument()
+      visualSignatures.push(component?.getAttribute('data-visual-signature') ?? '')
+      expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
+      unmount()
+    }
+    expect(new Set(visualSignatures).size).toBe(64)
+    expect(visualSignatures.every(Boolean)).toBe(true)
+  })
 })
 
 describe('new interactive API previews', () => {
@@ -92,7 +117,7 @@ describe('new interactive API previews', () => {
 
   it('renders current global air-quality measurements', () => {
     render(<ResponseDemoPreview api={api('open-meteo-air-quality')} data={{ timezone: 'Asia/Singapore', current_units: { pm2_5: 'μg/m³' }, current: { time: '2026-07-15T07:00', us_aqi: 66, pm2_5: 19.6, pm10: 26.5, nitrogen_dioxide: 12.6, ozone: 56 } }}/> )
-    const preview = screen.getByRole('region', { name: 'Current air quality' })
+    const preview = screen.getByRole('region', { name: 'Global Air Quality' })
     expect(preview).toHaveAttribute('data-preview-variant', 'air-quality-forecast')
     expect(within(preview).getByText('U.S. AQI · Moderate')).toBeInTheDocument()
     expect(within(preview).getByText('19.6')).toBeInTheDocument()
@@ -100,20 +125,20 @@ describe('new interactive API previews', () => {
 
   it('renders a solar timeline from sunrise-sunset v2', () => {
     render(<ResponseDemoPreview api={api('sunrise-sunset')} data={{ date: '2026-07-15', tzid: 'Asia/Singapore', lat: 1.3521, lng: 103.8198, sunrise: '2026-07-15T07:03:51+08:00', sunset: '2026-07-15T19:17:33+08:00', solar_noon: '2026-07-15T13:10:42+08:00', first_light: '2026-07-15T05:50:49+08:00', last_light: '2026-07-15T20:30:35+08:00', day_length: 44022, moon_phase: 'New Moon' }}/> )
-    const preview = screen.getByRole('region', { name: 'Sun & moon cycle' })
+    const preview = screen.getByRole('region', { name: 'Sunrise & Sunset' })
     expect(within(preview).getByText('12h 14m of daylight')).toBeInTheDocument()
     expect(within(preview).getByText('New Moon', { exact: false })).toBeInTheDocument()
   })
 
   it('renders NASA events, MBTA routes, and decoded trivia content', () => {
     const { rerender } = render(<ResponseDemoPreview api={api('nasa-eonet-events')} data={{ events: [{ id: 'E1', title: 'Pacific Wildfire', closed: null, categories: [{ title: 'Wildfires' }], geometry: [{ date: '2026-07-13T11:54:00Z', coordinates: [-94.39, 46.24], magnitudeValue: 503, magnitudeUnit: 'acres' }] }] }}/> )
-    expect(screen.getByRole('region', { name: 'Natural events monitor' })).toHaveTextContent('Pacific Wildfire')
+    expect(screen.getByRole('region', { name: 'NASA Natural Events' })).toHaveTextContent('Pacific Wildfire')
 
     rerender(<ResponseDemoPreview api={api('mbta-transit-routes')} data={{ data: [{ id: 'Red', attributes: { color: 'DA291C', description: 'Rapid Transit', long_name: 'Red Line', direction_destinations: ['Ashmont/Braintree', 'Alewife'] } }] }}/> )
-    expect(screen.getByRole('region', { name: 'Transit route board' })).toHaveTextContent('Ashmont/Braintree ↔ Alewife')
+    expect(screen.getByRole('region', { name: 'MBTA Transit Routes' })).toHaveTextContent('Ashmont/Braintree ↔ Alewife')
 
     rerender(<ResponseDemoPreview api={api('open-trivia')} data={{ response_code: 0, results: [{ category: 'General Knowledge', difficulty: 'medium', question: 'When did Halley&#039;s Comet appear?', correct_answer: '1986', incorrect_answers: ['2001', '1942', '1909'] }] }}/> )
-    const trivia = screen.getByRole('region', { name: 'Trivia challenge' })
+    const trivia = screen.getByRole('region', { name: 'Trivia Challenge' })
     expect(trivia).toHaveTextContent("When did Halley's Comet appear?")
     expect(within(trivia).getByText('1986')).toBeInTheDocument()
   })
@@ -130,7 +155,7 @@ describe('catalog-wide semantic previews', () => {
 
   it('turns nested dictionary meanings into definitions, examples, and synonyms', () => {
     render(<ResponseDemoPreview api={api('free-dictionary')} data={[{ word: 'hello', phonetic: '/həˈləʊ/', meanings: [{ partOfSpeech: 'noun', synonyms: ['greeting', 'salutation'], definitions: [{ definition: 'An expression of greeting.', example: 'Hello, how are you?' }] }] }]}/> )
-    const preview = screen.getByRole('region', { name: 'Dictionary entry' })
+    const preview = screen.getByRole('region', { name: 'Free Dictionary' })
     expect(preview).toHaveAttribute('data-preview-layout', 'dictionary-entry')
     expect(within(preview).getByText('An expression of greeting.')).toBeInTheDocument()
     expect(within(preview).getByText('greeting')).toBeInTheDocument()
@@ -139,16 +164,16 @@ describe('catalog-wide semantic previews', () => {
 
   it('maps developer, security, research, and structured data families to semantic cards', () => {
     const { rerender } = render(<ResponseDemoPreview api={api('github')} data={[{ full_name: 'octocat/Hello-World', language: 'JavaScript', description: 'Example repository', stargazers_count: 42, forks_count: 8, open_issues_count: 2, topics: ['demo'] }]}/> )
-    expect(screen.getByRole('region', { name: 'Developer workspace' })).toHaveTextContent('octocat/Hello-World')
+    expect(screen.getByRole('region', { name: 'GitHub Public Repos' })).toHaveTextContent('octocat/Hello-World')
 
     rerender(<ResponseDemoPreview api={api('nvd-cves')} data={{ vulnerabilities: [{ cve: { id: 'CVE-2026-1234', published: '2026-07-01', lastModified: '2026-07-10', descriptions: [{ lang: 'en', value: 'A representative security issue.' }], metrics: { cvssMetricV31: [{ cvssData: { baseScore: 8.1, baseSeverity: 'HIGH' } }] } } }] }}/> )
-    expect(screen.getByRole('region', { name: 'Security advisory center' })).toHaveTextContent('CVE-2026-1234')
+    expect(screen.getByRole('region', { name: 'NVD CVE Search' })).toHaveTextContent('CVE-2026-1234')
 
     rerender(<ResponseDemoPreview api={api('europe-pmc-search')} data={{ resultList: { result: [{ title: 'Agentic systems in practice', authorString: 'A. Developer', pubYear: '2026', journalTitle: 'Demo Journal', citedByCount: 12, isOpenAccess: 'Y', doi: '10.1/demo' }] } }}/> )
-    expect(screen.getByRole('region', { name: 'Research library' })).toHaveTextContent('Agentic systems in practice')
+    expect(screen.getByRole('region', { name: 'Europe PMC Search' })).toHaveTextContent('Agentic systems in practice')
 
     rerender(<ResponseDemoPreview api={api('ipify-public-ip')} data={{ ip: '203.0.113.10' }}/> )
-    expect(screen.getByRole('region', { name: 'Structured data view' })).toHaveTextContent('203.0.113.10')
+    expect(screen.getByRole('region', { name: 'ipify Public IP' })).toHaveTextContent('203.0.113.10')
   })
 })
 
@@ -170,7 +195,7 @@ describe('data.gov.sg adaptive weather previews', () => {
       ],
     }] }}/> )
 
-    const preview = screen.getByRole('region', { name: '4-day outlook' })
+    const preview = screen.getByRole('region', { name: 'data.gov.sg 4-Day Forecast' })
     expect(preview).toHaveAttribute('data-preview-variant', 'four-day')
     expect(within(preview).getAllByText('Afternoon thundery showers').length).toBeGreaterThan(0)
     expect(within(preview).getAllByText('65–95%').length).toBeGreaterThan(0)
@@ -184,7 +209,7 @@ describe('data.gov.sg adaptive weather previews', () => {
       items: [{ timestamp: '2026-07-15T07:15:00+08:00', readings: [{ station_id: 'S107', value: 28.8 }, { station_id: 'S108', value: 27.2 }] }],
     }}/>)
 
-    const preview = screen.getByRole('region', { name: 'Station readings' })
+    const preview = screen.getByRole('region', { name: 'data.gov.sg Air Temperature' })
     expect(preview).toHaveAttribute('data-preview-variant', 'station-readings')
     expect(within(preview).getByText('28°C')).toBeInTheDocument()
     expect(within(preview).getByText('East Coast Parkway')).toBeInTheDocument()
@@ -194,7 +219,7 @@ describe('data.gov.sg adaptive weather previews', () => {
   it('uses the PSI regional metric instead of the first arbitrary scalar', () => {
     render(<ResponseDemoPreview api={api('data-gov-psi')} data={{ items: [{ timestamp: '2026-07-15T07:00:00+08:00', readings: { pm10_twenty_four_hourly: { north: 27 }, psi_twenty_four_hourly: { north: 55, south: 53, east: 58, west: 59, central: 63 } } }] }}/>)
 
-    const preview = screen.getByRole('region', { name: 'Regional air quality' })
+    const preview = screen.getByRole('region', { name: 'data.gov.sg PSI' })
     expect(preview).toHaveAttribute('data-preview-variant', 'regional-air-quality')
     expect(within(preview).getByText('North')).toBeInTheDocument()
     expect(within(preview).getByText('63')).toBeInTheDocument()

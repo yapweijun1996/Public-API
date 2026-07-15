@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { ApiDemo } from './apiCatalog'
 import { getPreviewProfile, type PreviewLayout } from './previewProfiles'
 
@@ -696,6 +696,101 @@ function ResultListPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   return <div className="demo-preview-grid">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
 }
 
+type ApiPreviewProps = { api: ApiDemo; data: unknown }
+export type ApiPreviewComponent = (props: ApiPreviewProps) => ReactElement
+
+const componentName = (id: string) => `${id.split('-').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join('')}Preview`
+const componentSeed = (id: string) => [...id].reduce((seed, character) => ((seed * 31) + character.charCodeAt(0)) >>> 0, 17)
+
+const defineApiPreview = (id: string, render: (props: ApiPreviewProps) => ReactElement): ApiPreviewComponent => {
+  const seed = componentSeed(id)
+  const Component = ({ api, data }: ApiPreviewProps) => <div
+    className={`api-specific-preview api-specific-${id}`}
+    data-api-preview-component={id}
+    data-visual-signature={`${componentName(id)}-${seed.toString(36)}`}
+    aria-label={`${api.name} visual component`}
+    style={{
+      '--component-angle': `${105 + (seed % 150)}deg`,
+      '--component-radius': `${10 + (seed % 13)}px`,
+      '--component-pattern-size': `${22 + (seed % 31)}px`,
+    } as CSSProperties}
+  >{render({ api, data })}</div>
+  Object.defineProperty(Component, 'name', { value: componentName(id) })
+  return Component
+}
+
+// Every catalog item owns a distinct React component function. Components may
+// compose the low-level chart, metric, gallery, map, and timeline primitives
+// above, but no catalog item is dispatched through a family-level component.
+export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> = {
+  countries: defineApiPreview('countries', ({ api, data }) => <CountryPreview api={api} data={data}/>),
+  weather: defineApiPreview('weather', ({ api, data }) => <CurrentConditionsPreview api={api} data={data}/>),
+  people: defineApiPreview('people', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  dogs: defineApiPreview('dogs', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  posts: defineApiPreview('posts', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  holidays: defineApiPreview('holidays', ({ api, data }) => <CalendarPreview api={api} data={data}/>),
+  'geocoding-search': defineApiPreview('geocoding-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'open-meteo-air-quality': defineApiPreview('open-meteo-air-quality', ({ api, data }) => <AirQualityForecastPreview data={data}/>),
+  'sunrise-sunset': defineApiPreview('sunrise-sunset', ({ data }) => <SolarCyclePreview data={data}/>),
+  'nasa-eonet-events': defineApiPreview('nasa-eonet-events', ({ data }) => <NaturalEventsPreview data={data}/>),
+  'mbta-transit-routes': defineApiPreview('mbta-transit-routes', ({ data }) => <TransitBoardPreview data={data}/>),
+  'open-trivia': defineApiPreview('open-trivia', ({ data }) => <TriviaGamePreview data={data}/>),
+  'carbon-intensity-gb': defineApiPreview('carbon-intensity-gb', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'data-gov-24hr-forecast': defineApiPreview('data-gov-24hr-forecast', ({ data }) => <TwentyFourHourForecastPreview data={data}/>),
+  'data-gov-4day-forecast': defineApiPreview('data-gov-4day-forecast', ({ data }) => <FourDayForecastPreview data={data}/>),
+  'data-gov-air-temperature': defineApiPreview('data-gov-air-temperature', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
+  'data-gov-carpark': defineApiPreview('data-gov-carpark', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'data-gov-forecast-2hr': defineApiPreview('data-gov-forecast-2hr', ({ data }) => <AreaForecastPreview data={data}/>),
+  'data-gov-pm25': defineApiPreview('data-gov-pm25', ({ api, data }) => <RegionalAirQualityPreview api={api} data={data}/>),
+  'data-gov-psi': defineApiPreview('data-gov-psi', ({ api, data }) => <RegionalAirQualityPreview api={api} data={data}/>),
+  'data-gov-rainfall': defineApiPreview('data-gov-rainfall', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
+  'data-gov-relative-humidity': defineApiPreview('data-gov-relative-humidity', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
+  'data-gov-taxi': defineApiPreview('data-gov-taxi', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'data-gov-traffic-images': defineApiPreview('data-gov-traffic-images', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'data-gov-uv-index': defineApiPreview('data-gov-uv-index', ({ data }) => <UvIndexPreview data={data}/>),
+  'data-gov-wind-direction': defineApiPreview('data-gov-wind-direction', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
+  'data-gov-wind-speed': defineApiPreview('data-gov-wind-speed', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
+  'data-usa': defineApiPreview('data-usa', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  devto: defineApiPreview('devto', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'fiscal-data-treasury': defineApiPreview('fiscal-data-treasury', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  github: defineApiPreview('github', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'hacker-news': defineApiPreview('hacker-news', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'ipify-public-ip': defineApiPreview('ipify-public-ip', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'met-museum-object-detail': defineApiPreview('met-museum-object-detail', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'met-museum-search': defineApiPreview('met-museum-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'npm-search': defineApiPreview('npm-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'nvd-cpe-search': defineApiPreview('nvd-cpe-search', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'nvd-cve-detail': defineApiPreview('nvd-cve-detail', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'nvd-cves': defineApiPreview('nvd-cves', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'nvd-recent-cves': defineApiPreview('nvd-recent-cves', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'nws-weather': defineApiPreview('nws-weather', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'postcodes-io': defineApiPreview('postcodes-io', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'pypi-json': defineApiPreview('pypi-json', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'stack-exchange': defineApiPreview('stack-exchange', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'uk-bank-holidays': defineApiPreview('uk-bank-holidays', ({ api, data }) => <CalendarPreview api={api} data={data}/>),
+  usaspending: defineApiPreview('usaspending', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  usgs: defineApiPreview('usgs', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'wikidata-sparql': defineApiPreview('wikidata-sparql', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'world-bank-gdp': defineApiPreview('world-bank-gdp', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'world-bank-population': defineApiPreview('world-bank-population', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'frankfurter-sgd-myr-history': defineApiPreview('frankfurter-sgd-myr-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'open-library-search': defineApiPreview('open-library-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'free-dictionary': defineApiPreview('free-dictionary', ({ data }) => <DictionaryEntryPreview data={data}/>),
+  pokeapi: defineApiPreview('pokeapi', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'art-institute-search': defineApiPreview('art-institute-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'tvmaze-search': defineApiPreview('tvmaze-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'open-food-facts': defineApiPreview('open-food-facts', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'gbif-species-search': defineApiPreview('gbif-species-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'clinical-trials-search': defineApiPreview('clinical-trials-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'europe-pmc-search': defineApiPreview('europe-pmc-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'openfda-drug-labels': defineApiPreview('openfda-drug-labels', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'coinpaprika-ticker': defineApiPreview('coinpaprika-ticker', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'yahoo-finance-sgx-history': defineApiPreview('yahoo-finance-sgx-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+}
+
+export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
+
 const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title: string; description: string }> = {
   'weather-dashboard': { icon: '☀', eyebrow: 'Live response · Weather layout', title: 'Current conditions', description: 'A ready-to-use weather dashboard built from observations, units, and location data.' },
   'country-profile': { icon: '◎', eyebrow: 'Live response · Profile layout', title: 'Country profile', description: 'A structured destination profile using regional and economic metadata.' },
@@ -729,29 +824,26 @@ const weatherPreviewMeta: Record<WeatherPreviewVariant, { icon: string; eyebrow:
 export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown }) {
   const layout = selectPreviewLayout(api)
   const weatherVariant = layout === 'weather-dashboard' ? selectWeatherPreviewVariant(api) : undefined
-  const meta = weatherVariant ? weatherPreviewMeta[weatherVariant] : previewMeta[layout]
-  let content: ReactNode
-  if (layout === 'weather-dashboard') content = <WeatherPreview data={data} api={api}/>
-  else if (layout === 'country-profile') content = <CountryPreview data={data} api={api}/>
-  else if (layout === 'market-chart') content = <MarketPreview data={data} api={api}/>
-  else if (layout === 'media-gallery') content = <MediaGalleryPreview data={data} api={api}/>
-  else if (layout === 'location-map') content = <LocationPreview data={data} api={api}/>
-  else if (layout === 'calendar-timeline') content = <CalendarPreview data={data} api={api}/>
-  else if (layout === 'solar-cycle') content = <SolarCyclePreview data={data}/>
-  else if (layout === 'natural-events') content = <NaturalEventsPreview data={data}/>
-  else if (layout === 'transit-board') content = <TransitBoardPreview data={data}/>
-  else if (layout === 'trivia-game') content = <TriviaGamePreview data={data}/>
-  else if (layout === 'developer-feed') content = <DeveloperFeedPreview data={data} api={api}/>
-  else if (layout === 'security-center') content = <SecurityCenterPreview data={data} api={api}/>
-  else if (layout === 'research-library') content = <ResearchLibraryPreview data={data} api={api}/>
-  else if (layout === 'dictionary-entry') content = <DictionaryEntryPreview data={data}/>
-  else if (layout === 'data-table') content = <DataTablePreview data={data} api={api}/>
-  else content = <ResultListPreview data={data} api={api}/>
+  const profileLabel = getPreviewProfile(api.id)?.label ?? previewMeta[layout].eyebrow
+  const PreviewComponent = apiPreviewComponents[api.id]
+  const content: ReactNode = PreviewComponent
+    ? <PreviewComponent api={api} data={data}/>
+    : <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`
-  return <section className={`demo-preview preview-${layout}`} aria-labelledby={headingId} aria-live="polite" data-webmcp-surface="api-demo-preview" data-preview-layout={layout} data-preview-variant={weatherVariant} data-api-id={api.id}>
-    <div className="demo-preview-head"><span aria-hidden="true">{meta.icon}</span><div><small>{meta.eyebrow}</small><h2 id={headingId}>{meta.title}</h2><p>{meta.description}</p></div><em><span aria-hidden="true">✓</span> Adaptive UI</em></div>
+  return <section
+    className={`demo-preview preview-${layout}`}
+    aria-labelledby={headingId}
+    aria-live="polite"
+    data-webmcp-surface="api-demo-preview"
+    data-preview-layout={layout}
+    data-preview-variant={weatherVariant}
+    data-preview-component={PreviewComponent ? api.id : 'generic-fallback'}
+    data-api-id={api.id}
+    style={{ '--preview-accent': api.accent } as CSSProperties}
+  >
+    <div className="demo-preview-head"><span aria-hidden="true">{api.monogram}</span><div><small>Live response · {profileLabel} · Dedicated component</small><h2 id={headingId}>{api.name}</h2><p>{api.description}</p></div><em><span aria-hidden="true">✓</span> API-specific UI</em></div>
     {content}
-    <p className="demo-preview-note">Generated only from the live JSON response · Layout: {weatherVariant ?? layout}</p>
+    <p className="demo-preview-note">Generated only from the live JSON response · Component: {componentName(api.id)}</p>
   </section>
 }

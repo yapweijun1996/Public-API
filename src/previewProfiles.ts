@@ -21,48 +21,77 @@ export type PreviewProfile = {
   label: string
 }
 
-const groups: Array<{ layout: PreviewLayout; label: string; ids: string[] }> = [
-  { layout: 'country-profile', label: 'Country profile', ids: ['countries'] },
-  { layout: 'weather-dashboard', label: 'Weather dashboard', ids: [
-    'weather', 'open-meteo-air-quality', 'data-gov-24hr-forecast', 'data-gov-4day-forecast', 'data-gov-air-temperature',
-    'data-gov-forecast-2hr', 'data-gov-pm25', 'data-gov-psi', 'data-gov-rainfall', 'data-gov-relative-humidity',
-    'data-gov-uv-index', 'data-gov-wind-direction', 'data-gov-wind-speed',
-  ] },
-  { layout: 'market-chart', label: 'Market chart', ids: [
-    'data-usa', 'fiscal-data-treasury', 'world-bank-gdp', 'world-bank-population', 'frankfurter-sgd-myr-history',
-    'coinpaprika-ticker', 'yahoo-finance-sgx-history',
-  ] },
-  { layout: 'media-gallery', label: 'Visual gallery', ids: [
-    'people', 'dogs', 'data-gov-traffic-images', 'met-museum-object-detail', 'met-museum-search', 'pokeapi',
-    'art-institute-search', 'tvmaze-search', 'open-food-facts', 'gbif-species-search',
-  ] },
-  { layout: 'location-map', label: 'Location map', ids: [
-    'geocoding-search', 'data-gov-carpark', 'data-gov-taxi', 'nhtsa-vpic', 'postcodes-io', 'usgs',
-  ] },
-  { layout: 'calendar-timeline', label: 'Calendar timeline', ids: ['holidays', 'uk-bank-holidays'] },
-  { layout: 'solar-cycle', label: 'Solar cycle', ids: ['sunrise-sunset'] },
-  { layout: 'natural-events', label: 'Natural events', ids: ['nasa-eonet-events'] },
-  { layout: 'transit-board', label: 'Transit board', ids: ['mbta-transit-routes'] },
-  { layout: 'trivia-game', label: 'Trivia game', ids: ['open-trivia'] },
-  { layout: 'developer-feed', label: 'Developer cards', ids: [
-    'posts', 'devto', 'github', 'hacker-news', 'npm-search', 'pypi-json', 'stack-exchange',
-  ] },
-  { layout: 'security-center', label: 'Security advisories', ids: [
-    'nvd-cpe-search', 'nvd-cve-detail', 'nvd-cves', 'nvd-recent-cves',
-  ] },
-  { layout: 'research-library', label: 'Research library', ids: [
-    'open-library-search', 'clinical-trials-search', 'europe-pmc-search',
-  ] },
-  { layout: 'dictionary-entry', label: 'Dictionary entry', ids: ['free-dictionary'] },
-  { layout: 'data-table', label: 'Structured data cards', ids: [
-    'carbon-intensity-gb', 'ipify-public-ip', 'nws-weather', 'usaspending', 'wikidata-sparql', 'openfda-drug-labels',
-  ] },
+const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> = [
+  ['countries', 'country-profile', 'Country intelligence profile'],
+  ['weather', 'weather-dashboard', 'Live weather cockpit'],
+  ['people', 'media-gallery', 'Generated people directory'],
+  ['dogs', 'media-gallery', 'Random dog photo wall'],
+  ['posts', 'developer-feed', 'REST post inspector'],
+  ['holidays', 'calendar-timeline', 'International holiday planner'],
+  ['geocoding-search', 'location-map', 'Global geocoding result map'],
+  ['open-meteo-air-quality', 'weather-dashboard', 'Coordinate air-quality monitor'],
+  ['sunrise-sunset', 'solar-cycle', 'Daylight and solar clock'],
+  ['nasa-eonet-events', 'natural-events', 'NASA Earth event monitor'],
+  ['mbta-transit-routes', 'transit-board', 'Boston transit route board'],
+  ['open-trivia', 'trivia-game', 'Interactive trivia question deck'],
+  ['carbon-intensity-gb', 'data-table', 'Great Britain carbon gauge'],
+  ['data-gov-24hr-forecast', 'weather-dashboard', 'Singapore 24-hour outlook'],
+  ['data-gov-4day-forecast', 'weather-dashboard', 'Singapore four-day planner'],
+  ['data-gov-air-temperature', 'weather-dashboard', 'Temperature station network'],
+  ['data-gov-carpark', 'location-map', 'Carpark capacity locator'],
+  ['data-gov-forecast-2hr', 'weather-dashboard', 'Neighbourhood forecast matrix'],
+  ['data-gov-pm25', 'weather-dashboard', 'PM2.5 regional monitor'],
+  ['data-gov-psi', 'weather-dashboard', 'PSI regional health panel'],
+  ['data-gov-rainfall', 'weather-dashboard', 'Rain gauge station network'],
+  ['data-gov-relative-humidity', 'weather-dashboard', 'Humidity sensor network'],
+  ['data-gov-taxi', 'location-map', 'Available taxi live map'],
+  ['data-gov-traffic-images', 'media-gallery', 'Traffic camera operations wall'],
+  ['data-gov-uv-index', 'weather-dashboard', 'UV exposure timeline'],
+  ['data-gov-wind-direction', 'weather-dashboard', 'Wind direction station compass'],
+  ['data-gov-wind-speed', 'weather-dashboard', 'Wind speed station dashboard'],
+  ['data-usa', 'market-chart', 'United States population explorer'],
+  ['devto', 'developer-feed', 'DEV article discovery feed'],
+  ['fiscal-data-treasury', 'market-chart', 'Treasury fiscal data ledger'],
+  ['github', 'developer-feed', 'GitHub repository command center'],
+  ['hacker-news', 'developer-feed', 'Hacker News story brief'],
+  ['ipify-public-ip', 'data-table', 'Public IP network card'],
+  ['met-museum-object-detail', 'media-gallery', 'Museum object spotlight'],
+  ['met-museum-search', 'media-gallery', 'Met collection search wall'],
+  ['nhtsa-vpic', 'location-map', 'Vehicle make registry'],
+  ['npm-search', 'developer-feed', 'npm package comparison grid'],
+  ['nvd-cpe-search', 'security-center', 'CPE product dictionary'],
+  ['nvd-cve-detail', 'security-center', 'Single CVE investigation dossier'],
+  ['nvd-cves', 'security-center', 'CVE search result center'],
+  ['nvd-recent-cves', 'security-center', 'Recently modified CVE watchlist'],
+  ['nws-weather', 'data-table', 'US weather alert board'],
+  ['postcodes-io', 'location-map', 'UK postcode intelligence card'],
+  ['pypi-json', 'developer-feed', 'Python package release profile'],
+  ['stack-exchange', 'developer-feed', 'Stack Overflow activity queue'],
+  ['uk-bank-holidays', 'calendar-timeline', 'UK bank holiday calendar'],
+  ['usaspending', 'data-table', 'Federal award spending ledger'],
+  ['usgs', 'location-map', 'Earthquake activity map'],
+  ['wikidata-sparql', 'data-table', 'Wikidata query result table'],
+  ['world-bank-gdp', 'market-chart', 'Singapore GDP history'],
+  ['world-bank-population', 'market-chart', 'Singapore population history'],
+  ['frankfurter-sgd-myr-history', 'market-chart', 'SGD/MYR exchange-rate history'],
+  ['open-library-search', 'research-library', 'Open Library bookshelf'],
+  ['free-dictionary', 'dictionary-entry', 'Word definition study card'],
+  ['pokeapi', 'media-gallery', 'Pokémon stat and ability profile'],
+  ['art-institute-search', 'media-gallery', 'Art Institute exhibition wall'],
+  ['tvmaze-search', 'media-gallery', 'Television show discovery rail'],
+  ['open-food-facts', 'media-gallery', 'Food product nutrition label'],
+  ['gbif-species-search', 'media-gallery', 'Species taxonomy explorer'],
+  ['clinical-trials-search', 'research-library', 'Clinical study registry'],
+  ['europe-pmc-search', 'research-library', 'Life-science paper library'],
+  ['openfda-drug-labels', 'data-table', 'Regulated drug label viewer'],
+  ['coinpaprika-ticker', 'market-chart', 'Cryptocurrency market terminal'],
+  ['yahoo-finance-sgx-history', 'market-chart', 'SGX equity history terminal'],
 ]
 
-export const previewProfileIds = groups.flatMap((group) => group.ids)
+export const previewProfileIds = profileEntries.map(([id]) => id)
 
-export const previewProfiles: Record<string, PreviewProfile> = Object.fromEntries(groups.flatMap((group) =>
-  group.ids.map((id) => [id, { layout: group.layout, label: group.label }]),
+export const previewProfiles: Record<string, PreviewProfile> = Object.fromEntries(profileEntries.map(([id, layout, label]) =>
+  [id, { layout, label }],
 ))
 
 export const getPreviewProfile = (id: string): PreviewProfile | undefined => previewProfiles[id]
