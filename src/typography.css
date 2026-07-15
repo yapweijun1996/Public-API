@@ -1,0 +1,315 @@
+/*
+ * Product typography system
+ * 11px micro UI · 12px support · 14px body · 16px subtitle
+ * 20px section title · 24px page title · 28px KPI · 32px display
+ */
+:root {
+  --type-micro: 0.6875rem;
+  --type-support: 0.75rem;
+  --type-compact: 0.8125rem;
+  --type-body: 0.875rem;
+  --type-subtitle: 1rem;
+  --type-section-title: 1.25rem;
+  --type-page-title: 1.5rem;
+  --type-kpi: 1.75rem;
+  --type-display: 2rem;
+  --leading-tight: 1.2;
+  --leading-copy: 1.55;
+  --leading-relaxed: 1.7;
+  --tracking-overline: 0.08em;
+}
+
+html { font-size: 16px; }
+body { font-size: var(--type-body); line-height: var(--leading-copy); }
+
+/* Page and section hierarchy */
+.page-title h1 { font-size: var(--type-page-title); line-height: var(--leading-tight); }
+.page-title p { font-size: var(--type-compact); line-height: var(--leading-copy); }
+.panel-heading h2,
+.section-title h2,
+.workspace-heading h2 { font-size: var(--type-section-title); line-height: var(--leading-tight); }
+.workspace-hero h2 { font-size: 1.75rem; line-height: var(--leading-tight); }
+.panel-heading p,
+.section-title p,
+.workspace-heading small,
+.workspace-hero > small { font-size: var(--type-body); line-height: var(--leading-copy); }
+
+/* Navigation */
+.sidebar-brand b { font-size: 1.0625rem; line-height: var(--leading-tight); }
+.sidebar-brand small { font-size: var(--type-support); }
+.nav-label { font-size: var(--type-micro); letter-spacing: .11em; }
+.nav-group button { min-height: 40px; font-size: var(--type-body); }
+.nav-group button em,
+.sidebar.collapsed .nav-group button em,
+.sidebar-version { font-size: var(--type-micro); }
+
+/* Inputs, actions, and global utility labels */
+.module-search input,
+.catalog-toolbar select,
+.toolbar-button,
+.workspace-actions > button:not(.primary-action),
+.primary-action,
+.detail-actions > button:not(.primary-action),
+.parameter-fields input,
+.parameter-fields select { font-size: var(--type-body); }
+.agent-connection,
+.result-count,
+.table-footer,
+.copy-output,
+.response-meta { font-size: var(--type-support); }
+
+/* KPI cards: value > label > description */
+.metric-card { min-height: 104px; }
+.metric-card strong { font-size: var(--type-kpi); line-height: 1; }
+.metric-card b { font-size: var(--type-compact); line-height: 1.3; }
+.metric-card small { font-size: var(--type-micro); line-height: 1.35; }
+
+/* Catalog table */
+thead th { height: 42px; font-size: var(--type-micro); }
+tbody td { height: 72px; font-size: var(--type-compact); }
+.api-identity { grid-template-columns: 32px minmax(0, 1fr); gap: 10px; }
+.api-identity > span,
+.active-api > span,
+.detail-title > span { width: 32px; height: 32px; font-size: var(--type-micro); }
+.api-identity b { font-size: var(--type-body); line-height: 1.3; }
+.provider-cell b { font-size: var(--type-compact); }
+.api-identity small { font-size: var(--type-support); line-height: 1.4; }
+.provider-cell a,
+.tag { font-size: var(--type-micro); }
+.catalog-empty b { font-size: var(--type-subtitle); }
+.catalog-empty p { font-size: var(--type-body); }
+
+/* Routed overview, providers, collections, tags, health and documentation */
+.workspace-heading p,
+.workspace-hero > p,
+.workspace-grid article > span { font-size: var(--type-micro); }
+.launch-grid button b,
+.workspace-grid h3 { font-size: var(--type-subtitle); line-height: 1.3; }
+.launch-grid button small { font-size: var(--type-support); line-height: 1.5; }
+.workspace-grid p { font-size: var(--type-body); line-height: var(--leading-copy); }
+
+/* Request Lab */
+.active-api small,
+.parameter-fields em { font-size: var(--type-micro); }
+.active-api b,
+.parameter-heading b { font-size: var(--type-subtitle); }
+.active-api a,
+.parameter-heading small,
+.parameter-fields label > small { font-size: var(--type-support); }
+.endpoint-box span,
+.endpoint-box code,
+.response-body pre { font-size: var(--type-support); }
+.parameter-fields label > span,
+.response-head [role="tab"] { font-size: var(--type-body); }
+.response-empty b,
+.response-error b { font-size: var(--type-subtitle); }
+.response-empty p,
+.response-error p { font-size: var(--type-body); }
+
+/* Preview header and generic response cards */
+.demo-preview-head small,
+.demo-preview-card-title small,
+.demo-preview-card dt,
+.demo-preview-note { font-size: var(--type-micro); }
+.demo-preview-head h2 { font-size: var(--type-section-title); }
+.demo-preview-head p { font-size: var(--type-body); line-height: var(--leading-copy); }
+.demo-preview-head em,
+.demo-preview-card-title > span { font-size: var(--type-micro); }
+.demo-preview-card-title h3 { font-size: var(--type-subtitle); }
+.demo-preview-card dd { font-size: var(--type-body); line-height: var(--leading-copy); }
+
+/* Weather and environmental layouts */
+.weather-location,
+.forecast-days article > div span,
+.forecast-periods article > div strong,
+.area-forecast-summary > div:first-child > span,
+.station-summary > div span,
+.air-quality-summary span,
+.uv-summary span,
+.global-air-hero span,
+.solar-hero > div > span { font-size: var(--type-compact); }
+.weather-hero b,
+.forecast-lead > div > b,
+.area-forecast-summary b,
+.station-summary > div b,
+.air-quality-summary b,
+.uv-summary b,
+.global-air-hero b,
+.solar-hero b { font-size: var(--type-subtitle); }
+.weather-hero small,
+.weather-metrics small,
+.forecast-lead > div > small:last-child,
+.forecast-summary small,
+.forecast-days article > div small,
+.forecast-days article em,
+.forecast-periods article > div small,
+.forecast-periods li span,
+.area-forecast-summary small,
+.area-forecast-grid small,
+.station-summary > div small,
+.station-summary dt,
+.station-list article div small,
+.air-quality-summary small,
+.regional-reading-grid article span,
+.regional-reading-grid article small,
+.uv-summary small,
+.uv-gauge span,
+.uv-timeline span,
+.global-air-hero small,
+.global-air-metrics small,
+.global-air-metrics span,
+.solar-hero small,
+.solar-timeline small { font-size: var(--type-support); }
+.weather-metrics strong,
+.forecast-summary strong,
+.forecast-days article p,
+.forecast-periods li b,
+.area-forecast-summary > div:last-child > strong,
+.area-forecast-grid strong,
+.station-summary dd,
+.station-list article div strong,
+.station-list article > b,
+.regional-reading-grid article strong,
+.uv-timeline strong,
+.global-air-metrics strong,
+.solar-timeline strong { font-size: var(--type-body); }
+.weather-empty strong { font-size: var(--type-subtitle); }
+.weather-empty span { font-size: var(--type-body); }
+.station-list article > span { font-size: var(--type-micro); }
+
+/* Country, market, media, map and calendar layouts */
+.country-hero small,
+.country-facts dt,
+.market-summary small,
+.market-range span,
+.market-metrics small,
+.media-preview article small,
+.calendar-preview time span,
+.calendar-preview small { font-size: var(--type-support); }
+.country-hero p,
+.country-facts dd,
+.market-summary span,
+.market-metrics strong,
+.media-preview article p,
+.location-preview li small,
+.calendar-preview p { font-size: var(--type-body); }
+.location-preview li strong,
+.calendar-preview h3 { font-size: var(--type-subtitle); }
+.map-compass,
+.location-map i b,
+.location-preview li > span { font-size: var(--type-micro); }
+
+/* Natural events, transit and trivia */
+.event-overview span,
+.event-grid small,
+.event-grid em,
+.transit-summary span,
+.transit-summary small,
+.transit-routes article > span,
+.transit-routes small,
+.transit-routes em,
+.trivia-score span,
+.trivia-score small,
+.trivia-grid header > span,
+.trivia-grid header small,
+.trivia-grid li > span,
+.trivia-grid li b { font-size: var(--type-micro); }
+.event-overview b,
+.event-grid p,
+.transit-summary b,
+.transit-routes p,
+.trivia-grid li { font-size: var(--type-body); }
+.event-grid h3,
+.transit-routes h3,
+.trivia-grid h3 { font-size: var(--type-subtitle); line-height: 1.4; }
+
+/* Semantic, dictionary and API-specific cards */
+.semantic-card-grid header > span,
+.semantic-card-grid header small,
+.semantic-card-grid header em,
+.semantic-card-grid dt,
+.semantic-card-grid footer span,
+.dictionary-hero span,
+.dictionary-meanings header span,
+.dictionary-meanings footer b,
+.dictionary-meanings footer span { font-size: var(--type-micro); }
+.semantic-card-grid h3,
+.dictionary-meanings h3 { font-size: var(--type-subtitle); }
+.semantic-card-grid article > p,
+.semantic-card-grid dd,
+.dictionary-meanings li p,
+.dictionary-meanings blockquote { font-size: var(--type-body); line-height: var(--leading-copy); }
+.dictionary-meanings li { font-size: var(--type-support); }
+
+/* Five specialist layouts */
+.fuel-hero small,
+.fuel-pump b,
+.fuel-price-grid small,
+.fuel-history small,
+.marine-hero small,
+.marine-compass span,
+.marine-compass b,
+.marine-metrics small,
+.marine-timeline time,
+.marine-timeline small,
+.nobel-summary small,
+.nobel-timeline article small,
+.nobel-timeline article b,
+.chess-hero small,
+.chess-rating-grid header small,
+.chess-rating-grid header > b,
+.crossref-preview > header small,
+.crossref-preview > header > span,
+.crossref-preview li > span,
+.crossref-preview article small,
+.crossref-preview article b,
+.crossref-preview code { font-size: var(--type-micro); }
+.fuel-hero span,
+.fuel-price-grid span,
+.fuel-price-grid em,
+.fuel-history strong,
+.marine-hero p,
+.marine-metrics span,
+.marine-timeline strong,
+.marine-disclaimer,
+.nobel-summary p,
+.nobel-timeline p,
+.chess-hero span,
+.chess-rating-grid dt,
+.chess-rating-grid dd,
+.crossref-preview p { font-size: var(--type-support); }
+.fuel-price-grid strong,
+.marine-metrics strong,
+.nobel-timeline h3,
+.chess-rating-grid header strong,
+.crossref-preview h3 { font-size: var(--type-subtitle); }
+
+/* WebMCP and detail drawer */
+.eyebrow,
+.webmcp-state small,
+.tool-list article > span,
+.tool-list code,
+.tool-list em,
+.detail-head,
+.detail-title small,
+.box-title span,
+.detail-box p small { font-size: var(--type-micro); }
+.webmcp-state b,
+.tool-list p,
+.box-title b,
+.detail-box dt,
+.endpoint-detail code { font-size: var(--type-support); }
+.agent-intro > p:not(.eyebrow),
+.detail-description,
+.detail-box dd,
+.detail-box p,
+.detail-box a { font-size: var(--type-body); line-height: var(--leading-copy); }
+.detail-title h2 { font-size: var(--type-section-title); }
+
+@media (max-width: 760px) {
+  .page-title h1 { font-size: var(--type-section-title); }
+  .metric-card strong { font-size: 1.5rem; }
+  .metric-card b { font-size: var(--type-support); }
+  .metric-card small { font-size: var(--type-micro); }
+  tbody td:nth-child(n+3)::before { font-size: var(--type-micro); }
+}
