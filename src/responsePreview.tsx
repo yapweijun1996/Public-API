@@ -455,6 +455,120 @@ function MarketPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   </div>
 }
 
+function FuelPricePreview({ data }: { data: unknown }) {
+  const levels = recordArray(data).filter((row) => row.series_type === 'level')
+  const latest = levels[0] ?? {}
+  const previous = levels[1] ?? {}
+  const fuels = [
+    { key: 'ron95', label: 'RON95', note: 'Market price' },
+    { key: 'ron97', label: 'RON97', note: 'Premium petrol' },
+    { key: 'diesel', label: 'Diesel', note: 'Peninsular Malaysia' },
+    { key: 'ron95_budi95', label: 'BUDI95', note: 'Targeted price' },
+  ]
+  const ron95History = levels.map((row) => numberValue(row.ron95)).filter((value): value is number => value !== undefined).reverse()
+  if (!levels.length) return <div className="weather-empty"><strong>Fuel-price history unavailable</strong><span>No weekly price-level rows were returned.</span></div>
+  return <div className="fuel-preview">
+    <header className="fuel-hero"><div><small>Official weekly price · Malaysia</small><strong>{dateParts(latest.date).full || previewValue(latest.date)}</strong><span>Ringgit Malaysia per litre</span></div><div className="fuel-pump" aria-hidden="true"><i/><b>MY</b></div></header>
+    <div className="fuel-price-grid">{fuels.map((fuel) => {
+      const value = numberValue(latest[fuel.key])
+      const previousValue = numberValue(previous[fuel.key])
+      const change = value !== undefined && previousValue !== undefined ? value - previousValue : undefined
+      return <article key={fuel.key}><small>{fuel.label}</small><strong>{value === undefined ? '—' : `RM ${formatNumber(value, 2)}`}</strong><span className={change !== undefined && change < 0 ? 'down' : ''}>{change === undefined || change === 0 ? 'No weekly change' : `${change > 0 ? '↑' : '↓'} RM ${formatNumber(Math.abs(change), 2)}`}</span><em>{fuel.note}</em></article>
+    })}</div>
+    <div className="fuel-history"><div><small>RON95 history</small><strong>{ron95History.length} observations</strong></div><Sparkline values={ron95History}/></div>
+  </div>
+}
+
+function MarineForecastPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const hourly = isRecord(root.hourly) ? root.hourly : {}
+  const units = isRecord(root.hourly_units) ? root.hourly_units : {}
+  const times = Array.isArray(hourly.time) ? hourly.time.map(textValue) : []
+  const offset = numberValue(root.utc_offset_seconds) ?? 0
+  const now = Date.now()
+  const timestamps = times.map((time) => time ? Date.parse(`${time}:00Z`) - (offset * 1000) : Number.NaN)
+  const validIndexes = timestamps.map((timestamp, index) => ({ timestamp, index })).filter((entry) => Number.isFinite(entry.timestamp))
+  const currentIndex = validIndexes.reduce((closest, entry) => Math.abs(entry.timestamp - now) < Math.abs(closest.timestamp - now) ? entry : closest, validIndexes[0] ?? { timestamp: now, index: 0 }).index
+  const series = (key: string) => Array.isArray(hourly[key]) ? hourly[key].map(numberValue) : []
+  const waveHeights = series('wave_height')
+  const waveDirections = series('wave_direction')
+  const wavePeriods = series('wave_period')
+  const temperatures = series('sea_surface_temperature')
+  const currents = series('ocean_current_velocity')
+  const currentDirections = series('ocean_current_direction')
+  const sampleIndexes = Array.from({ length: 8 }, (_, index) => Math.min(currentIndex + (index * 3), Math.max(0, times.length - 1))).filter((index, position, all) => all.indexOf(index) === position)
+  if (!times.length) return <div className="weather-empty"><strong>Marine forecast unavailable</strong><span>No hourly marine series were returned.</span></div>
+  return <div className="marine-preview">
+    <div className="marine-hero"><div><small>{textValue(root.timezone)?.replace('_', ' ') ?? 'Coastal forecast'} · nearest forecast hour</small><strong>{formatNumber(waveHeights[currentIndex] ?? 0, 2)}<span>{textValue(units.wave_height) ?? 'm'}</span></strong><b>Wave height</b><p>{timeLabel(times[currentIndex])} · {formatNumber(numberValue(root.latitude) ?? 0, 3)}, {formatNumber(numberValue(root.longitude) ?? 0, 3)}</p></div><div className="marine-compass" style={{ '--marine-bearing': `${waveDirections[currentIndex] ?? 0}deg` } as CSSProperties}><i>↑</i><span>N</span><b>{formatNumber(waveDirections[currentIndex] ?? 0, 0)}°</b></div></div>
+    <div className="marine-metrics">
+      <article><small>Wave period</small><strong>{formatNumber(wavePeriods[currentIndex] ?? 0, 1)} {textValue(units.wave_period) ?? 's'}</strong><span>Energy interval</span></article>
+      <article><small>Sea surface</small><strong>{formatNumber(temperatures[currentIndex] ?? 0, 1)}{textValue(units.sea_surface_temperature) ?? '°C'}</strong><span>Water temperature</span></article>
+      <article><small>Ocean current</small><strong>{formatNumber(currents[currentIndex] ?? 0, 1)} {textValue(units.ocean_current_velocity) ?? 'km/h'}</strong><span>{formatNumber(currentDirections[currentIndex] ?? 0, 0)}° bearing</span></article>
+    </div>
+    <div className="marine-timeline">{sampleIndexes.map((index) => <article key={`${times[index]}-${index}`}><time>{timeLabel(times[index])}</time><i style={{ '--wave-height': `${Math.min(100, ((waveHeights[index] ?? 0) / Math.max(...waveHeights.filter((value): value is number => value !== undefined), 1)) * 100)}%` } as CSSProperties}/><strong>{formatNumber(waveHeights[index] ?? 0, 2)} m</strong><small>{dateParts(times[index]).full}</small></article>)}</div>
+    <p className="marine-disclaimer">Forecast guidance only · Not for navigation or safety-critical decisions</p>
+  </div>
+}
+
+function NobelPrizePreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const prizes = recordArray(root.nobelPrizes)
+  if (!prizes.length) return <div className="weather-empty"><strong>Nobel Prize records unavailable</strong><span>No prize records were returned.</span></div>
+  const first = prizes[0]
+  const firstCategory = isRecord(first.category) ? cleanText(first.category.en) : undefined
+  const laureateCount = prizes.reduce((total, prize) => total + recordArray(prize.laureates).length, 0)
+  return <div className="nobel-preview">
+    <div className="nobel-summary"><span aria-hidden="true">N</span><div><small>Latest {firstCategory ?? 'Nobel'} awards</small><strong>{prizes.length} prize years</strong><p>{laureateCount} laureates represented in this response</p></div><b>{previewValue(first.awardYear)}</b></div>
+    <ol className="nobel-timeline">{prizes.slice(0, 6).map((prize, index) => {
+      const category = isRecord(prize.category) ? cleanText(prize.category.en) : 'Nobel Prize'
+      const laureates = recordArray(prize.laureates)
+      return <li key={`${prize.awardYear}-${index}`}><time>{previewValue(prize.awardYear)}</time><i/><article><header><small>{category}</small><b>{compactNumber(numberValue(prize.prizeAmount) ?? 0)} SEK</b></header><h3>{laureates.map((laureate) => cleanText(recordValue(laureate.knownName, 'en') ?? recordValue(laureate.fullName, 'en'))).filter(Boolean).join(' · ') || 'Prize organization'}</h3><p>{cleanText(recordValue(laureates[0]?.motivation, 'en')) ?? 'Official prize record and laureate information.'}</p></article></li>
+    })}</ol>
+  </div>
+}
+
+function ChessRatingsPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const modes = [
+    { key: 'chess_blitz', label: 'Blitz', symbol: '⚡' },
+    { key: 'chess_bullet', label: 'Bullet', symbol: '●' },
+    { key: 'chess_rapid', label: 'Rapid', symbol: '◷' },
+    { key: 'chess_daily', label: 'Daily', symbol: '□' },
+  ].map((mode) => {
+    const stats = isRecord(root[mode.key]) ? root[mode.key] as Record<string, unknown> : {}
+    const last = isRecord(stats.last) ? stats.last : {}
+    const best = isRecord(stats.best) ? stats.best : {}
+    const record = isRecord(stats.record) ? stats.record : {}
+    return { ...mode, rating: numberValue(last.rating), best: numberValue(best.rating), wins: numberValue(record.win) ?? 0, losses: numberValue(record.loss) ?? 0, draws: numberValue(record.draw) ?? 0 }
+  }).filter((mode) => mode.rating !== undefined)
+  if (!modes.length) return <div className="weather-empty"><strong>Chess ratings unavailable</strong><span>The player has no public rating records.</span></div>
+  const leader = [...modes].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]
+  const totalGames = modes.reduce((total, mode) => total + mode.wins + mode.losses + mode.draws, 0)
+  return <div className="chess-preview">
+    <header className="chess-hero"><div className="chess-board" aria-hidden="true">♞</div><div><small>Public competitive profile</small><strong>{formatNumber(leader.rating ?? 0, 0)}</strong><span>Highest current rating · {leader.label}</span></div><div><small>FIDE</small><b>{previewValue(root.fide)}</b><span>{compactNumber(totalGames)} recorded games</span></div></header>
+    <div className="chess-rating-grid">{modes.map((mode) => {
+      const games = mode.wins + mode.losses + mode.draws
+      const winRate = games ? (mode.wins / games) * 100 : 0
+      return <article key={mode.key}><header><span>{mode.symbol}</span><div><small>{mode.label}</small><strong>{formatNumber(mode.rating ?? 0, 0)}</strong></div><b>Best {formatNumber(mode.best ?? mode.rating ?? 0, 0)}</b></header><div className="chess-score"><i style={{ '--win-rate': `${winRate}%` } as CSSProperties}/></div><dl><div><dt>Win</dt><dd>{compactNumber(mode.wins)}</dd></div><div><dt>Draw</dt><dd>{compactNumber(mode.draws)}</dd></div><div><dt>Loss</dt><dd>{compactNumber(mode.losses)}</dd></div></dl></article>
+    })}</div>
+  </div>
+}
+
+function CrossrefWorksPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const message = isRecord(root.message) ? root.message : {}
+  const works = recordArray(message.items)
+  if (!works.length) return <div className="weather-empty"><strong>Scholarly works unavailable</strong><span>No Crossref work records were returned.</span></div>
+  return <div className="crossref-preview">
+    <header><div><small>Crossref scholarly index</small><strong>{compactNumber(numberValue(message['total-results']) ?? works.length)} matching works</strong></div><span>{works.length} shown</span></header>
+    <ol>{works.slice(0, 8).map((work, index) => {
+      const authors = recordArray(work.author).map((author) => [cleanText(author.given), cleanText(author.family)].filter(Boolean).join(' ')).filter(Boolean)
+      const published = isRecord(work.published) && Array.isArray(work.published['date-parts']) && Array.isArray(work.published['date-parts'][0]) ? previewValue(work.published['date-parts'][0][0]) : '—'
+      return <li key={`${work.DOI}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><article><header><small>{previewLabel(cleanText(work.type) ?? 'Scholarly work')} · {published}</small><b>{compactNumber(numberValue(work['is-referenced-by-count']) ?? 0)} citations</b></header><h3>{textArray(work.title)[0] ?? 'Untitled scholarly work'}</h3><p>{authors.slice(0, 3).join(', ') || 'Authorship unavailable'} · {cleanText(work.publisher) ?? 'Publisher unavailable'}</p><code>{cleanText(work.DOI) ?? 'DOI unavailable'}</code></article></li>
+    })}</ol>
+  </div>
+}
+
 const collectImageUrls = (value: unknown, found: string[] = [], depth = 0): string[] => {
   if (depth > 7 || found.length >= 8) return found
   if (typeof value === 'string' && /^https?:\/\//.test(value) && /\.(?:jpe?g|png|webp)(?:\?|$)/i.test(value)) found.push(value)
@@ -787,6 +901,11 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'openfda-drug-labels': defineApiPreview('openfda-drug-labels', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'coinpaprika-ticker': defineApiPreview('coinpaprika-ticker', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'yahoo-finance-sgx-history': defineApiPreview('yahoo-finance-sgx-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'malaysia-fuel-price': defineApiPreview('malaysia-fuel-price', ({ data }) => <FuelPricePreview data={data}/>),
+  'open-meteo-marine': defineApiPreview('open-meteo-marine', ({ data }) => <MarineForecastPreview data={data}/>),
+  'nobel-prizes': defineApiPreview('nobel-prizes', ({ data }) => <NobelPrizePreview data={data}/>),
+  'chess-player-stats': defineApiPreview('chess-player-stats', ({ data }) => <ChessRatingsPreview data={data}/>),
+  'crossref-works': defineApiPreview('crossref-works', ({ data }) => <CrossrefWorksPreview data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
@@ -807,6 +926,11 @@ const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title:
   'research-library': { icon: '▤', eyebrow: 'Live response · Research layout', title: 'Research library', description: 'Books, papers, and clinical studies presented with authorship, status, and identifiers.' },
   'dictionary-entry': { icon: 'Aa', eyebrow: 'Live response · Language layout', title: 'Dictionary entry', description: 'Definitions, parts of speech, examples, and synonyms mapped from the word response.' },
   'data-table': { icon: '▦', eyebrow: 'Live response · Data layout', title: 'Structured data view', description: 'Purpose-built records that expose the most useful values from this response.' },
+  'fuel-dashboard': { icon: '⛽', eyebrow: 'Live response · Fuel market layout', title: 'Malaysia fuel board', description: 'Official weekly pump prices, subsidy tiers, changes, and price history in a retail-market dashboard.' },
+  'marine-forecast': { icon: '≈', eyebrow: 'Live response · Marine layout', title: 'Marine forecast', description: 'Wave, current, bearing, period, and sea-temperature series presented as a coastal conditions cockpit.' },
+  'awards-timeline': { icon: 'N', eyebrow: 'Live response · Awards layout', title: 'Nobel Prize timeline', description: 'Prize years, categories, laureates, discoveries, and award values arranged chronologically.' },
+  'chess-ratings': { icon: '♞', eyebrow: 'Live response · Chess layout', title: 'Player ratings', description: 'Competitive ratings, personal bests, match records, and win ratios compared across time controls.' },
+  'scholarly-search': { icon: 'DOI', eyebrow: 'Live response · Scholarly layout', title: 'Scholarly works', description: 'DOI metadata organized by title, authorship, publication year, publisher, type, and citation count.' },
   'result-list': { icon: '✦', eyebrow: 'Live response · Results layout', title: 'Result explorer', description: 'A structured result browser adapted to this API response.' },
 }
 

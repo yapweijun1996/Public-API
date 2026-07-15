@@ -80,14 +80,14 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 
-  it('registers 64 distinct React component functions with no shared identity', () => {
+  it('registers 69 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(64)
-    expect(new Set(components).size).toBe(64)
-    expect(new Set(components.map((component) => component.name)).size).toBe(64)
+    expect(components).toHaveLength(69)
+    expect(new Set(components).size).toBe(69)
+    expect(new Set(components.map((component) => component.name)).size).toBe(69)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -101,7 +101,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(64)
+    expect(new Set(visualSignatures).size).toBe(69)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })
@@ -141,6 +141,67 @@ describe('new interactive API previews', () => {
     const trivia = screen.getByRole('region', { name: 'Trivia Challenge' })
     expect(trivia).toHaveTextContent("When did Halley's Comet appear?")
     expect(within(trivia).getByText('1986')).toBeInTheDocument()
+  })
+})
+
+describe('new specialist API previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('renders official Malaysia fuel levels and weekly movement', () => {
+    render(<ResponseDemoPreview api={api('malaysia-fuel-price')} data={[
+      { date: '2026-07-09', ron95: 3.37, ron97: 4, diesel: 3.97, ron95_budi95: 1.99, series_type: 'level' },
+      { date: '2026-07-01', ron95: 3.47, ron97: 4.1, diesel: 4.07, ron95_budi95: 1.99, series_type: 'level' },
+    ]}/> )
+    const preview = screen.getByRole('region', { name: 'Malaysia Fuel Price' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'fuel-dashboard')
+    expect(within(preview).getByText('RM 3.37')).toBeInTheDocument()
+    expect(within(preview).getAllByText('↓ RM 0.1')).toHaveLength(3)
+    expect(within(preview).getByText('BUDI95')).toBeInTheDocument()
+  })
+
+  it('maps marine hourly arrays into wave, temperature, and current readings', () => {
+    render(<ResponseDemoPreview api={api('open-meteo-marine')} data={{
+      latitude: 1.29, longitude: 103.79, timezone: 'Asia/Singapore', utc_offset_seconds: 28800,
+      hourly_units: { wave_height: 'm', wave_period: 's', sea_surface_temperature: '°C', ocean_current_velocity: 'km/h' },
+      hourly: { time: ['2026-07-15T06:00', '2026-07-15T09:00'], wave_height: [0.32, 0.32], wave_direction: [155, 155], wave_period: [2.9, 2.9], sea_surface_temperature: [29.8, 29.8], ocean_current_velocity: [1.8, 1.8], ocean_current_direction: [127, 127] },
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Marine Weather' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'marine-forecast')
+    expect(within(preview).getAllByText('0.32', { exact: false }).length).toBeGreaterThan(0)
+    expect(within(preview).getByText('29.8°C')).toBeInTheDocument()
+    expect(within(preview).getByText('1.8 km/h')).toBeInTheDocument()
+  })
+
+  it('renders Nobel laureates and their official motivation', () => {
+    render(<ResponseDemoPreview api={api('nobel-prizes')} data={{ nobelPrizes: [{ awardYear: '2024', category: { en: 'Physics' }, prizeAmount: 11000000, laureates: [{ knownName: { en: 'Geoffrey Hinton' }, motivation: { en: 'for foundational discoveries that enable machine learning' } }] }] }}/>)
+    const preview = screen.getByRole('region', { name: 'Nobel Prize Explorer' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'awards-timeline')
+    expect(within(preview).getByText('Geoffrey Hinton')).toBeInTheDocument()
+    expect(preview).toHaveTextContent('foundational discoveries')
+  })
+
+  it('compares Chess.com ratings and match records by time control', () => {
+    render(<ResponseDemoPreview api={api('chess-player-stats')} data={{ fide: 2814, chess_blitz: { last: { rating: 3403 }, best: { rating: 3465 }, record: { win: 35200, loss: 5479, draw: 4312 } }, chess_rapid: { last: { rating: 2839 }, best: { rating: 2927 }, record: { win: 201, loss: 67, draw: 209 } } }}/>)
+    const preview = screen.getByRole('region', { name: 'Chess.com Player Ratings' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'chess-ratings')
+    expect(within(preview).getAllByText('3,403').length).toBeGreaterThan(0)
+    expect(within(preview).getByText('FIDE')).toBeInTheDocument()
+    expect(within(preview).getByText('Best 3,465')).toBeInTheDocument()
+  })
+
+  it('turns Crossref work metadata into DOI research cards', () => {
+    render(<ResponseDemoPreview api={api('crossref-works')} data={{ message: { 'total-results': 562402, items: [{ DOI: '10.1007/demo', title: ['Enterprise Agentic AI'], author: [{ given: 'Sumit', family: 'Ranjan' }], published: { 'date-parts': [[2025]] }, publisher: 'Apress', 'is-referenced-by-count': 12, type: 'book-chapter' }] } }}/>)
+    const preview = screen.getByRole('region', { name: 'Crossref Works Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'scholarly-search')
+    expect(within(preview).getByText('Enterprise Agentic AI')).toBeInTheDocument()
+    expect(within(preview).getByText('Sumit Ranjan · Apress')).toBeInTheDocument()
+    expect(within(preview).getByText('10.1007/demo')).toBeInTheDocument()
   })
 })
 

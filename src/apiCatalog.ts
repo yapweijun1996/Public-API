@@ -802,6 +802,84 @@ const importedRecommendedApis: ApiDemo[] = [
     },
     parseResponse: parseReaderJson,
   },
+  {
+    id: 'malaysia-fuel-price', name: 'Malaysia Fuel Price', provider: 'data.gov.my', category: 'Finance',
+    description: 'Compare Malaysia’s weekly RON95, RON97, diesel, and targeted-subsidy fuel prices.',
+    documentationUrl: 'https://data.gov.my/data-catalogue/fuelprice', accent: '#d9485f', monogram: 'MY',
+    usageNote: 'Official open data licensed under CC BY 4.0. Keep data.gov.my attribution visible when republishing the results.',
+    fields: [
+      { id: 'limit', label: 'History rows', type: 'number', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' },
+    ],
+    buildUrl: ({ limit = '52' }) => {
+      const safeLimit = Math.min(104, Math.max(12, Number.parseInt(limit, 10) || 52))
+      return `https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=${safeLimit}&sort=-date`
+    },
+  },
+  {
+    id: 'open-meteo-marine', name: 'Marine Weather', provider: 'Open-Meteo', category: 'Weather',
+    description: 'Inspect wave height, period, direction, sea temperature, and ocean currents for coastal demos.',
+    documentationUrl: 'https://open-meteo.com/en/docs/marine-weather-api', accent: '#087ea4', monogram: 'MW', risk: 'Review',
+    usageNote: 'Open-Meteo attribution is required. Forecasts are not suitable for coastal navigation or safety-critical decisions.',
+    fields: [
+      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
+      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, help: 'Return between 1 and 7 forecast days.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '3' }) => {
+      const safeDays = Math.min(7, Math.max(1, Number.parseInt(days, 10) || 3))
+      const query = new URLSearchParams({
+        latitude,
+        longitude,
+        hourly: 'wave_height,wave_direction,wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction',
+        timezone: 'auto',
+        forecast_days: String(safeDays),
+      })
+      return `https://marine-api.open-meteo.com/v1/marine?${query.toString()}`
+    },
+  },
+  {
+    id: 'nobel-prizes', name: 'Nobel Prize Explorer', provider: 'Nobel Prize Outreach', category: 'Research',
+    description: 'Browse recent Nobel Prizes, laureates, motivations, award years, and prize amounts by category.',
+    documentationUrl: 'https://www.nobelprize.org/about/developer-zone-2/', accent: '#a66b18', monogram: 'NP',
+    usageNote: 'Uses the official Nobel Prize API. Follow the linked API terms and licence when republishing data.',
+    fields: [
+      { id: 'category', label: 'Prize category', type: 'select', defaultValue: 'phy', help: 'Choose a Nobel Prize category.', options: [
+        { label: 'Physics', value: 'phy' }, { label: 'Chemistry', value: 'che' }, { label: 'Physiology or Medicine', value: 'med' },
+        { label: 'Literature', value: 'lit' }, { label: 'Peace', value: 'pea' }, { label: 'Economic Sciences', value: 'eco' },
+      ] },
+      { id: 'limit', label: 'Prize years', type: 'number', defaultValue: '6', min: 1, max: 12, help: 'Return between 1 and 12 recent prize records.' },
+    ],
+    buildUrl: ({ category = 'phy', limit = '6' }) => {
+      const safeLimit = Math.min(12, Math.max(1, Number.parseInt(limit, 10) || 6))
+      const query = new URLSearchParams({ nobelPrizeCategory: category || 'phy', limit: String(safeLimit), sort: 'desc' })
+      return `https://api.nobelprize.org/2.1/nobelPrizes?${query.toString()}`
+    },
+  },
+  {
+    id: 'chess-player-stats', name: 'Chess.com Player Ratings', provider: 'Chess.com', category: 'Games',
+    description: 'Compare a public player’s blitz, bullet, rapid, daily, FIDE, tactics, and match records.',
+    documentationUrl: 'https://support.chess.com/en/articles/9650547-what-is-the-pubapi-and-how-do-i-use-it', accent: '#63863c', monogram: 'CH',
+    usageNote: 'The PubAPI is read-only. Keep requests serial, respect cache headers, and avoid rapid repeated refreshes.',
+    fields: [
+      { id: 'username', label: 'Chess.com username', type: 'text', defaultValue: 'hikaru', placeholder: 'e.g. hikaru', help: 'Enter a public Chess.com username.' },
+    ],
+    buildUrl: ({ username = 'hikaru' }) => `https://api.chess.com/pub/player/${encode(username || 'hikaru').toLowerCase()}/stats`,
+  },
+  {
+    id: 'crossref-works', name: 'Crossref Works Search', provider: 'Crossref', category: 'Research',
+    description: 'Search scholarly works and inspect DOI, authorship, publisher, type, year, and citation counts.',
+    documentationUrl: 'https://www.crossref.org/documentation/retrieve-metadata/rest-api/', accent: '#4f46a5', monogram: 'CR',
+    usageNote: 'Uses Crossref’s public pool without authentication. Cache results and keep request volume modest.',
+    fields: [
+      { id: 'query', label: 'Research query', type: 'text', defaultValue: 'agentic AI', placeholder: 'e.g. climate adaptation', help: 'Search titles, authors, abstracts, and other Crossref metadata.' },
+      { id: 'rows', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 works.' },
+    ],
+    buildUrl: ({ query = 'agentic AI', rows = '8' }) => {
+      const safeRows = Math.min(20, Math.max(1, Number.parseInt(rows, 10) || 8))
+      const params = new URLSearchParams({ query: query.trim() || 'agentic AI', rows: String(safeRows), select: 'DOI,title,author,published,publisher,is-referenced-by-count,type,URL' })
+      return `https://api.crossref.org/works?${params.toString()}`
+    },
+  },
 ]
 
 export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis]

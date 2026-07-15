@@ -24,7 +24,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(64)
+    expect(apiCatalog).toHaveLength(69)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -63,6 +63,24 @@ describe('API catalog', () => {
     expect(yahoo.parseResponse?.('{"data":{"content":"{\\"chart\\":{\\"result\\":[]}}"}}')).toEqual({ chart: { result: [] } })
     expect(frankfurter.buildUrl(getDefaultParameters(frankfurter))).toContain('from=1999-01-04')
     expect(frankfurter.buildUrl(getDefaultParameters(frankfurter))).toContain('base=SGD&quotes=MYR&providers=ECB')
+  })
+
+  it('builds the five new keyless specialist API requests', () => {
+    const ids = ['malaysia-fuel-price', 'open-meteo-marine', 'nobel-prizes', 'chess-player-stats', 'crossref-works']
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['malaysia-fuel-price'].hostname).toBe('api.data.gov.my')
+    expect(urls['malaysia-fuel-price'].searchParams.get('id')).toBe('fuelprice')
+    expect(urls['open-meteo-marine'].searchParams.get('hourly')).toContain('ocean_current_velocity')
+    expect(urls['open-meteo-marine'].searchParams.get('forecast_days')).toBe('3')
+    expect(urls['nobel-prizes'].searchParams.get('nobelPrizeCategory')).toBe('phy')
+    expect(urls['chess-player-stats'].pathname).toBe('/pub/player/hikaru/stats')
+    expect(urls['crossref-works'].searchParams.get('select')).toContain('DOI')
   })
 
   it('finds API demos by ID', () => {

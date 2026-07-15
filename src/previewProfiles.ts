@@ -14,6 +14,11 @@ export type PreviewLayout =
   | 'research-library'
   | 'dictionary-entry'
   | 'data-table'
+  | 'fuel-dashboard'
+  | 'marine-forecast'
+  | 'awards-timeline'
+  | 'chess-ratings'
+  | 'scholarly-search'
   | 'result-list'
 
 export type PreviewProfile = {
@@ -86,6 +91,11 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['openfda-drug-labels', 'data-table', 'Regulated drug label viewer'],
   ['coinpaprika-ticker', 'market-chart', 'Cryptocurrency market terminal'],
   ['yahoo-finance-sgx-history', 'market-chart', 'SGX equity history terminal'],
+  ['malaysia-fuel-price', 'fuel-dashboard', 'Malaysia weekly fuel-price board'],
+  ['open-meteo-marine', 'marine-forecast', 'Coastal and ocean forecast cockpit'],
+  ['nobel-prizes', 'awards-timeline', 'Nobel laureate and discovery timeline'],
+  ['chess-player-stats', 'chess-ratings', 'Chess performance rating board'],
+  ['crossref-works', 'scholarly-search', 'DOI and scholarly works explorer'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)
