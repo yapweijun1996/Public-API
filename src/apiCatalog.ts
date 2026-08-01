@@ -60,11 +60,32 @@ export type ApiDemo = {
   method?: 'GET' | 'POST'
   buildBody?: (parameters: Record<string, string>) => unknown
   parseResponse?: (text: string) => unknown
+  headers?: Record<string, string>
   risk?: 'Low' | 'Review'
   usageNote?: string
 }
 
 const encode = (value: string) => encodeURIComponent(value.trim())
+
+const clampInt = (value: string, min: number, max: number, fallback: number): number =>
+  Math.min(max, Math.max(min, Number.parseInt(value, 10) || fallback))
+
+const numberField = (id: string, params: Omit<ApiField, 'id' | 'type'>): ApiField => ({ id, type: 'number', ...params })
+const textField = (id: string, params: Omit<ApiField, 'id' | 'type'>): ApiField => ({ id, type: 'text', ...params })
+
+const latLongFields = (overrides: {
+  latitude?: Partial<Pick<ApiField, 'defaultValue' | 'min' | 'max' | 'help'>>
+  longitude?: Partial<Pick<ApiField, 'defaultValue' | 'min' | 'max' | 'help'>>
+} = {}): [ApiField, ApiField] => [
+  { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.', ...overrides.latitude },
+  { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.', ...overrides.longitude },
+]
+
+const countField = (params: Omit<ApiField, 'id' | 'type' | 'label'> & { label?: string }) =>
+  numberField('count', { label: 'Count', ...params })
+const limitField = (params: Omit<ApiField, 'id' | 'type' | 'label'> & { label?: string }) =>
+  numberField('limit', { label: 'Results', ...params })
+const queryField = (params: Omit<ApiField, 'id' | 'type'>) => textField('query', params)
 
 const coreApis: ApiDemo[] = [
   {
@@ -163,7 +184,7 @@ const coreApis: ApiDemo[] = [
       },
     ],
     buildUrl: ({ count = '3', nationality = 'au' }) => {
-      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 3))
+      const safeCount = clampInt(count, 1, 10, 3)
       const query = new URLSearchParams({ results: String(safeCount), nat: nationality })
       return `https://randomuser.me/api/?${query.toString()}`
     },
@@ -189,7 +210,7 @@ const coreApis: ApiDemo[] = [
       },
     ],
     buildUrl: ({ count = '4' }) => {
-      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 4))
+      const safeCount = clampInt(count, 1, 10, 4)
       return `https://dog.ceo/api/breeds/image/random/${safeCount}`
     },
   },
@@ -214,7 +235,7 @@ const coreApis: ApiDemo[] = [
       },
     ],
     buildUrl: ({ postId = '7' }) => {
-      const safeId = Math.min(100, Math.max(1, Number.parseInt(postId, 10) || 7))
+      const safeId = clampInt(postId, 1, 100, 7)
       return `https://jsonplaceholder.typicode.com/posts/${safeId}`
     },
   },
@@ -256,7 +277,7 @@ const coreApis: ApiDemo[] = [
       },
     ],
     buildUrl: ({ year = '2026', country = 'SG' }) => {
-      const safeYear = Math.min(2100, Math.max(2000, Number.parseInt(year, 10) || 2026))
+      const safeYear = clampInt(year, 2000, 2100, 2026)
       return `https://date.nager.at/api/v3/PublicHolidays/${safeYear}/${encode(country || 'SG').toUpperCase()}`
     },
   },
@@ -339,7 +360,7 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 matching locations.' },
     ],
     buildUrl: ({ name = 'Singapore', count = '6' }) => {
-      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 6))
+      const safeCount = clampInt(count, 1, 10, 6)
       const query = new URLSearchParams({ name: name.trim() || 'Singapore', count: String(safeCount), language: 'en', format: 'json' })
       return `https://geocoding-api.open-meteo.com/v1/search?${query.toString()}`
     },
@@ -386,7 +407,7 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'limit', label: 'Events', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 active events.' },
     ],
     buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
-      const query = new URLSearchParams({ status: 'open', days: String(Math.min(365, Math.max(1, Number.parseInt(days, 10) || 30))), limit: String(Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))) })
+      const query = new URLSearchParams({ status: 'open', days: String(clampInt(days, 1, 365, 30)), limit: String(clampInt(limit, 1, 10, 6)) })
       if (category !== 'all') query.set('category', category)
       return `https://eonet.gsfc.nasa.gov/api/v3/events?${query.toString()}`
     },
@@ -421,7 +442,7 @@ const additionalInteractiveApis: ApiDemo[] = [
       ] },
     ],
     buildUrl: ({ amount = '6', category = '9', difficulty = 'medium' }) => {
-      const safeAmount = Math.min(10, Math.max(1, Number.parseInt(amount, 10) || 6))
+      const safeAmount = clampInt(amount, 1, 10, 6)
       const query = new URLSearchParams({ amount: String(safeAmount), category, difficulty, type: 'multiple' })
       return `https://opentdb.com/api.php?${query.toString()}`
     },
@@ -819,7 +840,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'limit', label: 'History rows', type: 'number', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' },
     ],
     buildUrl: ({ limit = '52' }) => {
-      const safeLimit = Math.min(104, Math.max(12, Number.parseInt(limit, 10) || 52))
+      const safeLimit = clampInt(limit, 12, 104, 52)
       return `https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=${safeLimit}&sort=-date`
     },
   },
@@ -834,7 +855,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, help: 'Return between 1 and 7 forecast days.' },
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '3' }) => {
-      const safeDays = Math.min(7, Math.max(1, Number.parseInt(days, 10) || 3))
+      const safeDays = clampInt(days, 1, 7, 3)
       const query = new URLSearchParams({
         latitude,
         longitude,
@@ -858,7 +879,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'limit', label: 'Prize years', type: 'number', defaultValue: '6', min: 1, max: 12, help: 'Return between 1 and 12 recent prize records.' },
     ],
     buildUrl: ({ category = 'phy', limit = '6' }) => {
-      const safeLimit = Math.min(12, Math.max(1, Number.parseInt(limit, 10) || 6))
+      const safeLimit = clampInt(limit, 1, 12, 6)
       const query = new URLSearchParams({ nobelPrizeCategory: category || 'phy', limit: String(safeLimit), sort: 'desc' })
       return `https://api.nobelprize.org/2.1/nobelPrizes?${query.toString()}`
     },
@@ -883,7 +904,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'rows', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 works.' },
     ],
     buildUrl: ({ query = 'agentic AI', rows = '8' }) => {
-      const safeRows = Math.min(20, Math.max(1, Number.parseInt(rows, 10) || 8))
+      const safeRows = clampInt(rows, 1, 20, 8)
       const params = new URLSearchParams({ query: query.trim() || 'agentic AI', rows: String(safeRows), select: 'DOI,title,author,published,publisher,is-referenced-by-count,type,URL' })
       return `https://api.crossref.org/works?${params.toString()}`
     },
@@ -913,7 +934,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Documents', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 recent documents.' },
     ],
     buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const safeLimit = Math.min(20, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const safeLimit = clampInt(limit, 1, 20, 8)
       const params = new URLSearchParams({ per_page: String(safeLimit), order: 'newest', 'conditions[term]': query.trim() || 'artificial intelligence' })
       return `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
     },
@@ -927,7 +948,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 12, help: 'Return between 1 and 12 matching pages.' },
     ],
     buildUrl: ({ query = 'Singapore', limit = '8' }) => {
-      const safeLimit = Math.min(12, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const safeLimit = clampInt(limit, 1, 12, 8)
       const params = new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim() || 'Singapore', gsrlimit: String(safeLimit), prop: 'pageimages|extracts', exintro: '1', explaintext: '1', piprop: 'thumbnail', pithumbsize: '480', format: 'json', origin: '*' })
       return `https://en.wikipedia.org/w/api.php?${params.toString()}`
     },
@@ -943,7 +964,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '7', min: 1, max: 30, help: 'Return between 1 and 30 daily discharge values.' },
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '7' }) => {
-      const safeDays = Math.min(30, Math.max(1, Number.parseInt(days, 10) || 7))
+      const safeDays = clampInt(days, 1, 30, 7)
       const params = new URLSearchParams({ latitude, longitude, daily: 'river_discharge,river_discharge_mean,river_discharge_max', forecast_days: String(safeDays) })
       return `https://flood-api.open-meteo.com/v1/flood?${params.toString()}`
     },
@@ -982,7 +1003,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Projects', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 public projects.' },
     ],
     buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const safeLimit = Math.min(20, Math.max(1, Number.parseInt(limit, 10) || 8))
+      const safeLimit = clampInt(limit, 1, 20, 8)
       const params = new URLSearchParams({ visibility: 'public', search: query.trim() || 'artificial intelligence', order_by: 'star_count', sort: 'desc', per_page: String(safeLimit) })
       return `https://gitlab.com/api/v4/projects?${params.toString()}`
     },
@@ -1044,7 +1065,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'days', label: 'History days', type: 'number', defaultValue: '14', min: 7, max: 90, help: 'Chart between 7 and 90 completed days.' },
     ],
     buildUrl: ({ article = 'Singapore', days = '14' }) => {
-      const safeDays = Math.min(90, Math.max(7, Number.parseInt(days, 10) || 14))
+      const safeDays = clampInt(days, 7, 90, 14)
       const end = daysAgo(1)
       const start = daysAgo(safeDays)
       const title = encode((article.trim() || 'Singapore').replace(/\s+/g, '_'))
@@ -1085,7 +1106,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Articles', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recent articles.' },
     ],
     buildUrl: ({ query = 'NASA', limit = '6' }) => {
-      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))
+      const safeLimit = clampInt(limit, 1, 10, 6)
       return `https://api.spaceflightnewsapi.net/v4/articles/?${new URLSearchParams({ search: query.trim() || 'NASA', limit: String(safeLimit), ordering: '-published_at' }).toString()}`
     },
   },
@@ -1099,7 +1120,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Launches', type: 'number', defaultValue: '4', min: 1, max: 6, help: 'Return between 1 and 6 upcoming launches.' },
     ],
     buildUrl: ({ query = 'SpaceX', limit = '4' }) => {
-      const safeLimit = Math.min(6, Math.max(1, Number.parseInt(limit, 10) || 4))
+      const safeLimit = clampInt(limit, 1, 6, 4)
       return `https://ll.thespacedevs.com/2.2.0/launch/upcoming/?${new URLSearchParams({ search: query.trim() || 'SpaceX', limit: String(safeLimit), ordering: 'net' }).toString()}`
     },
   },
@@ -1139,7 +1160,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'limit', label: 'Recipes', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recipes.' },
     ],
     buildUrl: ({ query = 'pasta', limit = '6' }) => {
-      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))
+      const safeLimit = clampInt(limit, 1, 10, 6)
       return `https://dummyjson.com/recipes/search?${new URLSearchParams({ q: query.trim() || 'pasta', limit: String(safeLimit) }).toString()}`
     },
   },
@@ -1160,7 +1181,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'count', label: 'Poems', type: 'number', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' },
     ],
     buildUrl: ({ author = 'Emily Dickinson', count = '3' }) => {
-      const safeCount = Math.min(4, Math.max(1, Number.parseInt(count, 10) || 3))
+      const safeCount = clampInt(count, 1, 4, 3)
       return `https://poetrydb.org/author,random/${encode(author || 'Emily Dickinson')};${safeCount}/title,author,lines,linecount`
     },
   },
@@ -1184,7 +1205,91 @@ const verifiedKeylessApis: ApiDemo[] = [
   },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis]
+const verifiedExpansionApis: ApiDemo[] = [
+  {
+    id: 'google-dns-doh', name: 'Google DNS over HTTPS', provider: 'Google Public DNS', category: 'Developer',
+    description: 'Resolve a domain name to its DNS records over HTTPS for developer troubleshooting and diagnostics.',
+    documentationUrl: 'https://developers.google.com/speed/public-dns/docs/doh/json', accent: '#4285f4', monogram: 'DNS',
+    fields: [
+      { id: 'name', label: 'Domain name', type: 'text', defaultValue: 'example.com', placeholder: 'e.g. example.com', help: 'Enter a domain name to resolve.' },
+      { id: 'type', label: 'Record type', type: 'select', defaultValue: 'A', help: 'Choose a DNS record type.', options: [
+        { label: 'A (IPv4)', value: 'A' }, { label: 'AAAA (IPv6)', value: 'AAAA' }, { label: 'MX (Mail)', value: 'MX' },
+        { label: 'TXT', value: 'TXT' }, { label: 'CNAME', value: 'CNAME' }, { label: 'NS', value: 'NS' },
+      ] },
+    ],
+    buildUrl: ({ name = 'example.com', type = 'A' }) => `https://dns.google/resolve?${new URLSearchParams({ name: name.trim() || 'example.com', type: type || 'A' }).toString()}`,
+  },
+  {
+    id: 'color-api', name: 'The Color API', provider: 'TheColorAPI', category: 'Utility',
+    description: 'Convert a hex color into RGB, HSL, HSV, CMYK, a named color match, and a contrast recommendation.',
+    documentationUrl: 'https://www.thecolorapi.com/docs', accent: '#24b1e0', monogram: 'HEX',
+    fields: [{ id: 'hex', label: 'Hex color', type: 'text', defaultValue: '24B1E0', placeholder: 'e.g. 24B1E0', help: 'Enter a hex color with or without the leading #.' }],
+    buildUrl: ({ hex = '24B1E0' }) => `https://www.thecolorapi.com/id?hex=${encode((hex || '24B1E0').replace(/^#/, ''))}`,
+  },
+  {
+    id: 'nasa-image-search', name: 'NASA Image & Video Library', provider: 'NASA', category: 'Media',
+    description: 'Search NASA imagery, video, and audio with titles, descriptions, and thumbnail links.',
+    documentationUrl: 'https://images.nasa.gov/docs/images.nasa.gov_api_docs.pdf', accent: '#0b3d91', monogram: 'NASA',
+    fields: [
+      { id: 'query', label: 'Search term', type: 'text', defaultValue: 'moon', placeholder: 'e.g. moon', help: 'Search NASA media titles and descriptions.' },
+      { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Filter by media type.', options: [{ label: 'Image', value: 'image' }, { label: 'Video', value: 'video' }, { label: 'Audio', value: 'audio' }] },
+    ],
+    buildUrl: ({ query = 'moon', mediaType = 'image' }) => `https://images-api.nasa.gov/search?${new URLSearchParams({ q: query.trim() || 'moon', media_type: mediaType || 'image' }).toString()}`,
+  },
+  {
+    id: 'lichess-top-players', name: 'Lichess Top Players', provider: 'Lichess', category: 'Games',
+    description: 'Browse the current Lichess leaderboard for a chosen time control, including titles and ratings.',
+    documentationUrl: 'https://lichess.org/api', accent: '#3893e8', monogram: 'LI',
+    usageNote: 'Public read-only endpoint. Keep requests serial and back off if you receive a 429 response.',
+    fields: [
+      { id: 'perfType', label: 'Time control', type: 'select', defaultValue: 'blitz', help: 'Choose a Lichess rating leaderboard.', options: [
+        { label: 'Bullet', value: 'bullet' }, { label: 'Blitz', value: 'blitz' }, { label: 'Rapid', value: 'rapid' }, { label: 'Classical', value: 'classical' },
+      ] },
+      { id: 'count', label: 'Players', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 top players.' },
+    ],
+    buildUrl: ({ perfType = 'blitz', count = '5' }) => {
+      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 5))
+      return `https://lichess.org/api/player/top/${safeCount}/${encode(perfType || 'blitz')}`
+    },
+  },
+  {
+    id: 'pubmed-search', name: 'PubMed Search', provider: 'NCBI PubMed', category: 'Research',
+    description: 'Search PubMed and return matching article identifiers along with the total result count.',
+    documentationUrl: 'https://www.ncbi.nlm.nih.gov/books/NBK25499/', accent: '#20558a', monogram: 'PB',
+    usageNote: 'Keyless requests are limited to about 3 per second. This search step returns PMIDs; open pubmed.ncbi.nlm.nih.gov/{id} for full articles.',
+    fields: [
+      { id: 'term', label: 'Search term', type: 'text', defaultValue: 'covid', placeholder: 'e.g. covid', help: 'Search PubMed indexed terms and MeSH headings.' },
+      { id: 'retmax', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 article identifiers.' },
+    ],
+    buildUrl: ({ term = 'covid', retmax = '5' }) => {
+      const safeRetmax = Math.min(10, Math.max(1, Number.parseInt(retmax, 10) || 5))
+      return `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${new URLSearchParams({ db: 'pubmed', term: term.trim() || 'covid', retmode: 'json', retmax: String(safeRetmax) }).toString()}`
+    },
+  },
+  {
+    id: 'rxnorm-drug-search', name: 'RxNorm Drug Search', provider: 'U.S. National Library of Medicine', category: 'Health', risk: 'Review',
+    description: 'Look up standardized drug names, brand products, and dosage forms from the RxNorm terminology.',
+    documentationUrl: 'https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html', accent: '#0369a1', monogram: 'RX',
+    usageNote: 'For terminology normalization demonstrations only. Never treat this response as medical or prescribing advice.',
+    fields: [{ id: 'name', label: 'Drug name', type: 'text', defaultValue: 'ibuprofen', placeholder: 'e.g. ibuprofen', help: 'Enter a generic or brand drug name.' }],
+    buildUrl: ({ name = 'ibuprofen' }) => `https://rxnav.nlm.nih.gov/REST/drugs.json?${new URLSearchParams({ name: name.trim() || 'ibuprofen' }).toString()}`,
+  },
+  {
+    id: 'inaturalist-observations', name: 'iNaturalist Observations', provider: 'iNaturalist', category: 'Biodiversity',
+    description: 'Browse real, photographed species observations with location, date, and taxonomy.',
+    documentationUrl: 'https://www.inaturalist.org/pages/api+reference', accent: '#74ac00', monogram: 'INAT',
+    fields: [
+      { id: 'taxonName', label: 'Species search', type: 'text', defaultValue: 'Panthera', placeholder: 'e.g. Panthera', help: 'Search by scientific or common name.' },
+      { id: 'perPage', label: 'Observations', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 observations.' },
+    ],
+    buildUrl: ({ taxonName = 'Panthera', perPage = '6' }) => {
+      const safePerPage = Math.min(10, Math.max(1, Number.parseInt(perPage, 10) || 6))
+      return `https://api.inaturalist.org/v1/observations?${new URLSearchParams({ taxon_name: taxonName.trim() || 'Panthera', per_page: String(safePerPage), photos: 'true' }).toString()}`
+    },
+  },
+]
+
+export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis, ...verifiedExpansionApis]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))

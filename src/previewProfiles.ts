@@ -120,6 +120,13 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['poetrydb-poems', 'research-library', 'Public-domain poetry reading room'],
   ['coingecko-keyless-market', 'market-chart', 'Keyless cryptocurrency market snapshot'],
   ['swapi-people', 'data-table', 'Star Wars character dossier'],
+  ['google-dns-doh', 'data-table', 'DNS resolution record table'],
+  ['color-api', 'data-table', 'Color conversion swatch card'],
+  ['nasa-image-search', 'media-gallery', 'NASA media discovery wall'],
+  ['lichess-top-players', 'chess-ratings', 'Lichess leaderboard board'],
+  ['pubmed-search', 'research-library', 'PubMed identifier search results'],
+  ['rxnorm-drug-search', 'data-table', 'Standardized drug name registry'],
+  ['inaturalist-observations', 'media-gallery', 'Species observation photo wall'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)

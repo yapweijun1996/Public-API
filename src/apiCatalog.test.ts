@@ -28,7 +28,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(93)
+    expect(apiCatalog).toHaveLength(100)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -144,6 +144,24 @@ describe('API catalog', () => {
     expect(decodeURIComponent(urls['poetrydb-poems'].pathname)).toContain('/Emily Dickinson;3/')
     expect(urls['coingecko-keyless-market'].searchParams.get('ids')).toBe('bitcoin')
     expect(urls['swapi-people'].searchParams.get('search')).toBe('Luke')
+  })
+
+  it('builds the seven externally-verified expansion API requests', () => {
+    const ids = ['google-dns-doh', 'color-api', 'nasa-image-search', 'lichess-top-players', 'pubmed-search', 'rxnorm-drug-search', 'inaturalist-observations']
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['google-dns-doh'].searchParams.get('name')).toBe('example.com')
+    expect(urls['color-api'].searchParams.get('hex')).toBe('24B1E0')
+    expect(urls['nasa-image-search'].searchParams.get('media_type')).toBe('image')
+    expect(urls['lichess-top-players'].pathname).toBe('/api/player/top/5/blitz')
+    expect(urls['pubmed-search'].searchParams.get('db')).toBe('pubmed')
+    expect(urls['rxnorm-drug-search'].searchParams.get('name')).toBe('ibuprofen')
+    expect(urls['inaturalist-observations'].searchParams.get('taxon_name')).toBe('Panthera')
   })
 
   it('finds API demos by ID', () => {

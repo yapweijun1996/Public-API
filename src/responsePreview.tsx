@@ -599,6 +599,25 @@ function NobelPrizePreview({ data }: { data: unknown }) {
   </div>
 }
 
+function LichessLeaderboardPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const cards: SemanticCard[] = recordArray(root.users).map((user, index) => {
+    const perfs = isRecord(user.perfs) ? user.perfs : {}
+    const perf = Object.values(perfs).find(isRecord) ?? {}
+    return {
+      title: cleanText(user.username) ?? `Player ${index + 1}`,
+      eyebrow: cleanText(user.title) ?? 'Lichess player',
+      badge: `Rating ${previewValue(perf.rating)}`,
+      metrics: [
+        { label: 'Rank', value: String(index + 1) },
+        { label: 'Progress', value: previewValue(perf.progress) },
+        { label: 'Patron', value: user.patron ? 'Yes' : 'No' },
+      ],
+    }
+  })
+  return <SemanticCards cards={cards} emptyTitle="Lichess leaderboard unavailable"/>
+}
+
 function ChessRatingsPreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
   const modes = [
@@ -678,6 +697,24 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
     title: cleanText(recipe.name) ?? 'Recipe',
     subtitle: `${cleanText(recipe.cuisine) ?? 'Global cuisine'} · ★ ${previewValue(recipe.rating)} · ${previewValue(recipe.difficulty)}`,
   })).filter((item) => item.image)
+  if (api.id === 'nasa-image-search' && isRecord(data)) {
+    const collection = isRecord(data.collection) ? data.collection : {}
+    return recordArray(collection.items).slice(0, 8).map((item) => {
+      const itemData = Array.isArray(item.data) ? item.data.find(isRecord) : undefined
+      const links = Array.isArray(item.links) ? item.links.filter(isRecord) : []
+      const thumbnail = links.find((link) => link.rel === 'preview') ?? links[0]
+      return { image: textValue(thumbnail?.href) ?? '', title: cleanText(itemData?.title) ?? 'NASA media item', subtitle: cleanText(itemData?.description) }
+    }).filter((item) => item.image)
+  }
+  if (api.id === 'inaturalist-observations' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((observation) => {
+    const taxon = isRecord(observation.taxon) ? observation.taxon : {}
+    const photos = Array.isArray(observation.photos) ? observation.photos.filter(isRecord) : []
+    return {
+      image: textValue(photos[0]?.url) ?? '',
+      title: cleanText(taxon.preferred_common_name) ?? cleanText(taxon.name) ?? 'Species observation',
+      subtitle: `${cleanText(observation.place_guess) ?? 'Location unavailable'} · ${previewValue(observation.observed_on)}`,
+    }
+  }).filter((item) => item.image)
   if (api.id === 'art-institute-search' && isRecord(data)) {
     const base = isRecord(data.config) ? textValue(data.config.iiif_url) : undefined
     if (base && Array.isArray(data.data)) return data.data.filter(isRecord).filter((item) => item.image_id).slice(0, 6).map((item) => ({ image: `${base}/2/${item.image_id}/full/500,/0/default.jpg`, title: textValue(item.title) ?? 'Artwork', subtitle: textValue(item.artist_title) }))
@@ -997,6 +1034,11 @@ function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) 
     const design = isRecord(protocol.designModule) ? protocol.designModule : {}
     return { title: cleanText(identification.briefTitle ?? identification.officialTitle) ?? 'Clinical study', eyebrow: cleanText(identification.nctId) ?? 'ClinicalTrials.gov', badge: cleanText(status.overallStatus) ?? 'Study', metrics: [{ label: 'Study type', value: previewValue(design.studyType) }, { label: 'Start date', value: previewValue(recordValue(status.startDateStruct, 'date')) }, { label: 'Has results', value: study.hasResults ? 'Yes' : 'No' }] }
   })
+  else if (api.id === 'pubmed-search') {
+    const result = isRecord(root.esearchresult) ? root.esearchresult : {}
+    const ids = Array.isArray(result.idlist) ? result.idlist.filter((item): item is string => typeof item === 'string') : []
+    cards = ids.map((id) => ({ title: `PMID ${id}`, eyebrow: 'PubMed article identifier', description: `Open pubmed.ncbi.nlm.nih.gov/${id} for the full record.`, metrics: [{ label: 'Total matches', value: previewValue(result.count) }, { label: 'Query used', value: cleanText(result.querytranslation) ?? '—' }] }))
+  }
   else if (api.id === 'europe-pmc-search') {
     const list = isRecord(root.resultList) ? root.resultList : {}
     cards = recordArray(list.result).map((paper) => ({ title: cleanText(paper.title) ?? 'Research paper', eyebrow: cleanText(paper.authorString) ?? 'Europe PMC', description: cleanText(paper.journalTitle), badge: previewValue(paper.pubYear), metrics: [{ label: 'Citations', value: previewValue(paper.citedByCount) }, { label: 'Open access', value: paper.isOpenAccess === 'Y' ? 'Yes' : 'No' }, { label: 'Identifier', value: previewValue(paper.doi ?? paper.pmid ?? paper.id) }] }))
@@ -1129,6 +1171,17 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   else if (api.id === 'usaspending') records = recordArray(root.results)
   else if (api.id === 'wikidata-sparql') records = recordArray(recordValue(recordValue(root.results, 'bindings'), 'items') ?? recordValue(root.results, 'bindings')).map((binding) => Object.fromEntries(Object.entries(binding).map(([key, value]) => [key, recordValue(value, 'value') ?? value])))
   else if (api.id === 'openfda-drug-labels') records = recordArray(root.results).map((record) => ({ title: textArray(record.openfda && recordValue(record.openfda, 'brand_name'))[0] ?? textArray(record.spl_product_data_elements)[0] ?? 'Drug label', purpose: textArray(record.purpose)[0], warnings: textArray(record.warnings)[0], active_ingredient: textArray(record.active_ingredient)[0] }))
+  else if (api.id === 'google-dns-doh') records = recordArray(root.Answer).map((record) => ({ title: textValue(record.name) ?? 'DNS answer', type: previewValue(record.type), data: previewValue(record.data), ttl: previewValue(record.TTL) }))
+  else if (api.id === 'color-api') {
+    const rgb = isRecord(root.rgb) ? root.rgb : {}
+    const hsl = isRecord(root.hsl) ? root.hsl : {}
+    const cmyk = isRecord(root.cmyk) ? root.cmyk : {}
+    const name = isRecord(root.name) ? root.name : {}
+    records = Object.keys(root).length ? [{ title: cleanText(name.value) ?? textValue(recordValue(root.hex, 'value')) ?? 'Color', hex: previewValue(recordValue(root.hex, 'value')), rgb: previewValue(rgb.value), hsl: previewValue(hsl.value), cmyk: previewValue(cmyk.value) }] : []
+  } else if (api.id === 'rxnorm-drug-search') {
+    const groups = recordArray(recordValue(root.drugGroup, 'conceptGroup'))
+    records = groups.flatMap((group) => recordArray(group.conceptProperties).map((property) => ({ title: cleanText(property.name) ?? 'Drug product', tty: previewValue(group.tty), rxcui: previewValue(property.rxcui), synonym: previewValue(property.synonym) })))
+  }
   else records = findPreviewRecords(data)
   const cards = records.map((record, index) => {
     const entries = Object.entries(record).filter(([, value]) => value !== undefined).slice(0, 6)
@@ -1263,6 +1316,13 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'poetrydb-poems': defineApiPreview('poetrydb-poems', ({ data }) => <PoetryReaderPreview data={data}/>),
   'coingecko-keyless-market': defineApiPreview('coingecko-keyless-market', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'swapi-people': defineApiPreview('swapi-people', ({ data }) => <StarWarsPeoplePreview data={data}/>),
+  'google-dns-doh': defineApiPreview('google-dns-doh', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'color-api': defineApiPreview('color-api', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'nasa-image-search': defineApiPreview('nasa-image-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'lichess-top-players': defineApiPreview('lichess-top-players', ({ data }) => <LichessLeaderboardPreview data={data}/>),
+  'pubmed-search': defineApiPreview('pubmed-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'rxnorm-drug-search': defineApiPreview('rxnorm-drug-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'inaturalist-observations': defineApiPreview('inaturalist-observations', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
