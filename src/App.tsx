@@ -482,7 +482,7 @@ function App() {
               </table>
               {filteredApis.length === 0 && <div className="catalog-empty"><Icon name="search" /><b>No matching APIs</b><p>Clear the search or choose another category.</p></div>}
             </div>
-            <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled>‹</button><button type="button" className="current">1</button><button type="button" disabled>›</button></div></div>
+            <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled aria-label="Previous page">‹</button><button type="button" className="current" aria-label="Page 1, current page">1</button><button type="button" disabled aria-label="Next page">›</button></div></div>
           </section>}
 
           {currentPage === 'request-lab' && <section className="request-lab page-section" aria-labelledby="lab-heading">
