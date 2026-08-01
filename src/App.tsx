@@ -90,7 +90,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 
 async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   const url = api.buildUrl(parameters)
-  const method = api.method ?? 'GET'
+  const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
   const started = performance.now()
   const response = await fetch(url, {
@@ -115,7 +115,7 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
 const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
   const url = api.buildUrl(parameters)
-  const method = api.method ?? 'GET'
+  const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
   const options = [
     `  method: '${method}',`,
@@ -129,6 +129,10 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
 }
 
 const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
+
+const DEFAULT_HTTP_METHOD: NonNullable<ApiDemo['method']> = 'GET'
+const DEFAULT_RISK: NonNullable<ApiDemo['risk']> = 'Low'
+const KEYLESS_TAG_LABEL = 'no-key'
 
 const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: string }> = {
   overview: { title: 'Overview', subtitle: 'Monitor the public API demo workspace', path: '/overview' },
@@ -165,8 +169,8 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
   tags: {
     icon: 'filter', eyebrow: 'Catalog taxonomy', description: 'Use tags to help people and agents select the right demo module.',
     cards: [
-      { title: 'no-key', description: 'No API key or sign-up is required.', meta: `${apiCatalog.length} APIs` },
-      { title: 'GET', description: 'Read-only public requests suitable for demonstrations.', meta: `${apiCatalog.filter((api) => (api.method ?? 'GET') === 'GET').length} APIs` },
+      { title: KEYLESS_TAG_LABEL, description: 'No API key or sign-up is required.', meta: `${apiCatalog.length} APIs` },
+      { title: DEFAULT_HTTP_METHOD, description: 'Read-only public requests suitable for demonstrations.', meta: `${apiCatalog.filter((api) => (api.method ?? DEFAULT_HTTP_METHOD) === DEFAULT_HTTP_METHOD).length} APIs` },
       ...apiCategories.map((category) => {
         const count = apiCatalog.filter((api) => api.category === category).length
         return { title: category, description: `Browse public demos in the ${category.toLowerCase()} category.`, meta: `${count} API${count === 1 ? '' : 's'}` }
@@ -175,7 +179,7 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
   },
   health: {
     icon: 'shield', eyebrow: 'Readiness overview', description: 'Static governance checks for every public endpoint in this demo catalog.',
-    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: `${api.risk ?? 'Low'} risk` })),
+    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: `${api.risk ?? DEFAULT_RISK} risk` })),
   },
   documentation: {
     icon: 'book', eyebrow: 'Developer guide', description: 'Use this project as a repeatable starting point for new public API demos.',
@@ -429,7 +433,7 @@ function App() {
               { label: 'Total APIs', value: apiCatalog.length, note: '100% of catalog', icon: 'box' as IconName, tone: 'blue' },
               { label: 'Source linked', value: apiCatalog.length, note: 'Documentation attached', icon: 'link' as IconName, tone: 'blue' },
               { label: 'Curated demos', value: apiCatalog.length, note: 'Ready to explore', icon: 'shield' as IconName, tone: 'green' },
-              { label: 'GET requests', value: apiCatalog.filter((api) => (api.method ?? 'GET') === 'GET').length, note: 'Read-only endpoints', icon: 'activity' as IconName, tone: 'green' },
+              { label: 'GET requests', value: apiCatalog.filter((api) => (api.method ?? DEFAULT_HTTP_METHOD) === DEFAULT_HTTP_METHOD).length, note: 'Read-only endpoints', icon: 'activity' as IconName, tone: 'green' },
               { label: 'No key', value: apiCatalog.length, note: 'No signup required', icon: 'alert' as IconName, tone: 'orange' },
               { label: 'Agent tools', value: 5, note: 'WebMCP controls', icon: 'agent' as IconName, tone: 'violet' },
             ].map((metric) => (
@@ -472,8 +476,8 @@ function App() {
                       <td data-label="API"><button className="api-identity" type="button" onClick={() => selectApi(api.id)}><span style={{ '--api-color': api.accent } as React.CSSProperties}>{api.monogram}</span><div><b>{api.name}</b><small>{api.description}</small></div></button></td>
                       <td data-label="Provider"><div className="provider-cell"><b>{api.provider}</b><a href={api.documentationUrl} target="_blank" rel="noreferrer">Documentation <Icon name="external" size={11} /></a></div></td>
                       <td data-label="Quality"><span className="tag green">verified</span></td>
-                      <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> {api.risk ?? 'Low'}</span></td>
-                      <td data-label="Tags"><div className="tags"><span className="tag blue">no-key</span><span className="tag green">{api.method ?? 'GET'}</span><span className="tag plain">{api.category}</span></div></td>
+                      <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> {api.risk ?? DEFAULT_RISK}</span></td>
+                      <td data-label="Tags"><div className="tags"><span className="tag blue">{KEYLESS_TAG_LABEL}</span><span className="tag green">{api.method ?? DEFAULT_HTTP_METHOD}</span><span className="tag plain">{api.category}</span></div></td>
                       <td data-label="Reviewed">2026-07-{String(14 - Math.min(index, 5)).padStart(2, '0')}</td>
                       <td data-label="Status"><span className="source-status"><i /> source-linked</span></td>
                     </tr>
@@ -490,7 +494,7 @@ function App() {
             <div className="lab-grid">
               <form className="parameter-card" onSubmit={submitRequest} noValidate>
                 <div className="active-api"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><small>Selected module</small><b>{activeApi.name}</b></div><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Docs <Icon name="external" size={12} /></a></div>
-                <div className="endpoint-box"><span>{activeApi.method ?? 'GET'}</span><code>{endpoint}</code></div>
+                <div className="endpoint-box"><span>{activeApi.method ?? DEFAULT_HTTP_METHOD}</span><code>{endpoint}</code></div>
                 <div className="parameter-heading"><b>Parameters</b><small>{activeApi.fields.length ? `${activeApi.fields.length} required` : 'No input required'}</small></div>
                 <div className="parameter-fields">
                   {activeApi.fields.map((field) => (
@@ -547,10 +551,10 @@ function App() {
         <div className="detail-head"><span>Selected module</span><button type="button" onClick={() => setDetailOpen(false)} aria-label="Close details"><Icon name="x" /></button></div>
         <div className="detail-title"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><h2>{activeApi.name}</h2><small>DEMO PICK</small></div></div>
         <p className="detail-description">{activeApi.description}</p>
-        <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">no-key</span><span className={`tag ${activeApi.risk === 'Review' ? 'plain' : 'green'}`}>{activeApi.risk ?? 'Low'} risk</span><span className="tag plain">{activeApi.category}</span></div>
+        <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">{KEYLESS_TAG_LABEL}</span><span className={`tag ${activeApi.risk === 'Review' ? 'plain' : 'green'}`}>{activeApi.risk ?? DEFAULT_RISK} risk</span><span className="tag plain">{activeApi.category}</span></div>
         <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
         <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Important notes</small>{activeApi.usageNote ?? 'Suitable for demonstration and internal prototyping. Review the provider terms before production use.'}</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
-        <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? 'GET'}</b></div><code>{endpoint}</code></section>
+        <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? DEFAULT_HTTP_METHOD}</b></div><code>{endpoint}</code></section>
         <div className="detail-actions"><button className="primary-action" type="button" onClick={trySelectedApi}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>
       </aside>}
     </div>
