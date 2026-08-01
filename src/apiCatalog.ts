@@ -583,7 +583,7 @@ const importedRecommendedApis: ApiDemo[] = [
     id: 'nvd-cpe-search', name: 'NVD CPE Search', provider: 'NIST NVD', category: 'Developer',
     description: 'Search the National Vulnerability Database product dictionary for OpenSSL.',
     documentationUrl: 'https://nvd.nist.gov/developers/products', endpoint: 'https://services.nvd.nist.gov/rest/json/cpes/2.0?keywordSearch=openssl&resultsPerPage=8',
-    accent: '#0369a1', monogram: 'CP',
+    accent: '#0369a1', monogram: 'NV',
   }),
   fixedApi({
     id: 'nvd-cve-detail', name: 'NVD CVE Detail', provider: 'NIST NVD', category: 'Developer',
@@ -662,7 +662,7 @@ const importedRecommendedApis: ApiDemo[] = [
     id: 'wikidata-sparql', name: 'Wikidata SPARQL', provider: 'Wikimedia Foundation', category: 'Knowledge',
     description: 'Run a small SPARQL query for city entities and English labels.',
     documentationUrl: 'https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service', endpoint: 'https://query.wikidata.org/sparql?query=SELECT%20%3Fitem%20%3FitemLabel%20WHERE%20%7B%20%3Fitem%20wdt%3AP31%20wd%3AQ515%20.%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22en%22%20.%20%7D%20%7D%20LIMIT%208&format=json',
-    accent: '#339966', monogram: 'WD',
+    accent: '#339966', monogram: 'WQ',
   }),
   fixedApi({
     id: 'world-bank-gdp', name: 'World Bank GDP', provider: 'World Bank', category: 'Economy',
@@ -789,7 +789,7 @@ const importedRecommendedApis: ApiDemo[] = [
   {
     id: 'coinpaprika-ticker', name: 'CoinPaprika Ticker', provider: 'CoinPaprika', category: 'Finance',
     description: 'Inspect current cryptocurrency price, market capitalization, volume, and percentage changes.',
-    documentationUrl: 'https://docs.coinpaprika.com/', accent: '#f59e0b', monogram: 'CP', risk: 'Review',
+    documentationUrl: 'https://docs.coinpaprika.com/', accent: '#f59e0b', monogram: 'CK', risk: 'Review',
     usageNote: 'Market data is informational, not investment advice. Display CoinPaprika attribution when publishing results.',
     fields: [{ id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'btc-bitcoin', help: 'Select a public ticker.', options: [{ label: 'Bitcoin', value: 'btc-bitcoin' }, { label: 'Ethereum', value: 'eth-ethereum' }, { label: 'Solana', value: 'sol-solana' }, { label: 'Tether', value: 'usdt-tether' }] }],
     buildUrl: ({ coin = 'btc-bitcoin' }) => `https://api.coinpaprika.com/v1/tickers/${encode(coin || 'btc-bitcoin')}`,
@@ -848,7 +848,7 @@ const importedRecommendedApis: ApiDemo[] = [
   {
     id: 'nobel-prizes', name: 'Nobel Prize Explorer', provider: 'Nobel Prize Outreach', category: 'Research',
     description: 'Browse recent Nobel Prizes, laureates, motivations, award years, and prize amounts by category.',
-    documentationUrl: 'https://www.nobelprize.org/about/developer-zone-2/', accent: '#a66b18', monogram: 'NP',
+    documentationUrl: 'https://www.nobelprize.org/about/developer-zone-2/', accent: '#a66b18', monogram: 'NB',
     usageNote: 'Uses the official Nobel Prize API. Follow the linked API terms and licence when republishing data.',
     fields: [
       { id: 'category', label: 'Prize category', type: 'select', defaultValue: 'phy', help: 'Choose a Nobel Prize category.', options: [
@@ -895,7 +895,7 @@ const nextKeylessApis: ApiDemo[] = [
     id: 'noaa-space-weather', name: 'NOAA Space Weather', provider: 'NOAA SWPC', category: 'Environment',
     description: 'Monitor current radio blackouts, solar radiation storms, and geomagnetic storm scales.',
     documentationUrl: 'https://www.spaceweather.gov/content/data-access', endpoint: 'https://services.swpc.noaa.gov/products/noaa-scales.json',
-    accent: '#0b5cab', monogram: 'SW', usageNote: 'Official NOAA operational data. Treat forecasts as guidance and retain NOAA attribution.',
+    accent: '#0b5cab', monogram: 'NS', usageNote: 'Official NOAA operational data. Treat forecasts as guidance and retain NOAA attribution.',
   }),
   {
     id: 'osv-vulnerability', name: 'OSV Vulnerability', provider: 'Google Open Source Security', category: 'Developer',
@@ -990,7 +990,7 @@ const nextKeylessApis: ApiDemo[] = [
   {
     id: 'uk-police-street-crime', name: 'UK Street Crime', provider: 'UK Home Office', category: 'Government',
     description: 'Explore recent anonymised street-level crime categories around a selected UK coordinate.',
-    documentationUrl: 'https://data.police.uk/docs/method/crime-street/', accent: '#1d4f91', monogram: 'UK', risk: 'Review',
+    documentationUrl: 'https://data.police.uk/docs/method/crime-street/', accent: '#1d4f91', monogram: 'UP', risk: 'Review',
     usageNote: 'Locations are anonymised by the source. Present the data as area-level context, not individual-level evidence.',
     fields: [
       { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '51.5074', min: 49, max: 61, help: 'Choose a coordinate within the United Kingdom.' },
@@ -1113,7 +1113,7 @@ const verifiedKeylessApis: ApiDemo[] = [
   {
     id: 'animechan-random-quote', name: 'Anime Quote Generator', provider: 'AnimeChan', category: 'Entertainment',
     description: 'Generate an anime quote with its character and series metadata for cards, prompts, and entertainment demos.',
-    documentationUrl: 'https://animechan.io/docs', accent: '#2e51a2', monogram: 'AQ',
+    documentationUrl: 'https://animechan.io/docs', accent: '#2e51a2', monogram: 'AC',
     usageNote: 'Public community service. Keep requests user-driven and avoid automated high-frequency refreshes.',
     fields: [],
     buildUrl: () => 'https://api.animechan.io/v1/quotes/random',
@@ -1146,7 +1146,7 @@ const verifiedKeylessApis: ApiDemo[] = [
   {
     id: 'brasilapi-postcode', name: 'Brazil Postcode Explorer', provider: 'BrasilAPI', category: 'Geo',
     description: 'Resolve a Brazilian CEP into address, neighbourhood, city, state, timezone, provider, and coordinates.',
-    documentationUrl: 'https://brasilapi.com.br/docs#tag/CEP-V2', accent: '#16a34a', monogram: 'BR',
+    documentationUrl: 'https://brasilapi.com.br/docs#tag/CEP-V2', accent: '#16a34a', monogram: 'BP',
     usageNote: 'User-driven lookups only. BrasilAPI prohibits automated crawling and full-range scans.',
     fields: [{ id: 'postcode', label: 'Brazilian CEP', type: 'text', defaultValue: '01310930', placeholder: 'e.g. 01310-930', help: 'Enter exactly eight digits, with or without a hyphen.' }],
     buildUrl: ({ postcode = '01310930' }) => `https://brasilapi.com.br/api/cep/v2/${encode((postcode || '01310930').replace(/\D/g, ''))}`,

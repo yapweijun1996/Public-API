@@ -12,6 +12,10 @@ describe('API catalog', () => {
     }
   })
 
+  it('has unique monograms (no duplicate UI badges)', () => {
+    expect(new Set(apiCatalog.map((api) => api.monogram)).size).toBe(apiCatalog.length)
+  })
+
   it('assigns one intentional demo preview profile to every catalog API', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const profileIds = [...previewProfileIds].sort()
