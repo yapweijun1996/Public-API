@@ -16,6 +16,12 @@ describe('API catalog', () => {
     expect(new Set(apiCatalog.map((api) => api.monogram)).size).toBe(apiCatalog.length)
   })
 
+  it('assigns a valid 6-digit hex accent to every catalog entry', () => {
+    for (const api of apiCatalog) {
+      expect(api.accent, api.id).toMatch(/^#[0-9a-f]{6}$/i)
+    }
+  })
+
   it('assigns one intentional demo preview profile to every catalog API', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const profileIds = [...previewProfileIds].sort()
