@@ -119,26 +119,7 @@ const coreApis: ApiDemo[] = [
     documentationUrl: 'https://open-meteo.com/en/docs',
     accent: '#4da3ff',
     monogram: 'OM',
-    fields: [
-      {
-        id: 'latitude',
-        label: 'Latitude',
-        type: 'number',
-        defaultValue: '1.3521',
-        min: -90,
-        max: 90,
-        help: 'A value from -90 to 90.',
-      },
-      {
-        id: 'longitude',
-        label: 'Longitude',
-        type: 'number',
-        defaultValue: '103.8198',
-        min: -180,
-        max: 180,
-        help: 'A value from -180 to 180.',
-      },
-    ],
+    fields: [...latLongFields()],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
       const query = new URLSearchParams({
         latitude,
@@ -159,15 +140,7 @@ const coreApis: ApiDemo[] = [
     accent: '#a57cff',
     monogram: 'RU',
     fields: [
-      {
-        id: 'count',
-        label: 'Profiles',
-        type: 'number',
-        defaultValue: '3',
-        min: 1,
-        max: 10,
-        help: 'Generate between 1 and 10 profiles.',
-      },
+      countField({ label: 'Profiles', defaultValue: '3', min: 1, max: 10, help: 'Generate between 1 and 10 profiles.' }),
       {
         id: 'nationality',
         label: 'Nationality',
@@ -199,15 +172,7 @@ const coreApis: ApiDemo[] = [
     accent: '#efad32',
     monogram: 'DG',
     fields: [
-      {
-        id: 'count',
-        label: 'Photos',
-        type: 'number',
-        defaultValue: '4',
-        min: 1,
-        max: 10,
-        help: 'Request between 1 and 10 image URLs.',
-      },
+      countField({ label: 'Photos', defaultValue: '4', min: 1, max: 10, help: 'Request between 1 and 10 image URLs.' }),
     ],
     buildUrl: ({ count = '4' }) => {
       const safeCount = clampInt(count, 1, 10, 4)
@@ -357,7 +322,7 @@ const additionalInteractiveApis: ApiDemo[] = [
     documentationUrl: 'https://open-meteo.com/en/docs/geocoding-api', accent: '#2563eb', monogram: 'GC',
     fields: [
       { id: 'name', label: 'Location', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Enter at least three characters for fuzzy matching.' },
-      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 matching locations.' },
+      countField({ label: 'Results', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 matching locations.' }),
     ],
     buildUrl: ({ name = 'Singapore', count = '6' }) => {
       const safeCount = clampInt(count, 1, 10, 6)
@@ -370,8 +335,7 @@ const additionalInteractiveApis: ApiDemo[] = [
     description: 'Read current AQI, particulate matter, nitrogen dioxide, and ozone for any coordinate.',
     documentationUrl: 'https://open-meteo.com/en/docs/air-quality-api', accent: '#0f9f8f', monogram: 'AQ',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      ...latLongFields(),
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
       const query = new URLSearchParams({ latitude, longitude, current: 'us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone', timezone: 'auto' })
@@ -384,8 +348,7 @@ const additionalInteractiveApis: ApiDemo[] = [
     description: 'Calculate sunrise, sunset, twilight, golden hour, solar noon, and moon data for a location.',
     documentationUrl: 'https://sunrise-sunset.org/api', accent: '#f59e0b', monogram: 'SS',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A latitude from -90 to 90.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A longitude from -180 to 180.' },
+      ...latLongFields(),
       { id: 'date', label: 'Date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD, today, or tomorrow.' },
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', date = today }) => {
@@ -404,7 +367,7 @@ const additionalInteractiveApis: ApiDemo[] = [
         { label: 'Volcanoes', value: 'volcanoes' }, { label: 'Floods', value: 'floods' }, { label: 'Earthquakes', value: 'earthquakes' },
       ] },
       { id: 'days', label: 'Recent days', type: 'number', defaultValue: '30', min: 1, max: 365, help: 'Look back between 1 and 365 days.' },
-      { id: 'limit', label: 'Events', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 active events.' },
+      limitField({ label: 'Events', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 active events.' }),
     ],
     buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
       const query = new URLSearchParams({ status: 'open', days: String(clampInt(days, 1, 365, 30)), limit: String(clampInt(limit, 1, 10, 6)) })
@@ -717,8 +680,8 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://openlibrary.org/developers/api', accent: '#b45309', monogram: 'OL',
     usageNote: 'Designed for low-volume, human-facing discovery. Cache results and follow Open Library usage limits.',
     fields: [
-      { id: 'query', label: 'Book search', type: 'text', defaultValue: 'artificial intelligence', help: 'Search by title, author, subject, or keyword.' },
-      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 books.' },
+      queryField({ label: 'Book search', defaultValue: 'artificial intelligence', help: 'Search by title, author, subject, or keyword.' }),
+      limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 books.' }),
     ],
     buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
       const params = new URLSearchParams({ q: query, limit, fields: 'key,title,author_name,first_publish_year,cover_i' })
@@ -745,8 +708,8 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://api.artic.edu/docs/', accent: '#dc2626', monogram: 'AI',
     usageNote: 'Anonymous access is rate-limited. Review image rights and use public-domain media for demonstrations.',
     fields: [
-      { id: 'query', label: 'Artwork search', type: 'text', defaultValue: 'monet', help: 'Search artwork titles, artists, or subjects.' },
-      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 artworks.' },
+      queryField({ label: 'Artwork search', defaultValue: 'monet', help: 'Search artwork titles, artists, or subjects.' }),
+      limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 artworks.' }),
     ],
     buildUrl: ({ query = 'monet', limit = '8' }) => {
       const params = new URLSearchParams({ q: query, limit, fields: 'id,title,artist_title,date_display,image_id' })
@@ -772,7 +735,7 @@ const importedRecommendedApis: ApiDemo[] = [
     id: 'gbif-species-search', name: 'GBIF Species Search', provider: 'GBIF', category: 'Biodiversity',
     description: 'Search scientific names, taxonomy, vernacular names, and species records.',
     documentationUrl: 'https://techdocs.gbif.org/en/openapi/v1/species', accent: '#16a34a', monogram: 'GB',
-    fields: [{ id: 'query', label: 'Species search', type: 'text', defaultValue: 'panthera', help: 'Search by scientific or common name.' }],
+    fields: [queryField({ label: 'Species search', defaultValue: 'panthera', help: 'Search by scientific or common name.' })],
     buildUrl: ({ query = 'panthera' }) => `https://api.gbif.org/v1/species/search?q=${encode(query || 'panthera')}&limit=8`,
   },
   {
@@ -790,7 +753,7 @@ const importedRecommendedApis: ApiDemo[] = [
     id: 'europe-pmc-search', name: 'Europe PMC Search', provider: 'Europe PMC', category: 'Research',
     description: 'Search life-sciences papers, preprints, citations, and open-access literature.',
     documentationUrl: 'https://europepmc.org/RestfulWebService', accent: '#2563eb', monogram: 'EP',
-    fields: [{ id: 'query', label: 'Literature search', type: 'text', defaultValue: 'OPEN_ACCESS:Y AND machine learning', help: 'Use Europe PMC search syntax.' }],
+    fields: [queryField({ label: 'Literature search', defaultValue: 'OPEN_ACCESS:Y AND machine learning', help: 'Use Europe PMC search syntax.' })],
     buildUrl: ({ query = 'OPEN_ACCESS:Y AND machine learning' }) => {
       const params = new URLSearchParams({ query, format: 'json', pageSize: '8' })
       return `https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params.toString()}`
@@ -837,7 +800,7 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/fuelprice', accent: '#d9485f', monogram: 'MY',
     usageNote: 'Official open data licensed under CC BY 4.0. Keep data.gov.my attribution visible when republishing the results.',
     fields: [
-      { id: 'limit', label: 'History rows', type: 'number', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' },
+      limitField({ label: 'History rows', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' }),
     ],
     buildUrl: ({ limit = '52' }) => {
       const safeLimit = clampInt(limit, 12, 104, 52)
@@ -850,8 +813,7 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://open-meteo.com/en/docs/marine-weather-api', accent: '#087ea4', monogram: 'MW', risk: 'Review',
     usageNote: 'Open-Meteo attribution is required. Forecasts are not suitable for coastal navigation or safety-critical decisions.',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, help: 'Return between 1 and 7 forecast days.' },
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '3' }) => {
@@ -876,7 +838,7 @@ const importedRecommendedApis: ApiDemo[] = [
         { label: 'Physics', value: 'phy' }, { label: 'Chemistry', value: 'che' }, { label: 'Physiology or Medicine', value: 'med' },
         { label: 'Literature', value: 'lit' }, { label: 'Peace', value: 'pea' }, { label: 'Economic Sciences', value: 'eco' },
       ] },
-      { id: 'limit', label: 'Prize years', type: 'number', defaultValue: '6', min: 1, max: 12, help: 'Return between 1 and 12 recent prize records.' },
+      limitField({ label: 'Prize years', defaultValue: '6', min: 1, max: 12, help: 'Return between 1 and 12 recent prize records.' }),
     ],
     buildUrl: ({ category = 'phy', limit = '6' }) => {
       const safeLimit = clampInt(limit, 1, 12, 6)
@@ -900,7 +862,7 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://www.crossref.org/documentation/retrieve-metadata/rest-api/', accent: '#4f46a5', monogram: 'CR',
     usageNote: 'Uses Crossref’s public pool without authentication. Cache results and keep request volume modest.',
     fields: [
-      { id: 'query', label: 'Research query', type: 'text', defaultValue: 'agentic AI', placeholder: 'e.g. climate adaptation', help: 'Search titles, authors, abstracts, and other Crossref metadata.' },
+      queryField({ label: 'Research query', defaultValue: 'agentic AI', placeholder: 'e.g. climate adaptation', help: 'Search titles, authors, abstracts, and other Crossref metadata.' }),
       { id: 'rows', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 works.' },
     ],
     buildUrl: ({ query = 'agentic AI', rows = '8' }) => {
@@ -930,8 +892,8 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Search recent U.S. rules, notices, proposed rules, presidential documents, and agency publications.',
     documentationUrl: 'https://www.federalregister.gov/developers/documentation/api/v1', accent: '#344054', monogram: 'FR',
     fields: [
-      { id: 'query', label: 'Search term', type: 'text', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search document titles and indexed Federal Register content.' },
-      { id: 'limit', label: 'Documents', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 recent documents.' },
+      queryField({ label: 'Search term', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search document titles and indexed Federal Register content.' }),
+      limitField({ label: 'Documents', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 recent documents.' }),
     ],
     buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 20, 8)
@@ -944,8 +906,8 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Search Wikipedia and return article extracts, thumbnails, page identifiers, and canonical titles.',
     documentationUrl: 'https://www.mediawiki.org/wiki/API:Search', accent: '#202122', monogram: 'WP',
     fields: [
-      { id: 'query', label: 'Article search', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Search English Wikipedia titles and article text.' },
-      { id: 'limit', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 12, help: 'Return between 1 and 12 matching pages.' },
+      queryField({ label: 'Article search', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Search English Wikipedia titles and article text.' }),
+      limitField({ label: 'Results', defaultValue: '8', min: 1, max: 12, help: 'Return between 1 and 12 matching pages.' }),
     ],
     buildUrl: ({ query = 'Singapore', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 12, 8)
@@ -959,8 +921,7 @@ const nextKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://open-meteo.com/en/docs/flood-api', accent: '#0284c7', monogram: 'FL', risk: 'Review',
     usageNote: 'Hydrological model guidance only. Do not use this demo for emergency or life-safety decisions.',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '7', min: 1, max: 30, help: 'Return between 1 and 30 daily discharge values.' },
     ],
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '7' }) => {
@@ -974,8 +935,7 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Compare historical daily temperature and precipitation series for a selected place and date range.',
     documentationUrl: 'https://open-meteo.com/en/docs/historical-weather-api', accent: '#2563eb', monogram: 'HW',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'A WGS84 latitude from -90 to 90.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'A WGS84 longitude from -180 to 180.' },
+      ...latLongFields(),
       { id: 'startDate', label: 'Start date', type: 'text', defaultValue: '2025-01-01', placeholder: 'YYYY-MM-DD', help: 'Use an ISO date supported by the historical archive.' },
       { id: 'endDate', label: 'End date', type: 'text', defaultValue: '2025-01-14', placeholder: 'YYYY-MM-DD', help: 'Choose an end date on or after the start date.' },
     ],
@@ -999,8 +959,8 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Discover public GitLab projects and compare stars, forks, activity, topics, and programming language.',
     documentationUrl: 'https://docs.gitlab.com/api/projects/', accent: '#fc6d26', monogram: 'GL',
     fields: [
-      { id: 'query', label: 'Project search', type: 'text', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search public project names, paths, and descriptions.' },
-      { id: 'limit', label: 'Projects', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 public projects.' },
+      queryField({ label: 'Project search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search public project names, paths, and descriptions.' }),
+      limitField({ label: 'Projects', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 public projects.' }),
     ],
     buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 20, 8)
@@ -1014,8 +974,10 @@ const nextKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.police.uk/docs/method/crime-street/', accent: '#1d4f91', monogram: 'UP', risk: 'Review',
     usageNote: 'Locations are anonymised by the source. Present the data as area-level context, not individual-level evidence.',
     fields: [
-      { id: 'latitude', label: 'Latitude', type: 'number', defaultValue: '51.5074', min: 49, max: 61, help: 'Choose a coordinate within the United Kingdom.' },
-      { id: 'longitude', label: 'Longitude', type: 'number', defaultValue: '-0.1278', min: -9, max: 3, help: 'Choose a coordinate within the United Kingdom.' },
+      ...latLongFields({
+        latitude: { defaultValue: '51.5074', min: 49, max: 61, help: 'Choose a coordinate within the United Kingdom.' },
+        longitude: { defaultValue: '-0.1278', min: -9, max: 3, help: 'Choose a coordinate within the United Kingdom.' },
+      }),
       { id: 'category', label: 'Crime category', type: 'select', defaultValue: 'burglary', help: 'Filter the street-level dataset by category. A focused default keeps the demo response lightweight.', options: [
         { label: 'All crime', value: 'all-crime' }, { label: 'Anti-social behaviour', value: 'anti-social-behaviour' }, { label: 'Burglary', value: 'burglary' }, { label: 'Vehicle crime', value: 'vehicle-crime' }, { label: 'Violence and sexual offences', value: 'violent-crime' },
       ] },
@@ -1102,8 +1064,8 @@ const verifiedKeylessApis: ApiDemo[] = [
     description: 'Browse recent spaceflight reporting with publishers, summaries, images, publication dates, and related missions.',
     documentationUrl: 'https://api.spaceflightnewsapi.net/v4/docs/', accent: '#4f46e5', monogram: 'SN',
     fields: [
-      { id: 'query', label: 'News search', type: 'text', defaultValue: 'NASA', placeholder: 'e.g. NASA', help: 'Search titles and summaries from indexed spaceflight publishers.' },
-      { id: 'limit', label: 'Articles', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recent articles.' },
+      queryField({ label: 'News search', defaultValue: 'NASA', placeholder: 'e.g. NASA', help: 'Search titles and summaries from indexed spaceflight publishers.' }),
+      limitField({ label: 'Articles', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recent articles.' }),
     ],
     buildUrl: ({ query = 'NASA', limit = '6' }) => {
       const safeLimit = clampInt(limit, 1, 10, 6)
@@ -1116,8 +1078,8 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://thespacedevs.com/llapi', accent: '#0f766e', monogram: 'LL',
     usageNote: 'The anonymous service is limited to 15 requests per hour; avoid automatic polling.',
     fields: [
-      { id: 'query', label: 'Launch search', type: 'text', defaultValue: 'SpaceX', placeholder: 'e.g. SpaceX', help: 'Filter upcoming launches by mission, rocket, or provider text.' },
-      { id: 'limit', label: 'Launches', type: 'number', defaultValue: '4', min: 1, max: 6, help: 'Return between 1 and 6 upcoming launches.' },
+      queryField({ label: 'Launch search', defaultValue: 'SpaceX', placeholder: 'e.g. SpaceX', help: 'Filter upcoming launches by mission, rocket, or provider text.' }),
+      limitField({ label: 'Launches', defaultValue: '4', min: 1, max: 6, help: 'Return between 1 and 6 upcoming launches.' }),
     ],
     buildUrl: ({ query = 'SpaceX', limit = '4' }) => {
       const safeLimit = clampInt(limit, 1, 6, 4)
@@ -1156,8 +1118,8 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://dummyjson.com/docs/recipes', accent: '#ea580c', monogram: 'RE',
     usageNote: 'Synthetic test data intended for prototypes, demonstrations, and UI development.',
     fields: [
-      { id: 'query', label: 'Recipe search', type: 'text', defaultValue: 'pasta', placeholder: 'e.g. pasta', help: 'Search recipe names and indexed recipe text.' },
-      { id: 'limit', label: 'Recipes', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recipes.' },
+      queryField({ label: 'Recipe search', defaultValue: 'pasta', placeholder: 'e.g. pasta', help: 'Search recipe names and indexed recipe text.' }),
+      limitField({ label: 'Recipes', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 recipes.' }),
     ],
     buildUrl: ({ query = 'pasta', limit = '6' }) => {
       const safeLimit = clampInt(limit, 1, 10, 6)
@@ -1178,7 +1140,7 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://github.com/thundercomb/poetrydb', accent: '#9f1239', monogram: 'PO',
     fields: [
       { id: 'author', label: 'Poet', type: 'select', defaultValue: 'Emily Dickinson', help: 'Choose a poet represented in PoetryDB.', options: [{ label: 'Emily Dickinson', value: 'Emily Dickinson' }, { label: 'William Shakespeare', value: 'William Shakespeare' }, { label: 'William Blake', value: 'William Blake' }, { label: 'Edgar Allan Poe', value: 'Edgar Allan Poe' }] },
-      { id: 'count', label: 'Poems', type: 'number', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' },
+      countField({ label: 'Poems', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' }),
     ],
     buildUrl: ({ author = 'Emily Dickinson', count = '3' }) => {
       const safeCount = clampInt(count, 1, 4, 3)
@@ -1200,7 +1162,7 @@ const verifiedKeylessApis: ApiDemo[] = [
     id: 'swapi-people', name: 'Star Wars People', provider: 'SWAPI', category: 'Entertainment',
     description: 'Search Star Wars characters and inspect species-era profile fields including birth year, homeworld, and films.',
     documentationUrl: 'https://swapi.dev/documentation', accent: '#ca8a04', monogram: 'SW',
-    fields: [{ id: 'query', label: 'Character search', type: 'text', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' }],
+    fields: [queryField({ label: 'Character search', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' })],
     buildUrl: ({ query = 'Luke' }) => `https://swapi.dev/api/people/?${new URLSearchParams({ search: query.trim() || 'Luke' }).toString()}`,
   },
 ]
