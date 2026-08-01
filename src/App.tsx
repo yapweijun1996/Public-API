@@ -199,12 +199,18 @@ function readSidebarPreference() {
   }
 }
 
-const navGroups: Array<{ label: string; items: Array<{ label: string; icon: IconName; page: AdminPage; badge?: string }> }> = [
-  { label: '', items: [{ label: 'Overview', icon: 'home', page: 'overview' }] },
-  { label: 'Discover', items: [{ label: 'API Catalog', icon: 'api', page: 'catalog' }, { label: 'Collections', icon: 'box', page: 'collections' }, { label: 'Providers', icon: 'database', page: 'providers' }, { label: 'Tags', icon: 'filter', page: 'tags' }] },
-  { label: 'Operate', items: [{ label: 'Request Lab', icon: 'activity', page: 'request-lab' }, { label: 'Agent Tools', icon: 'agent', page: 'agent-tools', badge: '5' }, { label: 'Health', icon: 'shield', page: 'health' }] },
-  { label: 'Resources', items: [{ label: 'Documentation', icon: 'book', page: 'documentation' }] },
+const navGroups: Array<{ label: string; items: Array<{ icon: IconName; page: AdminPage; badge?: string }> }> = [
+  { label: '', items: [{ icon: 'home', page: 'overview' }] },
+  { label: 'Discover', items: [{ icon: 'api', page: 'catalog' }, { icon: 'box', page: 'collections' }, { icon: 'database', page: 'providers' }, { icon: 'filter', page: 'tags' }] },
+  { label: 'Operate', items: [{ icon: 'activity', page: 'request-lab' }, { icon: 'agent', page: 'agent-tools', badge: '5' }, { icon: 'shield', page: 'health' }] },
+  { label: 'Resources', items: [{ icon: 'book', page: 'documentation' }] },
 ]
+
+if (import.meta.env.DEV) {
+  const navPages = new Set(navGroups.flatMap((group) => group.items.map((item) => item.page)))
+  const missing = (Object.keys(pageMeta) as AdminPage[]).filter((page) => !navPages.has(page))
+  if (missing.length) console.warn(`navGroups is missing sidebar entries for: ${missing.join(', ')}`)
+}
 
 function App() {
   const [currentPage, setCurrentPage] = useState<AdminPage>(readPageFromLocation)
@@ -398,19 +404,22 @@ function App() {
           {navGroups.map((group, index) => (
             <div className="nav-group" key={`${group.label}-${index}`}>
               {group.label && <span className="nav-label">{group.label}</span>}
-              {group.items.map((item) => (
-                <button
-                  type="button"
-                  className={item.page === currentPage ? 'active' : ''}
-                  key={item.label}
-                  onClick={() => navigatePage(item.page)}
-                  aria-current={item.page === currentPage ? 'page' : undefined}
-                  aria-label={sidebarCollapsed && !viewport.mobile ? item.label : undefined}
-                  title={sidebarCollapsed && !viewport.mobile ? item.label : undefined}
-                >
-                  <Icon name={item.icon} size={17} /><span>{item.label}</span>{item.badge && <em>{item.badge}</em>}
-                </button>
-              ))}
+              {group.items.map((item) => {
+                const label = pageMeta[item.page].title
+                return (
+                  <button
+                    type="button"
+                    className={item.page === currentPage ? 'active' : ''}
+                    key={item.page}
+                    onClick={() => navigatePage(item.page)}
+                    aria-current={item.page === currentPage ? 'page' : undefined}
+                    aria-label={sidebarCollapsed && !viewport.mobile ? label : undefined}
+                    title={sidebarCollapsed && !viewport.mobile ? label : undefined}
+                  >
+                    <Icon name={item.icon} size={17} /><span>{label}</span>{item.badge && <em>{item.badge}</em>}
+                  </button>
+                )
+              })}
             </div>
           ))}
         </nav>
