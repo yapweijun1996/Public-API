@@ -8,7 +8,7 @@ import {
   type ApiDemo,
 } from './apiCatalog'
 import { ResponseDemoPreview } from './responsePreview'
-import { useWebMcp, type AdminSection } from './webmcp'
+import { useWebMcp, WEBMCP_TOOL_COUNT, WEBMCP_TOOL_UI_LIST, type AdminSection } from './webmcp'
 
 type RequestState =
   | { status: 'idle' }
@@ -202,7 +202,7 @@ function readSidebarPreference() {
 const navGroups: Array<{ label: string; items: Array<{ icon: IconName; page: AdminPage; badge?: string }> }> = [
   { label: '', items: [{ icon: 'home', page: 'overview' }] },
   { label: 'Discover', items: [{ icon: 'api', page: 'catalog' }, { icon: 'box', page: 'collections' }, { icon: 'database', page: 'providers' }, { icon: 'filter', page: 'tags' }] },
-  { label: 'Operate', items: [{ icon: 'activity', page: 'request-lab' }, { icon: 'agent', page: 'agent-tools', badge: '5' }, { icon: 'shield', page: 'health' }] },
+  { label: 'Operate', items: [{ icon: 'activity', page: 'request-lab' }, { icon: 'agent', page: 'agent-tools', badge: String(WEBMCP_TOOL_COUNT) }, { icon: 'shield', page: 'health' }] },
   { label: 'Resources', items: [{ icon: 'book', page: 'documentation' }] },
 ]
 
@@ -444,7 +444,7 @@ function App() {
               { label: 'Curated demos', value: apiCatalog.length, note: 'Ready to explore', icon: 'shield' as IconName, tone: 'green' },
               { label: 'GET requests', value: apiCatalog.filter((api) => (api.method ?? DEFAULT_HTTP_METHOD) === DEFAULT_HTTP_METHOD).length, note: 'Read-only endpoints', icon: 'activity' as IconName, tone: 'green' },
               { label: 'No key', value: apiCatalog.length, note: 'No signup required', icon: 'alert' as IconName, tone: 'orange' },
-              { label: 'Agent tools', value: 5, note: 'WebMCP controls', icon: 'agent' as IconName, tone: 'violet' },
+              { label: 'Agent tools', value: WEBMCP_TOOL_COUNT, note: 'WebMCP controls', icon: 'agent' as IconName, tone: 'violet' },
             ].map((metric) => (
               <article className="metric-card" key={metric.label}>
                 <span className={`metric-icon ${metric.tone}`}><Icon name={metric.icon} /></span>
@@ -528,13 +528,7 @@ function App() {
           {currentPage === 'agent-tools' && <section className="agent-section page-section" aria-labelledby="agent-heading">
             <div className="agent-intro"><span className="agent-hero-icon"><Icon name="agent" size={26} /></span><p className="eyebrow">WebMCP control layer</p><h2 id="agent-heading">Built for people.<br />Operable by AI agents.</h2><p>The same actions a person performs in this console are exposed as typed browser tools. Agent actions update the visible interface, preserving shared context and user control.</p><div className={`webmcp-state ${webMcpStatus}`}><i /><div><b>{webMcpStatus === 'ready' ? 'WebMCP tools registered' : webMcpStatus === 'unsupported' ? 'WebMCP preview not available in this browser' : 'Checking WebMCP support'}</b><small>The admin console remains fully usable without agent support.</small></div></div></div>
             <div className="tool-list">
-              {[
-                ['list_public_api_demos', 'Discover APIs and input schemas', 'Read'],
-                ['filter_public_api_catalog', 'Search and filter the visible inventory', 'Control'],
-                ['navigate_api_console', 'Open catalog, request lab, or agent tools', 'Control'],
-                ['open_public_api_demo', 'Select a module in the shared UI', 'Control'],
-                ['run_public_api_demo', 'Execute a live request and return JSON', 'Execute'],
-              ].map(([name, description, type], index) => <article key={name}><span>0{index + 1}</span><div><code>{name}</code><p>{description}</p></div><em>{type}</em><Icon name="check" /></article>)}
+              {WEBMCP_TOOL_UI_LIST.map(([name, description, type], index) => <article key={name}><span>0{index + 1}</span><div><code>{name}</code><p>{description}</p></div><em>{type}</em><Icon name="check" /></article>)}
             </div>
           </section>}
 
