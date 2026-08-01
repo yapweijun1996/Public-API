@@ -796,12 +796,21 @@ function LocationPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 function CalendarPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const records = findPreviewRecords(data).slice(0, 6)
   if (!records.length) return <ResultListPreview data={data} api={api}/>
-  return <ol className="calendar-preview">{records.map((record, index) => {
+  const items: DateListItem[] = records.map((record, index) => {
     const dateText = textValue(record.date ?? record.start ?? record.datetime) ?? 'Upcoming'
     const parsed = new Date(dateText)
     const valid = !Number.isNaN(parsed.getTime())
-    return <li key={`${dateText}-${index}`}><time dateTime={dateText}><strong>{valid ? parsed.toLocaleDateString('en', { day: '2-digit' }) : '—'}</strong><span>{valid ? parsed.toLocaleDateString('en', { month: 'short' }) : dateText.slice(0, 3)}</span></time><div><small>{textValue(record.countryCode) ?? api.provider}</small><h3>{textValue(record.name ?? record.localName ?? record.title) ?? `Event ${index + 1}`}</h3><p>{record.localName && record.localName !== record.name ? textValue(record.localName) : record.global === true ? 'Observed nationally' : 'Public calendar event'}</p></div></li>
-  })}</ol>
+    return {
+      key: `${dateText}-${index}`,
+      dateText,
+      day: valid ? parsed.toLocaleDateString('en', { day: '2-digit' }) : '—',
+      month: valid ? parsed.toLocaleDateString('en', { month: 'short' }) : dateText.slice(0, 3),
+      eyebrow: textValue(record.countryCode) ?? api.provider,
+      title: textValue(record.name ?? record.localName ?? record.title) ?? `Event ${index + 1}`,
+      description: record.localName && record.localName !== record.name ? textValue(record.localName) : record.global === true ? 'Observed nationally' : 'Public calendar event',
+    }
+  })
+  return <DateList items={items}/>
 }
 
 function SolarCyclePreview({ data }: { data: unknown }) {
@@ -869,12 +878,21 @@ function FederalRegisterPreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
   const documents = recordArray(root.results).slice(0, 8)
   if (!documents.length) return <div className="weather-empty"><strong>Federal documents unavailable</strong><span>No matching Federal Register documents were returned.</span></div>
-  return <ol className="calendar-preview federal-register-preview">{documents.map((document, index) => {
+  const items: DateListItem[] = documents.map((document, index) => {
     const dateText = textValue(document.publication_date) ?? ''
     const date = new Date(dateText)
     const agencies = recordArray(document.agencies).map((agency) => cleanText(agency.name)).filter(Boolean)
-    return <li key={`${document.document_number}-${index}`}><time dateTime={dateText}><strong>{Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en', { day: '2-digit' })}</strong><span>{Number.isNaN(date.getTime()) ? 'FR' : date.toLocaleDateString('en', { month: 'short' })}</span></time><div><small>{cleanText(document.type) ?? 'Federal document'} · {agencies[0] ?? 'U.S. Government'}</small><h3>{cleanText(document.title) ?? `Document ${index + 1}`}</h3><p>{cleanText(document.abstract) ?? `Document ${previewValue(document.document_number)}`}</p></div></li>
-  })}</ol>
+    return {
+      key: `${document.document_number}-${index}`,
+      dateText,
+      day: Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en', { day: '2-digit' }),
+      month: Number.isNaN(date.getTime()) ? 'FR' : date.toLocaleDateString('en', { month: 'short' }),
+      eyebrow: `${cleanText(document.type) ?? 'Federal document'} · ${agencies[0] ?? 'U.S. Government'}`,
+      title: cleanText(document.title) ?? `Document ${index + 1}`,
+      description: cleanText(document.abstract) ?? `Document ${previewValue(document.document_number)}`,
+    }
+  })
+  return <DateList items={items} className="federal-register-preview"/>
 }
 
 function NaturalEventsPreview({ data }: { data: unknown }) {
@@ -953,6 +971,20 @@ const epochDate = (value: unknown) => {
 function SemanticCards({ cards, emptyTitle }: { cards: SemanticCard[]; emptyTitle: string }) {
   if (!cards.length) return <div className="weather-empty"><strong>{emptyTitle}</strong><span>The response did not include records for this demo layout.</span></div>
   return <div className="semantic-card-grid">{cards.slice(0, 8).map((card, index) => <article key={`${card.title}-${index}`}><header><span>{index + 1}</span><div><small>{card.eyebrow}</small><h3>{card.title}</h3></div>{card.badge && <em>{card.badge}</em>}</header>{card.description && <p>{card.description}</p>}<dl>{card.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl>{card.tags?.length ? <footer>{card.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer> : null}</article>)}</div>
+}
+
+type DateListItem = {
+  key: string
+  dateText: string
+  day: string
+  month: string
+  eyebrow: ReactNode
+  title: ReactNode
+  description: ReactNode
+}
+
+function DateList({ items, className }: { items: DateListItem[]; className?: string }) {
+  return <ol className={`calendar-preview${className ? ` ${className}` : ''}`}>{items.map((item) => <li key={item.key}><time dateTime={item.dateText}><strong>{item.day}</strong><span>{item.month}</span></time><div><small>{item.eyebrow}</small><h3>{item.title}</h3><p>{item.description}</p></div></li>)}</ol>
 }
 
 function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
@@ -1079,15 +1111,24 @@ function LaunchSchedulePreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
   const launches = recordArray(root.results).slice(0, 8)
   if (!launches.length) return <div className="weather-empty"><strong>Upcoming launches unavailable</strong><span>No matching mission records were returned.</span></div>
-  return <ol className="calendar-preview launch-schedule-preview">{launches.map((launch, index) => {
+  const items: DateListItem[] = launches.map((launch, index) => {
     const dateText = textValue(launch.net) ?? textValue(launch.window_start) ?? ''
     const parsed = new Date(dateText)
     const provider = cleanText(recordValue(launch.launch_service_provider, 'name')) ?? 'Launch provider'
     const pad = isRecord(launch.pad) ? launch.pad : {}
     const location = cleanText(recordValue(pad.location, 'name') ?? pad.name) ?? 'Launch site pending'
     const mission = isRecord(launch.mission) ? launch.mission : {}
-    return <li key={`${launch.id}-${index}`}><time dateTime={dateText}><strong>{Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('en', { day: '2-digit' })}</strong><span>{Number.isNaN(parsed.getTime()) ? 'TBD' : parsed.toLocaleDateString('en', { month: 'short' })}</span></time><div><small>{provider} · {cleanText(recordValue(launch.status, 'name')) ?? 'Scheduled'}</small><h3>{cleanText(launch.name) ?? cleanText(mission.name) ?? `Launch ${index + 1}`}</h3><p>{location} · {Number.isNaN(parsed.getTime()) ? 'Time pending' : parsed.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</p></div></li>
-  })}</ol>
+    return {
+      key: `${launch.id}-${index}`,
+      dateText,
+      day: Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('en', { day: '2-digit' }),
+      month: Number.isNaN(parsed.getTime()) ? 'TBD' : parsed.toLocaleDateString('en', { month: 'short' }),
+      eyebrow: `${provider} · ${cleanText(recordValue(launch.status, 'name')) ?? 'Scheduled'}`,
+      title: cleanText(launch.name) ?? cleanText(mission.name) ?? `Launch ${index + 1}`,
+      description: `${location} · ${Number.isNaN(parsed.getTime()) ? 'Time pending' : parsed.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}`,
+    }
+  })
+  return <DateList items={items} className="launch-schedule-preview"/>
 }
 
 function WiktionaryEntryPreview({ data }: { data: unknown }) {
