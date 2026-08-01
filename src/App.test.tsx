@@ -80,14 +80,14 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 
-  it('registers 100 distinct React component functions with no shared identity', () => {
+  it('registers 143 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(100)
-    expect(new Set(components).size).toBe(100)
-    expect(new Set(components.map((component) => component.name)).size).toBe(100)
+    expect(components).toHaveLength(143)
+    expect(new Set(components).size).toBe(143)
+    expect(new Set(components.map((component) => component.name)).size).toBe(143)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -101,7 +101,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(100)
+    expect(new Set(visualSignatures).size).toBe(143)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })

@@ -92,14 +92,15 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   const url = api.buildUrl(parameters)
   const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
+  const isForm = api.bodyEncoding === 'form'
   const started = performance.now()
   const response = await fetch(url, {
     method,
     headers: {
       Accept: 'application/json',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined ? {} : { 'Content-Type': isForm ? 'application/x-www-form-urlencoded' : 'application/json' }),
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined ? {} : { body: isForm ? new URLSearchParams(body as Record<string, string>).toString() : JSON.stringify(body) }),
   })
   const text = await response.text()
   let data: unknown
@@ -117,10 +118,11 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
   const url = api.buildUrl(parameters)
   const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
+  const isForm = api.bodyEncoding === 'form'
   const options = [
     `  method: '${method}',`,
-    `  headers: { Accept: 'application/json'${body === undefined ? '' : ", 'Content-Type': 'application/json'"} },`,
-    ...(body === undefined ? [] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
+    `  headers: { Accept: 'application/json'${body === undefined ? '' : isForm ? ", 'Content-Type': 'application/x-www-form-urlencoded'" : ", 'Content-Type': 'application/json'"} },`,
+    ...(body === undefined ? [] : isForm ? [`  body: new URLSearchParams(${JSON.stringify(body)}).toString(),`] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
   ].join('\n')
   const parse = api.parseResponse
     ? `const text = await response.text();\nconst marker = 'Markdown Content:';\nconst parsed = text.trim().startsWith('{')\n  ? JSON.parse(text)\n  : JSON.parse(text.slice(text.indexOf(marker) + marker.length).trim());\nconst data = parsed?.data?.content ? JSON.parse(parsed.data.content) : parsed;`
@@ -522,7 +524,7 @@ function App() {
                 </div>
               </div>
             </div>
-            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} />}
+            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} />}
           </section>}
 
           {currentPage === 'agent-tools' && <section className="agent-section page-section" aria-labelledby="agent-heading">

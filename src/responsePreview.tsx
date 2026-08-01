@@ -398,6 +398,43 @@ function CountryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 }
 
 function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
+  if (api.id === 'bls-timeseries' && isRecord(data)) {
+    const series = recordArray(recordValue(data.Results, 'series'))[0]
+    const points = recordArray(series?.data).map((entry) => numberValue(entry.value)).filter((value): value is number => value !== undefined).reverse()
+    const dates = recordArray(series?.data).map((entry) => `${textValue(entry.periodName) ?? ''} ${textValue(entry.year) ?? ''}`.trim()).reverse()
+    const latest = points.at(-1) ?? 0
+    return {
+      label: `${textValue(series?.seriesID) ?? 'BLS series'} · U.S. labor statistics`, value: latest, points, dates,
+      metrics: [
+        { label: 'Latest period', value: dates.at(-1) || '—' },
+        { label: 'Period high', value: points.length ? formatNumber(Math.max(...points), 2) : '—' },
+        { label: 'Period low', value: points.length ? formatNumber(Math.min(...points), 2) : '—' },
+      ],
+    }
+  }
+  if (api.id === 'ecb-fx-rates' && isRecord(data)) {
+    const dataSet = Array.isArray(data.dataSets) ? data.dataSets[0] : undefined
+    const series = isRecord(dataSet) && isRecord(dataSet.series) ? Object.values(dataSet.series)[0] : undefined
+    const observations = isRecord(series) && isRecord(series.observations) ? series.observations : {}
+    const structure = isRecord(data.structure) ? data.structure : {}
+    const dimensions = isRecord(structure.dimensions) ? structure.dimensions : {}
+    const timeValues = Array.isArray(dimensions.observation) && isRecord(dimensions.observation[0]) && Array.isArray(dimensions.observation[0].values) ? dimensions.observation[0].values : []
+    const seriesDimensions = recordArray(dimensions.series)
+    const currencyDimension = seriesDimensions.find((dimension) => dimension.id === 'CURRENCY')
+    const currencyValues = currencyDimension && Array.isArray(currencyDimension.values) ? currencyDimension.values : []
+    const currencyId = textValue(recordValue(currencyValues[0], 'id')) ?? 'currency'
+    const points = Object.keys(observations).map((index) => numberValue((observations[index] as unknown[])?.[0])).filter((value): value is number => value !== undefined)
+    const dates = timeValues.map((entry: unknown) => isRecord(entry) ? textValue(entry.id) ?? '' : '')
+    const latest = points.at(-1) ?? 0
+    return {
+      label: `EUR / ${currencyId} · ECB reference rate`, value: latest, points, dates,
+      metrics: [
+        { label: 'Latest date', value: dates.at(-1) || '—' },
+        { label: 'Period high', value: points.length ? formatNumber(Math.max(...points), 4) : '—' },
+        { label: 'Period low', value: points.length ? formatNumber(Math.min(...points), 4) : '—' },
+      ],
+    }
+  }
   if (api.id === 'coingecko-keyless-market' && isRecord(data)) {
     const [coinId, quote] = Object.entries(data).find(([, value]) => isRecord(value)) ?? ['Cryptocurrency', {}]
     const market = isRecord(quote) ? quote : {}
@@ -671,6 +708,25 @@ const collectImageUrls = (value: unknown, found: string[] = [], depth = 0): stri
 }
 
 function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
+  if (api.id === 'internet-archive-search' && isRecord(data)) {
+    const response = isRecord(data.response) ? data.response : {}
+    return recordArray(response.docs).slice(0, 8).map((item) => ({
+      image: typeof item.identifier === 'string' ? `https://archive.org/services/img/${item.identifier}` : '',
+      title: cleanText(item.title) ?? 'Archive item',
+      subtitle: `${cleanText(item.creator) ?? 'Internet Archive'} · ${previewValue(item.date)}`,
+    })).filter((item) => item.image)
+  }
+  if (api.id === 'randomfox-photo' && isRecord(data)) return textValue(data.image) ? [{ image: textValue(data.image) ?? '', title: 'Random fox', subtitle: 'randomfox.ca' }] : []
+  if (api.id === 'cleveland-museum-search' && isRecord(data)) return recordArray(data.data).slice(0, 8).map((artwork) => {
+    const images = isRecord(artwork.images) ? artwork.images : {}
+    const web = isRecord(images.web) ? images.web : {}
+    const creators = recordArray(artwork.creators).map((creator) => cleanText(creator.description)).filter((value): value is string => Boolean(value))
+    return { image: textValue(web.url) ?? '', title: cleanText(artwork.title) ?? 'Artwork', subtitle: creators.join(', ') || cleanText(artwork.creation_date) }
+  }).filter((item) => item.image)
+  if (api.id === 'scryfall-card-search' && isRecord(data)) return recordArray(data.data).slice(0, 8).map((card) => {
+    const images = isRecord(card.image_uris) ? card.image_uris : {}
+    return { image: textValue(images.normal ?? images.large) ?? '', title: cleanText(card.name) ?? 'Card', subtitle: `${cleanText(card.type_line) ?? 'Card'} · ${cleanText(card.set_name) ?? 'Magic: The Gathering'}` }
+  }).filter((item) => item.image)
   if (api.id === 'dogs' && isRecord(data) && Array.isArray(data.message)) return data.message.filter((item): item is string => typeof item === 'string').slice(0, 6).map((image, index) => ({ image, title: `Dog ${index + 1}`, subtitle: 'Random Dog gallery' }))
   if (api.id === 'people' && isRecord(data) && Array.isArray(data.results)) return data.results.filter(isRecord).slice(0, 6).map((person, index) => ({ image: textValue(recordValue(person.picture, 'large') ?? recordValue(person.picture, 'medium')) ?? '', title: isRecord(person.name) ? `${textValue(person.name.first) ?? ''} ${textValue(person.name.last) ?? ''}`.trim() : `Person ${index + 1}`, subtitle: textValue(person.email) })).filter((item) => item.image)
   if (api.id === 'wikipedia-search' && isRecord(data)) {
@@ -990,7 +1046,33 @@ function DateList({ items, className }: { items: DateListItem[]; className?: str
 function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let cards: SemanticCard[] = []
-  if (api.id === 'posts') cards = [root].filter((record) => Object.keys(record).length > 0).map((record) => ({ title: cleanText(record.title) ?? 'Post', eyebrow: 'JSONPlaceholder post', description: cleanText(record.body), metrics: [{ label: 'Post ID', value: previewValue(record.id) }, { label: 'User ID', value: previewValue(record.userId) }] }))
+  if (api.id === 'crates-io-search') {
+    const crate = isRecord(root.crate) ? root.crate : {}
+    cards = Object.keys(crate).length ? [{ title: cleanText(crate.name) ?? 'Rust crate', eyebrow: `crates.io · v${previewValue(crate.max_version)}`, description: cleanText(crate.description), badge: compactNumber(numberValue(crate.downloads) ?? 0), metrics: [{ label: 'Homepage', value: previewValue(crate.homepage) }, { label: 'Repository', value: previewValue(crate.repository) }], tags: textArray(crate.keywords) }] : []
+  } else if (api.id === 'rubygems-lookup') {
+    cards = Object.keys(root).length ? [{ title: cleanText(root.name) ?? 'Ruby gem', eyebrow: `RubyGems · v${previewValue(root.version)}`, description: cleanText(root.info), badge: compactNumber(numberValue(root.downloads) ?? 0), metrics: [{ label: 'Authors', value: previewValue(root.authors) }, { label: 'Licenses', value: textArray(root.licenses).join(', ') || '—' }] }] : []
+  } else if (api.id === 'nuget-package-lookup') {
+    const lastPage = Array.isArray(root.items) ? root.items[root.items.length - 1] : undefined
+    const lastEntry = isRecord(lastPage) && Array.isArray(lastPage.items) ? lastPage.items[lastPage.items.length - 1] : undefined
+    const catalogEntry = isRecord(lastEntry) && isRecord(lastEntry.catalogEntry) ? lastEntry.catalogEntry : undefined
+    cards = catalogEntry ? [{ title: cleanText(catalogEntry.id) ?? 'NuGet package', eyebrow: `NuGet · v${previewValue(catalogEntry.version)}`, description: cleanText(catalogEntry.description), badge: previewValue(catalogEntry.licenseExpression), metrics: [{ label: 'Published', value: dateParts(catalogEntry.published).full || '—' }, { label: 'Authors', value: previewValue(catalogEntry.authors) }] }] : []
+  }
+  else if (api.id === 'deps-dev') {
+    const packageKey = isRecord(root.packageKey) ? root.packageKey : {}
+    const versions = recordArray(root.versions)
+    const latest = versions.find((version) => version.isDefault) ?? versions[0]
+    const versionKey = latest && isRecord(latest.versionKey) ? latest.versionKey : {}
+    cards = Object.keys(packageKey).length ? [{
+      title: cleanText(packageKey.name) ?? 'Package',
+      eyebrow: `${cleanText(packageKey.system) ?? 'Package'} ecosystem`,
+      badge: previewValue(versionKey.version),
+      metrics: [
+        { label: 'Published versions', value: String(versions.length) },
+        { label: 'Latest published', value: dateParts(latest?.publishedAt).full || previewValue(latest?.publishedAt) },
+      ],
+    }] : []
+  }
+  else if (api.id === 'posts') cards = [root].filter((record) => Object.keys(record).length > 0).map((record) => ({ title: cleanText(record.title) ?? 'Post', eyebrow: 'JSONPlaceholder post', description: cleanText(record.body), metrics: [{ label: 'Post ID', value: previewValue(record.id) }, { label: 'User ID', value: previewValue(record.userId) }] }))
   else if (api.id === 'devto') cards = recordArray(data).map((record) => ({ title: cleanText(record.title) ?? 'DEV article', eyebrow: cleanText(record.readable_publish_date) ?? 'Published article', description: cleanText(record.description), badge: `${previewValue(record.public_reactions_count)} reactions`, metrics: [{ label: 'Comments', value: previewValue(record.comments_count) }, { label: 'Reading time', value: `${previewValue(record.reading_time_minutes)} min` }], tags: textArray(record.tag_list) }))
   else if (api.id === 'github') cards = recordArray(data).map((record) => ({ title: cleanText(record.full_name ?? record.name) ?? 'Repository', eyebrow: cleanText(record.language) ?? 'GitHub repository', description: cleanText(record.description) ?? 'Public source repository', badge: record.archived ? 'Archived' : 'Active', metrics: [{ label: 'Stars', value: previewValue(record.stargazers_count) }, { label: 'Forks', value: previewValue(record.forks_count) }, { label: 'Issues', value: previewValue(record.open_issues_count) }], tags: textArray(record.topics) }))
   else if (api.id === 'gitlab-public-projects') cards = recordArray(data).map((record) => ({
@@ -1021,7 +1103,21 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 function SecurityCenterPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let cards: SemanticCard[] = []
-  if (api.id === 'osv-vulnerability') {
+  if (api.id === 'first-epss') cards = recordArray(root.data).map((entry) => {
+    const percentile = numberValue(entry.percentile)
+    const score = numberValue(entry.epss)
+    return {
+      title: cleanText(entry.cve) ?? 'CVE',
+      eyebrow: 'FIRST.org Exploit Prediction Scoring System',
+      badge: score !== undefined ? `${formatNumber(score * 100, 2)}% probability` : undefined,
+      metrics: [
+        { label: 'EPSS score', value: score !== undefined ? formatNumber(score, 5) : '—' },
+        { label: 'Percentile', value: percentile !== undefined ? `${formatNumber(percentile * 100, 1)}%` : '—' },
+        { label: 'Model date', value: previewValue(entry.date) },
+      ],
+    }
+  })
+  else if (api.id === 'osv-vulnerability') {
     const affected = recordArray(root.affected)
     const packageNames = affected.map((entry) => cleanText(recordValue(entry.package, 'name'))).filter((value): value is string => Boolean(value))
     const ecosystems = affected.map((entry) => cleanText(recordValue(entry.package, 'ecosystem'))).filter((value): value is string => Boolean(value))
@@ -1058,7 +1154,35 @@ function SecurityCenterPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let cards: SemanticCard[] = []
-  if (api.id === 'open-library-search') cards = recordArray(root.docs).map((book) => ({ title: cleanText(book.title) ?? 'Book', eyebrow: textArray(book.author_name).join(', ') || 'Open Library', badge: previewValue(book.first_publish_year), metrics: [{ label: 'Authors', value: String(textArray(book.author_name).length || 1) }, { label: 'First published', value: previewValue(book.first_publish_year) }, { label: 'Edition key', value: previewValue(book.key) }] }))
+  if (api.id === 'zenodo-search') cards = recordArray(recordValue(root.hits, 'hits')).map((entry) => {
+    const metadata = isRecord(entry.metadata) ? entry.metadata : {}
+    const creators = recordArray(metadata.creators).map((creator) => cleanText(creator.name)).filter((value): value is string => Boolean(value))
+    return { title: cleanText(metadata.title) ?? 'Zenodo record', eyebrow: creators.join(', ') || 'Zenodo', badge: previewValue(metadata.publication_date), metrics: [{ label: 'Resource type', value: previewValue(recordValue(metadata.resource_type, 'title')) }, { label: 'DOI', value: previewValue(entry.doi) }] }
+  })
+  else if (api.id === 'doaj-search') cards = recordArray(root.results).map((entry) => {
+    const bibjson = isRecord(entry.bibjson) ? entry.bibjson : {}
+    const authors = recordArray(bibjson.author).map((author) => cleanText(author.name)).filter((value): value is string => Boolean(value))
+    const journal = isRecord(bibjson.journal) ? bibjson.journal : {}
+    return { title: cleanText(bibjson.title) ?? 'Open-access article', eyebrow: authors.slice(0, 3).join(', ') || 'DOAJ', badge: previewValue(bibjson.year), metrics: [{ label: 'Journal', value: previewValue(journal.title) }, { label: 'Publisher', value: previewValue(journal.publisher) }] }
+  })
+  else if (api.id === 'gutendex-books') cards = recordArray(root.results).map((book) => {
+    const authors = recordArray(book.authors).map((author) => cleanText(author.name)).filter((value): value is string => Boolean(value))
+    return { title: cleanText(book.title) ?? 'Book', eyebrow: authors.join(', ') || 'Project Gutenberg', badge: previewValue(book.download_count), metrics: [{ label: 'Languages', value: textArray(book.languages).join(', ') || '—' }, { label: 'Subjects', value: textArray(book.subjects).slice(0, 2).join(', ') || '—' }] }
+  })
+  else if (api.id === 'datacite-search') cards = recordArray(root.data).map((entry) => {
+    const attributes = isRecord(entry.attributes) ? entry.attributes : {}
+    const creators = recordArray(attributes.creators).map((creator) => cleanText(creator.name)).filter((value): value is string => Boolean(value))
+    return { title: textArray(attributes.titles).length ? cleanText((recordArray(attributes.titles)[0])?.title) ?? 'Untitled record' : 'Untitled record', eyebrow: creators.join(', ') || cleanText(attributes.publisher) || 'DataCite', badge: previewValue(attributes.publicationYear), metrics: [{ label: 'Resource type', value: previewValue(recordValue(attributes.types, 'resourceTypeGeneral')) }, { label: 'Publisher', value: previewValue(attributes.publisher) }, { label: 'DOI', value: previewValue(attributes.doi) }] }
+  })
+  else if (api.id === 'ror-search') cards = recordArray(root.items).map((org) => {
+    const names = recordArray(org.names)
+    const displayName = names.find((entry) => Array.isArray(entry.types) && entry.types.includes('ror_display')) ?? names[0]
+    const location = recordArray(org.locations)[0]
+    const geoDetails = location && isRecord(location.geonames_details) ? location.geonames_details : {}
+    const website = recordArray(org.links).find((link) => link.type === 'website')
+    return { title: cleanText(displayName?.value) ?? 'Organization', eyebrow: textArray(org.types).join(', ') || 'Research organization', badge: previewValue(org.established), metrics: [{ label: 'Country', value: previewValue(geoDetails.country_name) }, { label: 'City', value: previewValue(geoDetails.name) }, { label: 'Website', value: previewValue(website?.value) }] }
+  })
+  else if (api.id === 'open-library-search') cards = recordArray(root.docs).map((book) => ({ title: cleanText(book.title) ?? 'Book', eyebrow: textArray(book.author_name).join(', ') || 'Open Library', badge: previewValue(book.first_publish_year), metrics: [{ label: 'Authors', value: String(textArray(book.author_name).length || 1) }, { label: 'First published', value: previewValue(book.first_publish_year) }, { label: 'Edition key', value: previewValue(book.key) }] }))
   else if (api.id === 'clinical-trials-search') cards = recordArray(root.studies).map((study) => {
     const protocol = isRecord(study.protocolSection) ? study.protocolSection : {}
     const identification = isRecord(protocol.identificationModule) ? protocol.identificationModule : {}
@@ -1203,6 +1327,19 @@ function BrazilPostcodePreview({ data }: { data: unknown }) {
   }]} emptyTitle="Brazilian postcode unavailable"/>
 }
 
+function DndSpellPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  if (!Object.keys(root).length) return <div className="weather-empty"><strong>Spell unavailable</strong><span>No matching D&amp;D 5e spell was returned.</span></div>
+  const school = isRecord(root.school) ? cleanText(root.school.name) : undefined
+  const classes = recordArray(root.classes).map((entry) => cleanText(entry.name)).filter((value): value is string => Boolean(value))
+  return <div className="dictionary-preview dnd-spell-preview"><div className="dictionary-hero"><div><span>{school ?? 'D&amp;D 5e'} spell · Level {previewValue(root.level)}</span><strong>{cleanText(root.name) ?? 'Spell'}</strong><b>{cleanText(root.range) ?? 'Range unavailable'} · {root.concentration ? 'Concentration' : 'No concentration'}</b></div><span aria-hidden="true">✦</span></div><div className="dictionary-meanings"><section><header><span>1</span><h3>Effect</h3></header><ol>{textArray(root.desc).map((paragraph, index) => <li key={index}><p>{paragraph}</p></li>)}</ol>{textArray(root.higher_level).length ? <footer><b>At higher levels</b><span>{textArray(root.higher_level).join(' ')}</span></footer> : null}</section></div><dl className="country-facts"><div><dt>Casting time</dt><dd>{previewValue(root.casting_time)}</dd></div><div><dt>Components</dt><dd>{textArray(root.components).join(', ') || '—'}</dd></div><div><dt>Duration</dt><dd>{previewValue(root.duration)}</dd></div><div><dt>Classes</dt><dd>{classes.join(', ') || '—'}</dd></div></dl></div>
+}
+
+function GeneratedImagePreview({ api, requestUrl }: { api: ApiDemo; requestUrl?: string }) {
+  if (!requestUrl) return <div className="weather-empty"><strong>Image unavailable</strong><span>No request URL was captured for this response.</span></div>
+  return <div className="media-preview single"><article><img src={requestUrl} alt={api.name} loading="lazy"/><div><small>{api.category}</small><h3>{api.name}</h3><p>Rendered directly from the live request URL.</p></div></article></div>
+}
+
 function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let records: Array<Record<string, unknown>> = []
@@ -1222,6 +1359,94 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   } else if (api.id === 'rxnorm-drug-search') {
     const groups = recordArray(recordValue(root.drugGroup, 'conceptGroup'))
     records = groups.flatMap((group) => recordArray(group.conceptProperties).map((property) => ({ title: cleanText(property.name) ?? 'Drug product', tty: previewValue(group.tty), rxcui: previewValue(property.rxcui), synonym: previewValue(property.synonym) })))
+  } else if (api.id === 'endoflife-date') {
+    const result = isRecord(root.result) ? root.result : {}
+    records = recordArray(result.releases).slice(0, 10).map((release) => ({
+      title: `${cleanText(result.label) ?? 'Release'} ${previewValue(release.name)}`,
+      status: release.isEol ? 'End of life' : release.isMaintained ? 'Maintained' : 'Unmaintained',
+      released: previewValue(release.releaseDate),
+      isLts: release.isLts ? 'Yes' : 'No',
+      eolFrom: previewValue(release.eolFrom),
+    }))
+  } else if (api.id === 'un-sdg-goals') {
+    records = recordArray(data).slice(0, 10).map((goal) => ({ title: `Goal ${previewValue(goal.code)}`, description: previewValue(goal.title) }))
+  } else if (api.id === 'celestrak-satellites') {
+    records = recordArray(data).slice(0, 10).map((satellite) => ({
+      title: cleanText(satellite.OBJECT_NAME) ?? 'Satellite',
+      norad_id: previewValue(satellite.NORAD_CAT_ID),
+      inclination: `${previewValue(satellite.INCLINATION)}°`,
+      mean_motion: previewValue(satellite.MEAN_MOTION),
+      epoch: previewValue(satellite.EPOCH),
+    }))
+  } else if (api.id === 'musicbrainz-artist-search') {
+    records = recordArray(root.artists).slice(0, 10).map((artist) => {
+      const lifeSpan = isRecord(artist['life-span']) ? artist['life-span'] : {}
+      return {
+        title: cleanText(artist.name) ?? 'Artist',
+        type: previewValue(artist.type),
+        country: previewValue(artist.country),
+        active_from: previewValue(lifeSpan.begin),
+        disambiguation: previewValue(artist.disambiguation),
+      }
+    })
+  } else if (api.id === 'eurostat-population') {
+    const dimension = isRecord(root.dimension) ? root.dimension : {}
+    const geoLabels = isRecord(recordValue(recordValue(dimension.geo, 'category'), 'label')) ? recordValue(recordValue(dimension.geo, 'category'), 'label') as Record<string, unknown> : {}
+    const timeIndex = isRecord(recordValue(recordValue(dimension.time, 'category'), 'index')) ? recordValue(recordValue(dimension.time, 'category'), 'index') as Record<string, unknown> : {}
+    const value = isRecord(root.value) ? Object.values(root.value)[0] : undefined
+    records = value !== undefined ? [{ title: `Population — ${previewValue(Object.values(geoLabels)[0])}`, year: previewValue(Object.keys(timeIndex)[0]), population: previewValue(value), source: previewValue(root.source) }] : []
+  } else if (api.id === 'fema-disasters') {
+    records = recordArray(root.DisasterDeclarationsSummaries).slice(0, 10).map((entry) => ({ title: cleanText(entry.declarationTitle) ?? 'Disaster declaration', state: previewValue(entry.state), incident_type: previewValue(entry.incidentType), declared: previewValue(entry.declarationDate) }))
+  } else if (api.id === 'noaa-tides') {
+    const metadata = isRecord(root.metadata) ? root.metadata : {}
+    const reading = recordArray(root.data)[0]
+    records = reading ? [{ title: cleanText(metadata.name) ?? 'Tide station', water_level: `${previewValue(reading.v)} m`, observed: previewValue(reading.t), quality: previewValue(reading.q) }] : []
+  } else if (api.id === 'rdap-domain-lookup') {
+    records = Object.keys(root).length ? [{ title: cleanText(root.ldhName) ?? 'Domain', status: textArray(root.status).join(', ') || '—', handle: previewValue(root.handle) }] : []
+  } else if (api.id === 'languagetool-grammar-check') {
+    records = recordArray(root.matches).slice(0, 8).map((match) => ({
+      title: cleanText(match.shortMessage) || cleanText(match.message) || 'Grammar issue',
+      description: cleanText(match.message),
+      category: previewValue(recordValue(recordValue(match.rule, 'category'), 'name')),
+      suggestion: previewValue(recordValue(recordArray(match.replacements)[0], 'value')),
+    }))
+  } else if (api.id === 'pubchem-compound') {
+    const property = recordArray(recordValue(root.PropertyTable, 'Properties'))[0]
+    records = property ? [{ title: cleanText(property.IUPACName) ?? 'Compound', formula: previewValue(property.MolecularFormula), weight: `${previewValue(property.MolecularWeight)} g/mol`, cid: previewValue(property.CID) }] : []
+  } else if (api.id === 'chembl-molecule') {
+    const properties = isRecord(root.molecule_properties) ? root.molecule_properties : {}
+    records = Object.keys(root).length ? [{ title: previewValue(root.pref_name) !== '—' ? previewValue(root.pref_name) : previewValue(root.molecule_chembl_id), formula: previewValue(properties.full_molformula), weight: previewValue(properties.full_mwt), max_phase: previewValue(root.max_phase), first_approval: previewValue(root.first_approval) }] : []
+  } else if (api.id === 'uniprot-protein') {
+    const organism = isRecord(root.organism) ? root.organism : {}
+    records = Object.keys(root).length ? [{ title: cleanText(root.uniProtkbId) ?? 'Protein', organism: previewValue(organism.scientificName), entry_type: previewValue(root.entryType), annotation_score: previewValue(root.annotationScore) }] : []
+  } else if (api.id === 'rcsb-pdb-entry') {
+    const citation = recordArray(root.citation)[0]
+    records = citation ? [{ title: cleanText(citation.title) ?? 'PDB structure', journal: previewValue(citation.journal_abbrev), authors: textArray(citation.rcsb_authors).slice(0, 3).join(', '), doi: previewValue(citation.pdbx_database_id_DOI) }] : []
+  } else if (api.id === 'ensembl-gene-lookup') {
+    records = Object.keys(root).length ? [{ title: cleanText(root.display_name) ?? previewValue(root.id), biotype: previewValue(root.biotype), location: `Chr ${previewValue(root.seq_region_name)}: ${previewValue(root.start)}-${previewValue(root.end)}`, description: cleanText(root.description) }] : []
+  } else if (api.id === 'obis-marine-occurrences') {
+    records = recordArray(root.results).slice(0, 10).map((occurrence) => ({ title: cleanText(occurrence.scientificName) ?? 'Marine occurrence', date: previewValue(occurrence.date_year ?? occurrence.eventDate), locality: previewValue(occurrence.locality), depth: previewValue(occurrence.depth) }))
+  } else if (api.id === 'worms-species-lookup') {
+    records = recordArray(data).slice(0, 5).map((record) => ({ title: cleanText(record.scientificname) ?? 'Species', authority: previewValue(record.authority), rank: previewValue(record.rank), status: previewValue(record.status) }))
+  } else if (api.id === 'paleobiodb-taxa') {
+    records = recordArray(root.records).slice(0, 5).map((taxon) => ({ title: cleanText(taxon.taxon_name) ?? 'Taxon', rank: previewValue(taxon.taxon_rank), status: previewValue(taxon.is_extant), occurrences: previewValue(taxon.n_occs) }))
+  } else if (api.id === 'usgs-water-legacy') {
+    const series = recordArray(recordValue(root.value, 'timeSeries'))[0]
+    const sourceInfo = series && isRecord(series.sourceInfo) ? series.sourceInfo : {}
+    const variable = series && isRecord(series.variable) ? series.variable : {}
+    const reading = series ? recordArray(recordValue(recordArray(series.values)[0], 'value'))[0] : undefined
+    records = series ? [{ title: cleanText(sourceInfo.siteName) ?? 'USGS gauge', measurement: cleanText(variable.variableName), value: reading ? `${previewValue(reading.value)} ${previewValue(recordValue(variable.unit, 'unitCode'))}` : '—', observed: previewValue(reading?.dateTime) }] : []
+  } else if (api.id === 'ipwhois-lookup') {
+    const connection = isRecord(root.connection) ? root.connection : {}
+    records = root.success ? [{ title: `${previewValue(root.city)}, ${previewValue(root.country)}`, ip: previewValue(root.ip), isp: previewValue(connection.isp), timezone: previewValue(recordValue(root.timezone, 'id')) }] : []
+  } else if (api.id === 'newton-math-solver') {
+    records = Object.keys(root).length ? [{ title: previewValue(root.expression), operation: previewValue(root.operation), result: previewValue(root.result) }] : []
+  } else if (api.id === 'datamuse-rhymes') {
+    records = recordArray(data).slice(0, 10).map((entry) => ({ title: cleanText(entry.word) ?? 'Word', score: previewValue(entry.score), syllables: previewValue(entry.numSyllables) }))
+  } else if (api.id === 'open5e-monster-search') {
+    records = recordArray(root.results).slice(0, 8).map((monster) => ({ title: cleanText(monster.name) ?? 'Monster', type: `${previewValue(monster.size)} ${previewValue(monster.type)}`, armor_class: previewValue(monster.armor_class), hit_points: previewValue(monster.hit_points) }))
+  } else if (api.id === 'catfacts') {
+    records = cleanText(root.fact) ? [{ title: cleanText(root.fact), length: previewValue(root.length) }] : []
   }
   else records = findPreviewRecords(data)
   const cards = records.map((record, index) => {
@@ -1237,7 +1462,7 @@ function ResultListPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   return <div className="demo-preview-grid">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
 }
 
-type ApiPreviewProps = { api: ApiDemo; data: unknown }
+type ApiPreviewProps = { api: ApiDemo; data: unknown; requestUrl?: string }
 export type ApiPreviewComponent = (props: ApiPreviewProps) => ReactElement
 
 const componentName = (id: string) => `${id.split('-').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join('')}Preview`
@@ -1245,7 +1470,7 @@ const componentSeed = (id: string) => [...id].reduce((seed, character) => ((seed
 
 const defineApiPreview = (id: string, render: (props: ApiPreviewProps) => ReactElement): ApiPreviewComponent => {
   const seed = componentSeed(id)
-  const Component = ({ api, data }: ApiPreviewProps) => <div
+  const Component = ({ api, data, requestUrl }: ApiPreviewProps) => <div
     className={`api-specific-preview api-specific-${id}`}
     data-api-preview-component={id}
     data-visual-signature={`${componentName(id)}-${seed.toString(36)}`}
@@ -1255,7 +1480,7 @@ const defineApiPreview = (id: string, render: (props: ApiPreviewProps) => ReactE
       '--component-radius': `${10 + (seed % 13)}px`,
       '--component-pattern-size': `${22 + (seed % 31)}px`,
     } as CSSProperties}
-  >{render({ api, data })}</div>
+  >{render({ api, data, requestUrl })}</div>
   Object.defineProperty(Component, 'name', { value: componentName(id) })
   return Component
 }
@@ -1364,6 +1589,49 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'pubmed-search': defineApiPreview('pubmed-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'rxnorm-drug-search': defineApiPreview('rxnorm-drug-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'inaturalist-observations': defineApiPreview('inaturalist-observations', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'first-epss': defineApiPreview('first-epss', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'endoflife-date': defineApiPreview('endoflife-date', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'deps-dev': defineApiPreview('deps-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'ecb-fx-rates': defineApiPreview('ecb-fx-rates', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'un-sdg-goals': defineApiPreview('un-sdg-goals', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'datacite-search': defineApiPreview('datacite-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'ror-search': defineApiPreview('ror-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'celestrak-satellites': defineApiPreview('celestrak-satellites', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'musicbrainz-artist-search': defineApiPreview('musicbrainz-artist-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'cleveland-museum-search': defineApiPreview('cleveland-museum-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'scryfall-card-search': defineApiPreview('scryfall-card-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'dnd5e-spell-lookup': defineApiPreview('dnd5e-spell-lookup', ({ data }) => <DndSpellPreview data={data}/>),
+  'qr-code-generator': defineApiPreview('qr-code-generator', ({ api, requestUrl }) => <GeneratedImagePreview api={api} requestUrl={requestUrl}/>),
+  'where-the-iss-at': defineApiPreview('where-the-iss-at', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'eurostat-population': defineApiPreview('eurostat-population', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'bls-timeseries': defineApiPreview('bls-timeseries', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'fema-disasters': defineApiPreview('fema-disasters', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'noaa-tides': defineApiPreview('noaa-tides', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'rdap-domain-lookup': defineApiPreview('rdap-domain-lookup', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'languagetool-grammar-check': defineApiPreview('languagetool-grammar-check', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'zenodo-search': defineApiPreview('zenodo-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'doaj-search': defineApiPreview('doaj-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'pubchem-compound': defineApiPreview('pubchem-compound', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'chembl-molecule': defineApiPreview('chembl-molecule', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'uniprot-protein': defineApiPreview('uniprot-protein', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'rcsb-pdb-entry': defineApiPreview('rcsb-pdb-entry', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'ensembl-gene-lookup': defineApiPreview('ensembl-gene-lookup', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'obis-marine-occurrences': defineApiPreview('obis-marine-occurrences', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'worms-species-lookup': defineApiPreview('worms-species-lookup', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'paleobiodb-taxa': defineApiPreview('paleobiodb-taxa', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'usgs-water-legacy': defineApiPreview('usgs-water-legacy', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'crates-io-search': defineApiPreview('crates-io-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'rubygems-lookup': defineApiPreview('rubygems-lookup', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'nuget-package-lookup': defineApiPreview('nuget-package-lookup', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'internet-archive-search': defineApiPreview('internet-archive-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'ipwhois-lookup': defineApiPreview('ipwhois-lookup', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'newton-math-solver': defineApiPreview('newton-math-solver', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'gutendex-books': defineApiPreview('gutendex-books', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'datamuse-rhymes': defineApiPreview('datamuse-rhymes', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'open5e-monster-search': defineApiPreview('open5e-monster-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'dicebear-avatar': defineApiPreview('dicebear-avatar', ({ api, requestUrl }) => <GeneratedImagePreview api={api} requestUrl={requestUrl}/>),
+  'catfacts': defineApiPreview('catfacts', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'randomfox-photo': defineApiPreview('randomfox-photo', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
@@ -1403,13 +1671,13 @@ const weatherPreviewMeta: Record<WeatherPreviewVariant, { icon: string; eyebrow:
   'uv-index': { icon: '☀', eyebrow: 'Live response · UV monitoring', title: 'UV index', description: 'The latest ultraviolet exposure level and its reporting timeline.' },
 }
 
-export function ResponseDemoPreview({ api, data }: { api: ApiDemo; data: unknown }) {
+export function ResponseDemoPreview({ api, data, requestUrl }: { api: ApiDemo; data: unknown; requestUrl?: string }) {
   const layout = selectPreviewLayout(api)
   const weatherVariant = layout === 'weather-dashboard' ? selectWeatherPreviewVariant(api) : undefined
   const profileLabel = getPreviewProfile(api.id)?.label ?? previewMeta[layout].eyebrow
   const PreviewComponent = apiPreviewComponents[api.id]
   const content: ReactNode = PreviewComponent
-    ? <PreviewComponent api={api} data={data}/>
+    ? <PreviewComponent api={api} data={data} requestUrl={requestUrl}/>
     : <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`

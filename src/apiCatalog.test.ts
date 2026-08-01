@@ -34,7 +34,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(100)
+    expect(apiCatalog).toHaveLength(143)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -168,6 +168,93 @@ describe('API catalog', () => {
     expect(urls['pubmed-search'].searchParams.get('db')).toBe('pubmed')
     expect(urls['rxnorm-drug-search'].searchParams.get('name')).toBe('ibuprofen')
     expect(urls['inaturalist-observations'].searchParams.get('taxon_name')).toBe('Panthera')
+  })
+
+  it('builds the fourteen second-expansion API requests', () => {
+    const ids = [
+      'first-epss', 'endoflife-date', 'deps-dev', 'ecb-fx-rates', 'un-sdg-goals', 'datacite-search',
+      'ror-search', 'celestrak-satellites', 'musicbrainz-artist-search', 'cleveland-museum-search',
+      'scryfall-card-search', 'dnd5e-spell-lookup', 'qr-code-generator', 'where-the-iss-at',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['first-epss'].searchParams.get('cve')).toBe('CVE-2021-44228')
+    expect(urls['endoflife-date'].pathname).toBe('/api/v1/products/nodejs')
+    expect(urls['deps-dev'].pathname).toBe('/v3/systems/npm/packages/react')
+    expect(urls['ecb-fx-rates'].pathname).toBe('/service/data/EXR/D.USD.EUR.SP00.A')
+    expect(urls['ecb-fx-rates'].searchParams.get('lastNObservations')).toBe('30')
+    expect(urls['un-sdg-goals'].pathname).toBe('/SDGAPI/v1/sdg/Goal/List')
+    expect(urls['datacite-search'].searchParams.get('query')).toBe('climate change')
+    expect(urls['ror-search'].searchParams.get('query')).toBe('stanford')
+    expect(urls['celestrak-satellites'].searchParams.get('GROUP')).toBe('stations')
+    expect(urls['musicbrainz-artist-search'].searchParams.get('query')).toBe('queen')
+    expect(urls['cleveland-museum-search'].searchParams.get('q')).toBe('monet')
+    expect(urls['scryfall-card-search'].searchParams.get('q')).toBe('dragon')
+    expect(urls['dnd5e-spell-lookup'].pathname).toBe('/api/2014/spells/fireball')
+    expect(urls['qr-code-generator'].searchParams.get('data')).toBe('https://example.com')
+    expect(urls['where-the-iss-at'].pathname).toBe('/v1/satellites/25544')
+
+    const qrApi = getApiById('qr-code-generator')
+    expect(qrApi?.parseResponse?.('binary-png-bytes')).toEqual({ note: 'Binary PNG image response — see the rendered QR code below.', approximateBytes: 16 })
+  })
+
+  it('builds the twenty-nine third-expansion API requests', () => {
+    const ids = [
+      'eurostat-population', 'bls-timeseries', 'fema-disasters', 'noaa-tides', 'rdap-domain-lookup',
+      'languagetool-grammar-check', 'zenodo-search', 'doaj-search', 'pubchem-compound', 'chembl-molecule',
+      'uniprot-protein', 'rcsb-pdb-entry', 'ensembl-gene-lookup', 'obis-marine-occurrences', 'worms-species-lookup',
+      'paleobiodb-taxa', 'usgs-water-legacy', 'crates-io-search', 'rubygems-lookup', 'nuget-package-lookup',
+      'internet-archive-search', 'ipwhois-lookup', 'newton-math-solver', 'gutendex-books', 'datamuse-rhymes',
+      'open5e-monster-search', 'dicebear-avatar', 'catfacts', 'randomfox-photo',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['eurostat-population'].searchParams.get('geo')).toBe('DE')
+    expect(urls['bls-timeseries'].pathname).toBe('/publicAPI/v2/timeseries/data/LNS14000000')
+    expect(urls['fema-disasters'].searchParams.get('$top')).toBe('5')
+    expect(urls['noaa-tides'].searchParams.get('station')).toBe('8518750')
+    expect(urls['rdap-domain-lookup'].pathname).toBe('/domain/google.com')
+    expect(urls['languagetool-grammar-check'].toString()).toBe('https://api.languagetool.org/v2/check')
+    expect(urls['zenodo-search'].searchParams.get('q')).toBe('climate')
+    expect(urls['doaj-search'].pathname).toBe('/api/search/articles/climate')
+    expect(urls['pubchem-compound'].pathname).toContain('/compound/name/aspirin/property/')
+    expect(urls['chembl-molecule'].pathname).toBe('/chembl/api/data/molecule/CHEMBL25.json')
+    expect(urls['uniprot-protein'].pathname).toBe('/uniprotkb/P05067.json')
+    expect(urls['rcsb-pdb-entry'].pathname).toBe('/rest/v1/core/entry/4HHB')
+    expect(urls['ensembl-gene-lookup'].pathname).toBe('/lookup/id/ENSG00000157764')
+    expect(urls['obis-marine-occurrences'].searchParams.get('scientificname')).toBe('Delphinus delphis')
+    expect(urls['worms-species-lookup'].pathname).toBe('/rest/AphiaRecordsByName/Delphinus%20delphis')
+    expect(urls['paleobiodb-taxa'].searchParams.get('name')).toBe('Tyrannosaurus')
+    expect(urls['usgs-water-legacy'].searchParams.get('sites')).toBe('01646500')
+    expect(urls['crates-io-search'].pathname).toBe('/api/v1/crates/serde')
+    expect(urls['rubygems-lookup'].pathname).toBe('/api/v1/gems/rails.json')
+    expect(urls['nuget-package-lookup'].pathname).toBe('/v3/registration5-semver1/newtonsoft.json/index.json')
+    expect(urls['internet-archive-search'].searchParams.get('q')).toBe('singapore AND mediatype:texts')
+    expect(urls['ipwhois-lookup'].pathname).toBe('/8.8.8.8')
+    expect(urls['newton-math-solver'].pathname).toBe('/api/v2/simplify/2x%2B2x')
+    expect(urls['gutendex-books'].searchParams.get('search')).toBe('shakespeare')
+    expect(urls['datamuse-rhymes'].searchParams.get('rel_rhy')).toBe('orange')
+    expect(urls['open5e-monster-search'].searchParams.get('search')).toBe('dragon')
+    expect(urls['dicebear-avatar'].pathname).toBe('/9.x/identicon/svg')
+    expect(urls['catfacts'].pathname).toBe('/fact')
+    expect(urls['randomfox-photo'].pathname).toBe('/floof')
+
+    const languageToolApi = getApiById('languagetool-grammar-check')
+    expect(languageToolApi?.bodyEncoding).toBe('form')
+    expect(languageToolApi?.buildBody?.({ text: 'Hello' })).toEqual({ text: 'Hello', language: 'en-US' })
+
+    const diceBearApi = getApiById('dicebear-avatar')
+    expect(diceBearApi?.parseResponse?.('<svg></svg>')).toEqual({ note: 'Raw SVG image response — see the rendered avatar below.', approximateBytes: 11 })
   })
 
   it('finds API demos by ID', () => {

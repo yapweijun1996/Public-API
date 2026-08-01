@@ -59,8 +59,8 @@ export type ApiDemo = {
   buildUrl: (parameters: Record<string, string>) => string
   method?: 'GET' | 'POST'
   buildBody?: (parameters: Record<string, string>) => unknown
+  bodyEncoding?: 'json' | 'form'
   parseResponse?: (text: string) => unknown
-  headers?: Record<string, string>
   risk?: 'Low' | 'Review'
   usageNote?: string
 }
@@ -1251,7 +1251,411 @@ const verifiedExpansionApis: ApiDemo[] = [
   },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis, ...verifiedExpansionApis]
+const verifiedSecondExpansionApis: ApiDemo[] = [
+  {
+    id: 'first-epss', name: 'FIRST EPSS Score', provider: 'FIRST.org', category: 'Developer',
+    description: 'Look up a CVE\'s Exploit Prediction Scoring System probability and percentile of real-world exploitation.',
+    documentationUrl: 'https://www.first.org/epss/api', accent: '#b42318', monogram: 'EPS', risk: 'Review',
+    usageNote: 'EPSS is a probability estimate, not a guarantee of exploitation. Use alongside CVSS and CISA KEV status.',
+    fields: [{ id: 'cve', label: 'CVE identifier', type: 'text', defaultValue: 'CVE-2021-44228', placeholder: 'e.g. CVE-2021-44228', help: 'Enter a published CVE identifier (e.g. the Log4Shell CVE).' }],
+    buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://api.first.org/data/v1/epss?${new URLSearchParams({ cve: cve.trim() || 'CVE-2021-44228' }).toString()}`,
+  },
+  {
+    id: 'endoflife-date', name: 'endoflife.date Lifecycle', provider: 'endoflife.date', category: 'Developer',
+    description: 'Check release, support, and end-of-life dates for popular software products and runtimes.',
+    documentationUrl: 'https://endoflife.date/docs/api/v1/', accent: '#0f766e', monogram: 'EOL',
+    fields: [{ id: 'product', label: 'Product', type: 'select', defaultValue: 'nodejs', help: 'Choose a tracked product.', options: [
+      { label: 'Node.js', value: 'nodejs' }, { label: 'Python', value: 'python' }, { label: 'PostgreSQL', value: 'postgresql' },
+      { label: 'Ubuntu', value: 'ubuntu' }, { label: 'PHP', value: 'php' }, { label: 'Java (OpenJDK)', value: 'java' },
+    ] }],
+    buildUrl: ({ product = 'nodejs' }) => `https://endoflife.date/api/v1/products/${encode(product || 'nodejs')}`,
+  },
+  {
+    id: 'deps-dev', name: 'deps.dev Package Insights', provider: 'Google Open Source Insights', category: 'Developer',
+    description: 'Inspect a package\'s published versions, dependencies, licenses, and security advisories across ecosystems.',
+    documentationUrl: 'https://docs.deps.dev/api/v3/', accent: '#4285f4', monogram: 'DD',
+    fields: [
+      { id: 'system', label: 'Package ecosystem', type: 'select', defaultValue: 'npm', help: 'Choose a package system.', options: [
+        { label: 'npm', value: 'npm' }, { label: 'PyPI', value: 'pypi' }, { label: 'Maven', value: 'maven' }, { label: 'Go', value: 'go' }, { label: 'Cargo', value: 'cargo' },
+      ] },
+      { id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'react', placeholder: 'e.g. react', help: 'Enter a package name for the selected ecosystem.' },
+    ],
+    buildUrl: ({ system = 'npm', packageName = 'react' }) => `https://api.deps.dev/v3/systems/${encode(system || 'npm')}/packages/${encode(packageName || 'react')}`,
+  },
+  {
+    id: 'ecb-fx-rates', name: 'ECB Reference Rates', provider: 'European Central Bank', category: 'Finance',
+    description: 'Read official European Central Bank daily reference exchange rates against the euro.',
+    documentationUrl: 'https://data.ecb.europa.eu/help/api/overview', accent: '#003399', monogram: 'ECB',
+    fields: [
+      { id: 'currency', label: 'Currency', type: 'select', defaultValue: 'USD', help: 'Choose a currency quoted against EUR.', options: [
+        { label: 'US Dollar', value: 'USD' }, { label: 'British Pound', value: 'GBP' }, { label: 'Japanese Yen', value: 'JPY' }, { label: 'Swiss Franc', value: 'CHF' }, { label: 'Singapore Dollar', value: 'SGD' },
+      ] },
+      { id: 'observations', label: 'History points', type: 'number', defaultValue: '30', min: 5, max: 90, help: 'Return between 5 and 90 recent daily observations.' },
+    ],
+    buildUrl: ({ currency = 'USD', observations = '30' }) => {
+      const safeObservations = Math.min(90, Math.max(5, Number.parseInt(observations, 10) || 30))
+      return `https://data-api.ecb.europa.eu/service/data/EXR/D.${encode(currency || 'USD')}.EUR.SP00.A?${new URLSearchParams({ format: 'jsondata', lastNObservations: String(safeObservations) }).toString()}`
+    },
+  },
+  {
+    id: 'un-sdg-goals', name: 'UN Sustainable Development Goals', provider: 'United Nations Statistics Division', category: 'Government',
+    description: 'Browse the official list of United Nations Sustainable Development Goals with descriptions.',
+    documentationUrl: 'https://unstats.un.org/SDGAPI/swagger/', accent: '#1cabe2', monogram: 'SDG',
+    fields: [],
+    buildUrl: () => 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List',
+  },
+  {
+    id: 'datacite-search', name: 'DataCite DOI Search', provider: 'DataCite', category: 'Research',
+    description: 'Search DOI records for research datasets, software, preprints, and publications.',
+    documentationUrl: 'https://support.datacite.org/docs/api', accent: '#00b1e2', monogram: 'DC',
+    fields: [
+      { id: 'query', label: 'Research query', type: 'text', defaultValue: 'climate change', placeholder: 'e.g. climate change', help: 'Search DataCite-indexed titles and metadata.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 DOI records.' },
+    ],
+    buildUrl: ({ query = 'climate change', count = '5' }) => {
+      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 5))
+      return `https://api.datacite.org/dois?${new URLSearchParams({ query: query.trim() || 'climate change', 'page[size]': String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'ror-search', name: 'ROR Organization Registry', provider: 'Research Organization Registry', category: 'Research',
+    description: 'Look up standardized identifiers, names, locations, and links for universities and research institutions.',
+    documentationUrl: 'https://ror.readme.io/docs/rest-api', accent: '#1a4cb3', monogram: 'ROR',
+    fields: [{ id: 'query', label: 'Organization search', type: 'text', defaultValue: 'stanford', placeholder: 'e.g. stanford', help: 'Search research organization names.' }],
+    buildUrl: ({ query = 'stanford' }) => `https://api.ror.org/v2/organizations?${new URLSearchParams({ query: query.trim() || 'stanford' }).toString()}`,
+  },
+  {
+    id: 'celestrak-satellites', name: 'CelesTrak Satellite Tracker', provider: 'CelesTrak', category: 'Geo',
+    description: 'Browse orbital elements for the ISS, Starlink, GPS, and other active satellite groups.',
+    documentationUrl: 'https://celestrak.org/NORAD/documentation/gp-data-formats.php', accent: '#111827', monogram: 'SAT',
+    usageNote: 'CelesTrak refreshes group data roughly every two hours; avoid frequent automated polling.',
+    fields: [{ id: 'group', label: 'Satellite group', type: 'select', defaultValue: 'stations', help: 'Choose a tracked satellite group.', options: [
+      { label: 'Space stations', value: 'stations' }, { label: 'Starlink', value: 'starlink' }, { label: 'GPS operational', value: 'gps-ops' }, { label: 'Active satellites', value: 'active' },
+    ] }],
+    buildUrl: ({ group = 'stations' }) => `https://celestrak.org/NORAD/elements/gp.php?${new URLSearchParams({ GROUP: group || 'stations', FORMAT: 'json' }).toString()}`,
+  },
+  {
+    id: 'musicbrainz-artist-search', name: 'MusicBrainz Artist Search', provider: 'MusicBrainz', category: 'Entertainment',
+    description: 'Search the MusicBrainz open music encyclopedia for artists, origin, type, and active years.',
+    documentationUrl: 'https://musicbrainz.org/doc/MusicBrainz_API', accent: '#ba478f', monogram: 'MB',
+    usageNote: 'Browsers cannot set a custom User-Agent header; keep request volume light and non-commercial per MusicBrainz terms.',
+    fields: [{ id: 'query', label: 'Artist search', type: 'text', defaultValue: 'queen', placeholder: 'e.g. queen', help: 'Search MusicBrainz artist names.' }],
+    buildUrl: ({ query = 'queen' }) => `https://musicbrainz.org/ws/2/artist/?${new URLSearchParams({ query: query.trim() || 'queen', fmt: 'json' }).toString()}`,
+  },
+  {
+    id: 'cleveland-museum-search', name: 'Cleveland Museum Open Access', provider: 'The Cleveland Museum of Art', category: 'Media',
+    description: 'Search artwork records with high-resolution images released under the museum\'s open-access CC0 program.',
+    documentationUrl: 'https://www.clevelandart.org/open-access-api', accent: '#8b1d3f', monogram: 'CMA',
+    fields: [
+      { id: 'query', label: 'Artwork search', type: 'text', defaultValue: 'monet', placeholder: 'e.g. monet', help: 'Search artwork titles, artists, or subjects.' },
+      { id: 'limit', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 artworks.' },
+    ],
+    buildUrl: ({ query = 'monet', limit = '6' }) => {
+      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 6))
+      return `https://openaccess-api.clevelandart.org/api/artworks?${new URLSearchParams({ q: query.trim() || 'monet', limit: String(safeLimit) }).toString()}`
+    },
+  },
+  {
+    id: 'scryfall-card-search', name: 'Scryfall Card Search', provider: 'Scryfall', category: 'Games',
+    description: 'Search Magic: The Gathering cards with mana cost, type, set, and full card artwork.',
+    documentationUrl: 'https://scryfall.com/docs/api', accent: '#f97316', monogram: 'MTG',
+    fields: [{ id: 'query', label: 'Card search', type: 'text', defaultValue: 'dragon', placeholder: 'e.g. dragon', help: 'Search card names, types, or rules text.' }],
+    buildUrl: ({ query = 'dragon' }) => `https://api.scryfall.com/cards/search?${new URLSearchParams({ q: query.trim() || 'dragon' }).toString()}`,
+  },
+  {
+    id: 'dnd5e-spell-lookup', name: 'D&D 5e Spell Lookup', provider: 'D&D 5e API', category: 'Games',
+    description: 'Look up a Dungeons & Dragons 5th edition spell with range, components, and effect description.',
+    documentationUrl: 'https://www.dnd5eapi.co/docs/', accent: '#7c2d12', monogram: 'DND',
+    fields: [{ id: 'spellIndex', label: 'Spell', type: 'text', defaultValue: 'fireball', placeholder: 'e.g. fireball', help: 'Enter a spell slug using lowercase and hyphens (e.g. magic-missile).' }],
+    buildUrl: ({ spellIndex = 'fireball' }) => `https://www.dnd5eapi.co/api/2014/spells/${encode(spellIndex || 'fireball').toLowerCase()}`,
+  },
+  {
+    id: 'qr-code-generator', name: 'QR Code Generator', provider: 'goQR.me', category: 'Utility',
+    description: 'Generate a scannable QR code image for any text or URL, entirely from a GET request.',
+    documentationUrl: 'https://goqr.me/api/', accent: '#111827', monogram: 'QR',
+    usageNote: 'The response body is a binary PNG image, not JSON; the raw response tab shows a placeholder summary instead.',
+    fields: [
+      { id: 'data', label: 'Text or URL', type: 'text', defaultValue: 'https://example.com', placeholder: 'e.g. https://example.com', help: 'Enter the text or URL to encode.' },
+      { id: 'size', label: 'Image size', type: 'select', defaultValue: '200x200', help: 'Choose the output image dimensions.', options: [{ label: '150 × 150', value: '150x150' }, { label: '200 × 200', value: '200x200' }, { label: '300 × 300', value: '300x300' }] },
+    ],
+    buildUrl: ({ data = 'https://example.com', size = '200x200' }) => `https://api.qrserver.com/v1/create-qr-code/?${new URLSearchParams({ data: data.trim() || 'https://example.com', size: size || '200x200' }).toString()}`,
+    parseResponse: (text) => ({ note: 'Binary PNG image response — see the rendered QR code below.', approximateBytes: text.length }),
+  },
+  {
+    id: 'where-the-iss-at', name: 'Where The ISS At', provider: 'Where The ISS At', category: 'Geo',
+    description: 'Track the International Space Station\'s current latitude, longitude, altitude, and velocity.',
+    documentationUrl: 'https://wheretheiss.at/w/developer', accent: '#0ea5e9', monogram: 'ISS',
+    fields: [],
+    buildUrl: () => 'https://api.wheretheiss.at/v1/satellites/25544',
+  },
+]
+
+const verifiedThirdExpansionApis: ApiDemo[] = [
+  {
+    id: 'eurostat-population', name: 'Eurostat Population Statistics', provider: 'Eurostat', category: 'Economy',
+    description: 'Read official European Union population figures by country and year from Eurostat.',
+    documentationUrl: 'https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access/api-getting-started', accent: '#003399', monogram: 'EU',
+    fields: [
+      { id: 'country', label: 'Country', type: 'select', defaultValue: 'DE', help: 'Choose an EU member state.', options: [
+        { label: 'Germany', value: 'DE' }, { label: 'France', value: 'FR' }, { label: 'Italy', value: 'IT' }, { label: 'Spain', value: 'ES' }, { label: 'Netherlands', value: 'NL' },
+      ] },
+      { id: 'year', label: 'Reference year', type: 'number', defaultValue: '2023', min: 2010, max: 2023, help: 'Choose a year between 2010 and 2023.' },
+    ],
+    buildUrl: ({ country = 'DE', year = '2023' }) => {
+      const safeYear = Math.min(2023, Math.max(2010, Number.parseInt(year, 10) || 2023))
+      return `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?${new URLSearchParams({ format: 'JSON', geo: country || 'DE', sex: 'T', age: 'TOTAL', time: String(safeYear) }).toString()}`
+    },
+  },
+  {
+    id: 'bls-timeseries', name: 'BLS Labor Statistics', provider: 'U.S. Bureau of Labor Statistics', category: 'Economy',
+    description: 'Read official U.S. economic time series including unemployment rate and consumer price index.',
+    documentationUrl: 'https://www.bls.gov/developers/api_signature_v2.htm', accent: '#005ea2', monogram: 'BLS',
+    fields: [{ id: 'seriesId', label: 'Series', type: 'select', defaultValue: 'LNS14000000', help: 'Choose a tracked BLS time series.', options: [
+      { label: 'Unemployment rate', value: 'LNS14000000' }, { label: 'CPI — all items', value: 'CUUR0000SA0' }, { label: 'CPI — food', value: 'CUUR0000SAF1' },
+    ] }],
+    buildUrl: ({ seriesId = 'LNS14000000' }) => `https://api.bls.gov/publicAPI/v2/timeseries/data/${encode(seriesId || 'LNS14000000')}`,
+  },
+  {
+    id: 'fema-disasters', name: 'FEMA Disaster Declarations', provider: 'FEMA OpenFEMA', category: 'Government',
+    description: 'Browse recent United States federal disaster declarations by state and incident type.',
+    documentationUrl: 'https://www.fema.gov/about/openfema/api', accent: '#1a4480', monogram: 'FEMA',
+    fields: [{ id: 'limit', label: 'Declarations', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 recent declarations.' }],
+    buildUrl: ({ limit = '5' }) => {
+      const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 5))
+      return `https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?${new URLSearchParams({ '$top': String(safeLimit), '$orderby': 'declarationDate desc' }).toString()}`
+    },
+  },
+  {
+    id: 'noaa-tides', name: 'NOAA Tides & Currents', provider: 'NOAA Tides and Currents', category: 'Weather',
+    description: 'Read the latest observed water level from a United States coastal tide station.',
+    documentationUrl: 'https://api.tidesandcurrents.noaa.gov/api/prod/', accent: '#0f6ba3', monogram: 'TIDE',
+    fields: [{ id: 'station', label: 'Tide station', type: 'select', defaultValue: '8518750', help: 'Choose a NOAA tide station.', options: [
+      { label: 'The Battery, NY', value: '8518750' }, { label: 'San Francisco, CA', value: '9414290' }, { label: 'Key West, FL', value: '8724580' },
+    ] }],
+    buildUrl: ({ station = '8518750' }) => `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?${new URLSearchParams({ station: station || '8518750', product: 'water_level', date: 'latest', datum: 'MLLW', units: 'metric', time_zone: 'gmt', format: 'json' }).toString()}`,
+  },
+  {
+    id: 'rdap-domain-lookup', name: 'RDAP Domain Lookup', provider: 'RDAP.org', category: 'Developer',
+    description: 'Look up a domain\'s registration status, registrar, nameservers, and key events using the modern WHOIS replacement.',
+    documentationUrl: 'https://about.rdap.org/', accent: '#111827', monogram: 'RDAP',
+    fields: [{ id: 'domain', label: 'Domain name', type: 'text', defaultValue: 'google.com', placeholder: 'e.g. google.com', help: 'Enter a registered domain name.' }],
+    buildUrl: ({ domain = 'google.com' }) => `https://rdap.org/domain/${encode(domain || 'google.com')}`,
+  },
+  {
+    id: 'languagetool-grammar-check', name: 'LanguageTool Grammar Check', provider: 'LanguageTool', category: 'Language',
+    description: 'Check English text for grammar, spelling, and style issues with rule-based suggestions.',
+    documentationUrl: 'https://languagetool.org/http-api/', accent: '#39a845', monogram: 'LT',
+    usageNote: 'Intended for interactive, human-driven checks. The free public service allows roughly 20 requests per minute.',
+    fields: [{ id: 'text', label: 'Text to check', type: 'text', defaultValue: 'This are a test.', placeholder: 'e.g. This are a test.', help: 'Enter a short English sentence to check.' }],
+    method: 'POST', bodyEncoding: 'form',
+    buildUrl: () => 'https://api.languagetool.org/v2/check',
+    buildBody: ({ text = 'This are a test.' }) => ({ text: text.trim() || 'This are a test.', language: 'en-US' }),
+  },
+  {
+    id: 'zenodo-search', name: 'Zenodo Research Records', provider: 'Zenodo', category: 'Research',
+    description: 'Search open-access papers, datasets, and software archived on Zenodo with DOIs and licenses.',
+    documentationUrl: 'https://developers.zenodo.org/', accent: '#1e3d59', monogram: 'ZEN',
+    fields: [
+      { id: 'query', label: 'Research query', type: 'text', defaultValue: 'climate', placeholder: 'e.g. climate', help: 'Search Zenodo record titles and metadata.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 records.' },
+    ],
+    buildUrl: ({ query = 'climate', count = '5' }) => {
+      const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 5))
+      return `https://zenodo.org/api/records?${new URLSearchParams({ q: query.trim() || 'climate', size: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'doaj-search', name: 'DOAJ Open Access Articles', provider: 'Directory of Open Access Journals', category: 'Research',
+    description: 'Search fully open-access journal articles with authors, journal, and identifiers.',
+    documentationUrl: 'https://doaj.org/api/docs', accent: '#f68212', monogram: 'DOAJ',
+    fields: [
+      { id: 'query', label: 'Article search', type: 'text', defaultValue: 'climate', placeholder: 'e.g. climate', help: 'Search open-access article titles and metadata.' },
+      { id: 'pageSize', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 articles.' },
+    ],
+    buildUrl: ({ query = 'climate', pageSize = '5' }) => {
+      const safePageSize = Math.min(10, Math.max(1, Number.parseInt(pageSize, 10) || 5))
+      return `https://doaj.org/api/search/articles/${encode(query.trim() || 'climate')}?${new URLSearchParams({ pageSize: String(safePageSize) }).toString()}`
+    },
+  },
+  {
+    id: 'pubchem-compound', name: 'PubChem Compound Lookup', provider: 'PubChem', category: 'Research',
+    description: 'Look up a chemical compound\'s molecular formula, weight, and IUPAC name by common name.',
+    documentationUrl: 'https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest-tutorial', accent: '#2e6da4', monogram: 'PUB',
+    fields: [{ id: 'name', label: 'Compound name', type: 'text', defaultValue: 'aspirin', placeholder: 'e.g. aspirin', help: 'Enter a common chemical or drug name.' }],
+    buildUrl: ({ name = 'aspirin' }) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encode(name || 'aspirin')}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`,
+  },
+  {
+    id: 'chembl-molecule', name: 'ChEMBL Molecule Profile', provider: 'ChEMBL', category: 'Health', risk: 'Review',
+    description: 'Inspect bioactivity-relevant molecule data including approval status, properties, and classifications.',
+    documentationUrl: 'https://www.ebi.ac.uk/chembl/api/data/docs', accent: '#6a1b9a', monogram: 'CHM',
+    usageNote: 'For research and education demonstrations only. Not a substitute for clinical or regulatory drug information.',
+    fields: [{ id: 'chemblId', label: 'ChEMBL ID', type: 'text', defaultValue: 'CHEMBL25', placeholder: 'e.g. CHEMBL25', help: 'Enter a ChEMBL molecule identifier (CHEMBL25 is aspirin).' }],
+    buildUrl: ({ chemblId = 'CHEMBL25' }) => `https://www.ebi.ac.uk/chembl/api/data/molecule/${encode(chemblId || 'CHEMBL25')}.json`,
+  },
+  {
+    id: 'uniprot-protein', name: 'UniProt Protein Lookup', provider: 'UniProt', category: 'Research',
+    description: 'Look up a protein\'s function, organism, gene, and annotation score by accession number.',
+    documentationUrl: 'https://www.uniprot.org/help/api_queries', accent: '#00639c', monogram: 'UNI',
+    fields: [{ id: 'accession', label: 'UniProt accession', type: 'text', defaultValue: 'P05067', placeholder: 'e.g. P05067', help: 'Enter a UniProtKB accession number.' }],
+    buildUrl: ({ accession = 'P05067' }) => `https://rest.uniprot.org/uniprotkb/${encode(accession || 'P05067')}.json`,
+  },
+  {
+    id: 'rcsb-pdb-entry', name: 'RCSB Protein Data Bank Entry', provider: 'RCSB PDB', category: 'Research',
+    description: 'Inspect a solved protein structure\'s experimental method, authors, and publication details.',
+    documentationUrl: 'https://data.rcsb.org/index.html', accent: '#4a4a4a', monogram: 'PDB',
+    fields: [{ id: 'entryId', label: 'PDB entry ID', type: 'text', defaultValue: '4HHB', placeholder: 'e.g. 4HHB', help: 'Enter a four-character PDB structure identifier.' }],
+    buildUrl: ({ entryId = '4HHB' }) => `https://data.rcsb.org/rest/v1/core/entry/${encode(entryId || '4HHB').toUpperCase()}`,
+  },
+  {
+    id: 'ensembl-gene-lookup', name: 'Ensembl Gene Lookup', provider: 'Ensembl', category: 'Research',
+    description: 'Look up a human gene\'s genomic location, biotype, and description by Ensembl identifier.',
+    documentationUrl: 'https://rest.ensembl.org/documentation/info/lookup', accent: '#7a1fa2', monogram: 'ENS',
+    fields: [{ id: 'geneId', label: 'Ensembl gene ID', type: 'text', defaultValue: 'ENSG00000157764', placeholder: 'e.g. ENSG00000157764', help: 'Enter an Ensembl gene identifier (default is BRAF).' }],
+    buildUrl: ({ geneId = 'ENSG00000157764' }) => `https://rest.ensembl.org/lookup/id/${encode(geneId || 'ENSG00000157764')}?${new URLSearchParams({ 'content-type': 'application/json' }).toString()}`,
+  },
+  {
+    id: 'obis-marine-occurrences', name: 'OBIS Marine Occurrences', provider: 'Ocean Biodiversity Information System', category: 'Biodiversity',
+    description: 'Search real recorded occurrences of marine species by scientific name across global datasets.',
+    documentationUrl: 'https://api.obis.org/', accent: '#0b6e99', monogram: 'OBIS',
+    fields: [
+      { id: 'scientificName', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', help: 'Enter a marine species scientific name.' },
+      { id: 'size', label: 'Occurrences', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 occurrence records.' },
+    ],
+    buildUrl: ({ scientificName = 'Delphinus delphis', size = '5' }) => {
+      const safeSize = Math.min(10, Math.max(1, Number.parseInt(size, 10) || 5))
+      return `https://api.obis.org/v3/occurrence?${new URLSearchParams({ scientificname: scientificName.trim() || 'Delphinus delphis', size: String(safeSize) }).toString()}`
+    },
+  },
+  {
+    id: 'worms-species-lookup', name: 'WoRMS Marine Species Registry', provider: 'World Register of Marine Species', category: 'Biodiversity',
+    description: 'Look up the accepted taxonomy, rank, and authority for a marine species name.',
+    documentationUrl: 'https://www.marinespecies.org/rest/', accent: '#0e7c86', monogram: 'WMS',
+    fields: [{ id: 'name', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', help: 'Enter a marine species scientific name.' }],
+    buildUrl: ({ name = 'Delphinus delphis' }) => `https://www.marinespecies.org/rest/AphiaRecordsByName/${encode(name || 'Delphinus delphis')}?${new URLSearchParams({ like: 'false' }).toString()}`,
+  },
+  {
+    id: 'paleobiodb-taxa', name: 'Paleobiology Database Taxa', provider: 'Paleobiology Database', category: 'Nature',
+    description: 'Look up a fossil taxon\'s rank, extinction status, and number of recorded occurrences.',
+    documentationUrl: 'https://paleobiodb.org/data1.2/', accent: '#7a5230', monogram: 'PBDB',
+    fields: [{ id: 'name', label: 'Taxon name', type: 'text', defaultValue: 'Tyrannosaurus', placeholder: 'e.g. Tyrannosaurus', help: 'Enter a genus or species name.' }],
+    buildUrl: ({ name = 'Tyrannosaurus' }) => `https://paleobiodb.org/data1.2/taxa/list.json?${new URLSearchParams({ name: name.trim() || 'Tyrannosaurus', vocab: 'pbdb' }).toString()}`,
+  },
+  {
+    id: 'usgs-water-legacy', name: 'USGS Water Data (Legacy)', provider: 'U.S. Geological Survey', category: 'Environment', risk: 'Review',
+    description: 'Read the latest river gauge measurement from a United States water monitoring site.',
+    documentationUrl: 'https://waterservices.usgs.gov/', accent: '#00264c', monogram: 'USGS',
+    usageNote: 'This legacy USGS water service is scheduled for retirement in early 2027; migrate to the newer Water Data APIs when available.',
+    fields: [{ id: 'site', label: 'Monitoring site', type: 'text', defaultValue: '01646500', placeholder: 'e.g. 01646500', help: 'Enter a USGS site number (default is the Potomac River near Washington, D.C.).' }],
+    buildUrl: ({ site = '01646500' }) => `https://waterservices.usgs.gov/nwis/iv/?${new URLSearchParams({ sites: site.trim() || '01646500', format: 'json', siteStatus: 'all' }).toString()}`,
+  },
+  {
+    id: 'crates-io-search', name: 'crates.io Package Lookup', provider: 'crates.io', category: 'Developer',
+    description: 'Inspect a Rust crate\'s latest version, downloads, license, and repository links.',
+    documentationUrl: 'https://crates.io/data-access', accent: '#f74c00', monogram: 'RS',
+    fields: [{ id: 'crateName', label: 'Crate name', type: 'text', defaultValue: 'serde', placeholder: 'e.g. serde', help: 'Enter a published crates.io package name.' }],
+    buildUrl: ({ crateName = 'serde' }) => `https://crates.io/api/v1/crates/${encode(crateName || 'serde')}`,
+  },
+  {
+    id: 'rubygems-lookup', name: 'RubyGems Package Lookup', provider: 'RubyGems.org', category: 'Developer',
+    description: 'Inspect a Ruby gem\'s latest version, downloads, authors, and license.',
+    documentationUrl: 'https://guides.rubygems.org/rubygems-org-api/', accent: '#e9573f', monogram: 'GEM',
+    fields: [{ id: 'gemName', label: 'Gem name', type: 'text', defaultValue: 'rails', placeholder: 'e.g. rails', help: 'Enter a published RubyGems package name.' }],
+    buildUrl: ({ gemName = 'rails' }) => `https://rubygems.org/api/v1/gems/${encode(gemName || 'rails')}.json`,
+  },
+  {
+    id: 'nuget-package-lookup', name: 'NuGet Package Lookup', provider: 'NuGet Gallery', category: 'Developer',
+    description: 'Browse a .NET package\'s published version history from the NuGet registration catalog.',
+    documentationUrl: 'https://learn.microsoft.com/nuget/api/overview', accent: '#004880', monogram: 'NUG',
+    usageNote: 'Very actively maintained packages paginate their version history externally; this demo reads only the most recent inline page.',
+    fields: [{ id: 'packageId', label: 'Package ID', type: 'text', defaultValue: 'newtonsoft.json', placeholder: 'e.g. newtonsoft.json', help: 'Enter a published NuGet package identifier.' }],
+    buildUrl: ({ packageId = 'newtonsoft.json' }) => `https://api.nuget.org/v3/registration5-semver1/${encode((packageId || 'newtonsoft.json').toLowerCase())}/index.json`,
+  },
+  {
+    id: 'internet-archive-search', name: 'Internet Archive Search', provider: 'Internet Archive', category: 'Media',
+    description: 'Search millions of archived books, audio, video, and software items with cover thumbnails.',
+    documentationUrl: 'https://archive.org/advancedsearch.php', accent: '#0b3c5d', monogram: 'IA',
+    fields: [
+      { id: 'query', label: 'Search term', type: 'text', defaultValue: 'singapore', placeholder: 'e.g. singapore', help: 'Search titles and descriptions across the archive.' },
+      { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'texts', help: 'Filter by archived media type.', options: [{ label: 'Texts & books', value: 'texts' }, { label: 'Audio', value: 'audio' }, { label: 'Movies', value: 'movies' }, { label: 'Software', value: 'software' }] },
+    ],
+    buildUrl: ({ query = 'singapore', mediaType = 'texts' }) => {
+      const params = new URLSearchParams({ q: `${query.trim() || 'singapore'} AND mediatype:${mediaType || 'texts'}`, rows: '6', output: 'json' })
+      params.append('fl[]', 'identifier'); params.append('fl[]', 'title'); params.append('fl[]', 'creator'); params.append('fl[]', 'date')
+      return `https://archive.org/advancedsearch.php?${params.toString()}`
+    },
+  },
+  {
+    id: 'ipwhois-lookup', name: 'IPWhoIs Geolocation', provider: 'ipwho.is', category: 'Developer',
+    description: 'Look up an IP address\'s country, region, city, timezone, and network provider.',
+    documentationUrl: 'https://ipwho.is/documentation', accent: '#0f766e', monogram: 'GEO',
+    usageNote: 'IP-based geolocation is approximate and reflects the network provider, not a precise personal address.',
+    fields: [{ id: 'ip', label: 'IP address', type: 'text', defaultValue: '8.8.8.8', placeholder: 'e.g. 8.8.8.8', help: 'Enter a public IPv4 or IPv6 address.' }],
+    buildUrl: ({ ip = '8.8.8.8' }) => `https://ipwho.is/${encode(ip || '8.8.8.8')}`,
+  },
+  {
+    id: 'newton-math-solver', name: 'Newton Math Solver', provider: 'Newton API', category: 'Knowledge',
+    description: 'Simplify, factor, derive, or solve a mathematical expression for education demos.',
+    documentationUrl: 'https://newton.vercel.app/', accent: '#4c1d95', monogram: 'MATH', risk: 'Review',
+    usageNote: 'A community-maintained service; treat as an education demo rather than a guaranteed-uptime dependency.',
+    fields: [
+      { id: 'operation', label: 'Operation', type: 'select', defaultValue: 'simplify', help: 'Choose a math operation.', options: [
+        { label: 'Simplify', value: 'simplify' }, { label: 'Factor', value: 'factor' }, { label: 'Derive', value: 'derive' }, { label: 'Zeroes', value: 'zeroes' },
+      ] },
+      { id: 'expression', label: 'Expression', type: 'text', defaultValue: '2x+2x', placeholder: 'e.g. 2x+2x', help: 'Use ^ for powers and avoid spaces.' },
+    ],
+    buildUrl: ({ operation = 'simplify', expression = '2x+2x' }) => `https://newton.now.sh/api/v2/${encode(operation || 'simplify')}/${encode(expression || '2x+2x')}`,
+  },
+  {
+    id: 'gutendex-books', name: 'Gutendex Book Search', provider: 'Gutendex (Project Gutenberg)', category: 'Books',
+    description: 'Search public-domain books with authors, subjects, languages, and download formats.',
+    documentationUrl: 'https://gutendex.com/', accent: '#5a3e2b', monogram: 'PG',
+    fields: [{ id: 'search', label: 'Book search', type: 'text', defaultValue: 'shakespeare', placeholder: 'e.g. shakespeare', help: 'Search public-domain book titles and authors.' }],
+    buildUrl: ({ search = 'shakespeare' }) => `https://gutendex.com/books?${new URLSearchParams({ search: search.trim() || 'shakespeare' }).toString()}`,
+  },
+  {
+    id: 'datamuse-rhymes', name: 'Datamuse Word Finder', provider: 'Datamuse', category: 'Language',
+    description: 'Find rhymes, related words, and spelling suggestions using the Datamuse word-relations engine.',
+    documentationUrl: 'https://www.datamuse.com/api/', accent: '#be185d', monogram: 'DTM',
+    fields: [{ id: 'word', label: 'Word to rhyme with', type: 'text', defaultValue: 'orange', placeholder: 'e.g. orange', help: 'Enter a word to find rhyming matches.' }],
+    buildUrl: ({ word = 'orange' }) => `https://api.datamuse.com/words?${new URLSearchParams({ rel_rhy: word.trim() || 'orange' }).toString()}`,
+  },
+  {
+    id: 'open5e-monster-search', name: 'Open5e Monster Search', provider: 'Open5e', category: 'Games',
+    description: 'Search open-license tabletop RPG monsters with stat blocks, hit points, and armor class.',
+    documentationUrl: 'https://open5e.com/api-docs', accent: '#166534', monogram: 'O5E',
+    fields: [{ id: 'search', label: 'Monster search', type: 'text', defaultValue: 'dragon', placeholder: 'e.g. dragon', help: 'Search open-license monster names.' }],
+    buildUrl: ({ search = 'dragon' }) => `https://api.open5e.com/v1/monsters/?${new URLSearchParams({ search: search.trim() || 'dragon' }).toString()}`,
+  },
+  {
+    id: 'dicebear-avatar', name: 'DiceBear Avatar Generator', provider: 'DiceBear', category: 'Utility',
+    description: 'Generate a deterministic SVG avatar from any seed text, useful for prototype user profiles.',
+    documentationUrl: 'https://www.dicebear.com/', accent: '#f97316', monogram: 'AVA',
+    fields: [
+      { id: 'style', label: 'Avatar style', type: 'select', defaultValue: 'identicon', help: 'Choose a DiceBear avatar style.', options: [
+        { label: 'Identicon', value: 'identicon' }, { label: 'Bottts', value: 'bottts' }, { label: 'Pixel art', value: 'pixel-art' }, { label: 'Thumbs', value: 'thumbs' },
+      ] },
+      { id: 'seed', label: 'Seed text', type: 'text', defaultValue: 'test', placeholder: 'e.g. test', help: 'Any text seed deterministically generates the same avatar.' },
+    ],
+    buildUrl: ({ style = 'identicon', seed = 'test' }) => `https://api.dicebear.com/9.x/${encode(style || 'identicon')}/svg?${new URLSearchParams({ seed: seed.trim() || 'test' }).toString()}`,
+    parseResponse: (text) => ({ note: 'Raw SVG image response — see the rendered avatar below.', approximateBytes: text.length }),
+  },
+  {
+    id: 'catfacts', name: 'Cat Facts Generator', provider: 'Cat Facts API', category: 'Nature',
+    description: 'Generate a random, bite-sized fact about cats for lightweight content demos.',
+    documentationUrl: 'https://catfact.ninja/', accent: '#ea580c', monogram: 'CAT',
+    fields: [],
+    buildUrl: () => 'https://catfact.ninja/fact',
+  },
+  {
+    id: 'randomfox-photo', name: 'Random Fox Photo', provider: 'randomfox.ca', category: 'Nature',
+    description: 'Fetch a random fox photograph, a lighter alternative to the existing dog photo gallery.',
+    documentationUrl: 'https://randomfox.ca/', accent: '#c2410c', monogram: 'FOX',
+    fields: [],
+    buildUrl: () => 'https://randomfox.ca/floof',
+  },
+]
+
+export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis, ...verifiedExpansionApis, ...verifiedSecondExpansionApis, ...verifiedThirdExpansionApis]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))
