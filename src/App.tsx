@@ -94,12 +94,14 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   const body = api.buildBody?.(parameters)
   const isForm = api.bodyEncoding === 'form'
   const started = performance.now()
+  const requestHeaders = {
+    Accept: 'application/json',
+    ...(api.headers ?? {}),
+    ...(body === undefined ? {} : { 'Content-Type': isForm ? 'application/x-www-form-urlencoded' : 'application/json' }),
+  }
   const response = await fetch(url, {
     method,
-    headers: {
-      Accept: 'application/json',
-      ...(body === undefined ? {} : { 'Content-Type': isForm ? 'application/x-www-form-urlencoded' : 'application/json' }),
-    },
+    headers: requestHeaders,
     ...(body === undefined ? {} : { body: isForm ? new URLSearchParams(body as Record<string, string>).toString() : JSON.stringify(body) }),
   })
   const text = await response.text()
@@ -119,9 +121,18 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
   const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
   const isForm = api.bodyEncoding === 'form'
+  const sampleHeaders = JSON.stringify(
+    {
+      Accept: 'application/json',
+      ...(api.headers ?? {}),
+      ...(body === undefined ? {} : { 'Content-Type': isForm ? 'application/x-www-form-urlencoded' : 'application/json' }),
+    },
+    null,
+    2,
+  ).slice(2, -2)
   const options = [
     `  method: '${method}',`,
-    `  headers: { Accept: 'application/json'${body === undefined ? '' : isForm ? ", 'Content-Type': 'application/x-www-form-urlencoded'" : ", 'Content-Type': 'application/json'"} },`,
+    `  headers: { ${sampleHeaders} },`,
     ...(body === undefined ? [] : isForm ? [`  body: new URLSearchParams(${JSON.stringify(body)}).toString(),`] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
   ].join('\n')
   const parse = api.parseResponse

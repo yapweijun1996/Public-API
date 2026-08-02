@@ -60,6 +60,7 @@ export type ApiDemo = {
   method?: 'GET' | 'POST'
   buildBody?: (parameters: Record<string, string>) => unknown
   bodyEncoding?: 'json' | 'form'
+  headers?: Record<string, string>
   parseResponse?: (text: string) => unknown
   risk?: 'Low' | 'Review'
   usageNote?: string
@@ -531,7 +532,7 @@ const importedRecommendedApis: ApiDemo[] = [
     id: 'hacker-news', name: 'Hacker News API', provider: 'Y Combinator', category: 'Developer',
     description: 'Load a public Hacker News item and its metadata from Firebase.',
     documentationUrl: 'https://github.com/HackerNews/API', endpoint: 'https://hacker-news.firebaseio.com/v0/item/8863.json?print=pretty',
-    accent: '#f97316', monogram: 'HN',
+    accent: '#f97316', monogram: 'HNR',
   }),
   fixedApi({
     id: 'ipify-public-ip', name: 'ipify Public IP', provider: 'ipify', category: 'Developer',
@@ -1049,6 +1050,276 @@ const verifiedKeylessApis: ApiDemo[] = [
     buildUrl: ({ season = '2025', country = 'Singapore' }) => `https://api.openf1.org/v1/sessions?${new URLSearchParams({ year: season || '2025', country_name: country || 'Singapore', session_name: 'Race' }).toString()}`,
   },
   {
+    id: 'packagist-search', name: 'Packagist Package Search', provider: 'Packagist', category: 'Developer',
+    description: 'Search Composer packages for metadata, stars, licenses, and source links.',
+    documentationUrl: 'https://packagist.org/apidoc', accent: '#4f46e5', monogram: 'PKG',
+    usageNote: 'Composer package records are keyless and community maintained. Keep automated crawls to a minimum.',
+    fields: [
+      queryField({ label: 'Package search', defaultValue: 'react', placeholder: 'e.g. react', help: 'Search package names and descriptions.' }),
+      limitField({ label: 'Packages', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 package records.' }),
+    ],
+    buildUrl: ({ query = 'react', count = '8' }) => {
+      const safeCount = clampInt(count, 1, 20, 8)
+      return `https://packagist.org/search.json?${new URLSearchParams({ q: query.trim() || 'react', per_page: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'nhtsa-vehicle-recalls', name: 'NHTSA Vehicle Recalls', provider: 'NHTSA', category: 'Vehicle',
+    description: 'Search U.S. vehicle recall campaigns by make, model, and year.',
+    documentationUrl: 'https://www.nhtsa.gov/nhtsa-datasets-and-apis', accent: '#1f3fd4', monogram: 'NRC',
+    fields: [
+      { id: 'make', label: 'Vehicle make', type: 'text', defaultValue: 'honda', help: 'Use an American-style vehicle make such as Honda or Toyota.' },
+      { id: 'model', label: 'Vehicle model', type: 'text', defaultValue: 'accord', help: 'Use a model name supported by the selected manufacturer.' },
+      numberField('year', { label: 'Model year', defaultValue: '2020', min: 1949, max: localNow.getFullYear() + 1, help: 'Narrow by model year to reduce response size.' }),
+    ],
+    buildUrl: ({ make = 'honda', model = 'accord', year = '2020' }) => {
+      const safeYear = clampInt(year, 1949, localNow.getFullYear() + 1, 2020)
+      const query = new URLSearchParams({
+        make: make.trim() || 'honda',
+        model: model.trim() || 'accord',
+        modelYear: String(safeYear),
+        format: 'json',
+      })
+      return `https://api.nhtsa.gov/recalls/recallsByVehicle?${query.toString()}`
+    },
+  },
+  {
+    id: 'anilist-graphql', name: 'AniList Media Search', provider: 'AniList', category: 'Entertainment',
+    description: 'Search anime and manga titles with status, year, score, formats, genres, and cover images.',
+    documentationUrl: 'https://docs.anilist.co/guide/auth/', accent: '#2e51a2', monogram: 'ANI', method: 'POST', risk: 'Review',
+    usageNote: 'AniList is public but may apply per-app usage controls. Keep calls burst-safe.',
+    fields: [
+      queryField({ label: 'Anime or manga search', defaultValue: 'Fullmetal Alchemist', placeholder: 'e.g. Fullmetal Alchemist', help: 'Search titles by English or romanized name.' }),
+      { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'ANIME', help: 'Search anime or manga media.', options: [{ label: 'Anime', value: 'ANIME' }, { label: 'Manga', value: 'MANGA' }] },
+      { id: 'page', label: 'Page', type: 'number', defaultValue: '1', min: 1, max: 10, help: 'Return page 1 to 10.' },
+      limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 records.' }),
+    ],
+    buildUrl: () => 'https://graphql.anilist.co',
+    buildBody: ({ query = 'Fullmetal Alchemist', mediaType = 'ANIME', page = '1', count = '6' }) => ({
+      query: `query ($search: String, $page: Int, $perPage: Int, $type: MediaType) {
+        Page(page: $page, perPage: $perPage) {
+          pageInfo {
+            total
+            perPage
+            currentPage
+            hasNextPage
+            hasPreviousPage
+          }
+          media(search: $search, type: $type, sort: POPULARITY_DESC) {
+            id
+            title { romaji english native }
+            format
+            status
+            type
+            episodes
+            startDate { year month day }
+            genres
+            averageScore
+            description(asHtml: false)
+            coverImage { medium large }
+          }
+        }
+      }`,
+      variables: {
+        search: query.trim() || 'Fullmetal Alchemist',
+        page: clampInt(page, 1, 10, 1),
+        perPage: clampInt(count, 1, 20, 6),
+        type: mediaType.toUpperCase() === 'MANGA' ? 'MANGA' : 'ANIME',
+      },
+    }),
+  },
+  {
+    id: 'openverse-search', name: 'Openverse Media Search', provider: 'Openverse', category: 'Media',
+    description: 'Search openly licensed images and audio by keyword, then reuse attribution-ready media results.',
+    documentationUrl: 'https://docs.openverse.org', accent: '#24b1e0', monogram: 'OVR',
+    usageNote: 'Always keep attribution and license text visible when presenting media.',
+    fields: [
+      queryField({ label: 'Media search', defaultValue: 'space', placeholder: 'e.g. moon', help: 'Search openly licensed media titles and descriptions.' }),
+      { id: 'contentType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Query images or audio separately.', options: [{ label: 'Images', value: 'image' }, { label: 'Audio', value: 'audio' }] },
+      limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 media records.' }),
+    ],
+    buildUrl: ({ query = 'space', contentType = 'image', count = '8' }) => {
+      const safeCount = clampInt(count, 1, 20, 8)
+      return `https://api.openverse.org/v1/${contentType === 'audio' ? 'audio' : 'images'}/?${new URLSearchParams({ q: query.trim() || 'space', page_size: String(safeCount), page: '1' }).toString()}`
+    },
+  },
+  {
+    id: 'apple-itunes-search', name: 'Apple iTunes Search', provider: 'Apple', category: 'Media',
+    description: 'Search music and media from iTunes, including songs, artists, albums, podcasts, and media previews.',
+    documentationUrl: 'https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/Searching.html',
+    accent: '#f4af3f', monogram: 'ITN',
+    usageNote: 'Honor Apple attribution and preview usage terms for artwork and sample clips.',
+    fields: [
+      queryField({ label: 'Search term', defaultValue: 'Beatles', placeholder: 'e.g. Beatles', help: 'Search across iTunes public indexes.' }),
+      { id: 'media', label: 'Media', type: 'select', defaultValue: 'music', help: 'Choose media category.', options: [{ label: 'Music', value: 'music' }, { label: 'Podcast', value: 'podcast' }] },
+      { id: 'entity', label: 'Entity', type: 'text', defaultValue: 'song', placeholder: 'e.g. song', help: 'Use iTunes entity filters such as song, album, musicArtist.' },
+      { id: 'country', label: 'Country', type: 'text', defaultValue: 'sg', placeholder: 'e.g. sg', help: 'Two-letter ISO country code for localized results.' },
+      limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 results.' }),
+    ],
+    buildUrl: ({ query = 'Beatles', media = 'music', entity = 'song', country = 'sg', count = '8' }) => {
+      const safeCount = clampInt(count, 1, 20, 8)
+      return `https://itunes.apple.com/search?${new URLSearchParams({
+        term: query.trim() || 'Beatles',
+        media: media.trim() || 'music',
+        entity: entity.trim() || 'song',
+        country: country.trim() || 'sg',
+        limit: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'hebcal-calendar', name: 'Hebcal Calendar', provider: 'Hebcal', category: 'Calendar',
+    description: 'Fetch Jewish holidays, observances, and date metadata across Gregorian or Hebrew calendars.',
+    documentationUrl: 'https://www.hebcal.com/home/developer-apis', accent: '#9f7aea', monogram: 'HB',
+    usageNote: 'Display license attribution where required for generated event and observance data.',
+    fields: [
+      { id: 'year', label: 'Hebrew year', type: 'number', defaultValue: '5786', min: 5700, max: 5800, help: 'Use a valid Hebrew year to center festival output.' },
+      { id: 'month', label: 'Month', type: 'number', defaultValue: '0', min: 0, max: 13, help: 'Use 0 for full-year results.' },
+      { id: 'type', label: 'Response mode', type: 'select', defaultValue: 'h', help: 'Return Jewish events in holiday-only or full daily mode.',
+        options: [{ label: 'Hebrew month mode', value: 'h' }, { label: 'Holiday mode', value: 'h1' }, { label: 'Public events', value: 'h2' }, { label: 'Daily events', value: 'd' }],
+      },
+    ],
+    buildUrl: ({ year = '5786', month = '0', type = 'h' }) => `https://www.hebcal.com/hebcal/?${new URLSearchParams({
+      v: '1', cfg: 'json', year: String(clampInt(year, 5700, 5800, 5786)),
+      month: String(clampInt(month, 0, 13, 0)),
+      h: 'on',
+      s: 'on',
+      type,
+      ny: 'on',
+      ns: 'on',
+    }).toString()}`,
+  },
+  {
+    id: 'aladhan-prayer-times', name: 'AlAdhan Prayer Times', provider: 'Al-Adhan', category: 'Calendar',
+    description: 'Return prayer timings, Hijri date metadata, and calculation data from coordinates.',
+    documentationUrl: 'https://aladhan.com/prayer-times-api', accent: '#5a6ee1', monogram: 'ADH',
+    usageNote: 'Use the coordinate endpoint with Method 11 for this catalog’s Singapore-style timing preset.',
+    fields: [
+      ...latLongFields({
+        latitude: { defaultValue: '1.3521', help: 'Use a valid WGS84 latitude from -90 to 90.' },
+        longitude: { defaultValue: '103.8198', help: 'Use a valid WGS84 longitude from -180 to 180.' },
+      }),
+      { id: 'method', label: 'Calculation method', type: 'number', defaultValue: '11', min: 0, max: 99, help: 'Method 11 is used in the catalog for Singapore-compatible timing behavior.' },
+      { id: 'date', label: 'Date', type: 'text', defaultValue: today, help: 'Use YYYY-MM-DD, today, or tomorrow.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', method = '11', date = today }) => {
+      const safeMethod = clampInt(method, 0, 99, 11)
+      return `https://api.aladhan.com/v1/timings/${encode((date || today).trim() || today)}?${new URLSearchParams({
+        latitude: latitude.trim() || '1.3521',
+        longitude: longitude.trim() || '103.8198',
+        method: String(safeMethod),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'jolpica-f1', name: 'Jolpica F1 Data', provider: 'Jolpica', category: 'Sports',
+    description: 'Load Formula 1 season data including races, drivers, and constructors from the Ergast-compatible Jolpica API.',
+    documentationUrl: 'https://github.com/jolpica/jolpica-f1/blob/main/docs/README.md', accent: '#e10600', monogram: 'JOL', risk: 'Review',
+    fields: [
+      { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose an F1 season.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
+      { id: 'dataset', label: 'Dataset', type: 'select', defaultValue: 'drivers', help: 'Pick a public F1 data table.', options: [{ label: 'Drivers', value: 'drivers' }, { label: 'Constructors', value: 'constructors' }, { label: 'Races', value: 'races' }] },
+      limitField({ label: 'Rows', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 rows.' }),
+    ],
+    buildUrl: ({ season = '2025', dataset = 'drivers', count = '8' }) => {
+      const safeCount = clampInt(count, 1, 30, 8)
+      const safeDataset = ['drivers', 'constructors', 'races'].includes(dataset) ? dataset : 'drivers'
+      return `https://api.jolpi.ca/ergast/f1/${season || '2025'}/${safeDataset}.json?${new URLSearchParams({ limit: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'hn-search-algolia', name: 'HN Search', provider: 'Algolia', category: 'News',
+    description: 'Search Hacker News stories and comments with scoring, points, and publication data.',
+    documentationUrl: 'https://hn.algolia.com/api', accent: '#ff6600', monogram: 'HN',
+    fields: [
+      queryField({ label: 'Search term', defaultValue: 'OpenAI', placeholder: 'e.g. OpenAI', help: 'Search public Hacker News posts and comments.' }),
+      { id: 'tag', label: 'Content type', type: 'select', defaultValue: 'story', help: 'Choose stories or comments.', options: [{ label: 'Stories', value: 'story' }, { label: 'Comments', value: 'comment' }, { label: 'Stories and comments', value: 'story,comment' }] },
+      limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 search hits.' }),
+    ],
+    buildUrl: ({ query = 'OpenAI', tag = 'story', count = '6' }) => {
+      const safeCount = clampInt(count, 1, 20, 6)
+      return `https://hn.algolia.com/api/v1/search?${new URLSearchParams({ query: query.trim() || 'OpenAI', tags: tag || 'story', hitsPerPage: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'bank-of-canada-valet', name: 'Bank of Canada Valet', provider: 'Bank of Canada', category: 'Finance',
+    description: 'Read official BOC observations such as USD/CAD and interest-rate series.',
+    documentationUrl: 'https://www.bankofcanada.ca/valet-api-how-to/', accent: '#0066cc', monogram: 'BOC', risk: 'Review',
+    fields: [
+      { id: 'series', label: 'Series', type: 'text', defaultValue: 'FXUSDCAD', placeholder: 'e.g. FXUSDCAD', help: 'Use a public Bank of Canada series code.' },
+      { id: 'startDate', label: 'Start date', type: 'text', defaultValue: compactDate(daysAgo(30)), placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
+      { id: 'endDate', label: 'End date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
+    ],
+    buildUrl: ({ series = 'FXUSDCAD', startDate = compactDate(daysAgo(30)), endDate = today }) => {
+      const safeStart = (startDate || compactDate(daysAgo(30))).replace(/\D/g, '')
+      const safeEnd = (endDate || today).replace(/\D/g, '')
+      return `https://www.bankofcanada.ca/valet/observations/${encode(series || 'FXUSDCAD')}/json?${new URLSearchParams({ start_date: safeStart, end_date: safeEnd }).toString()}`
+    },
+  },
+  {
+    id: 'swiss-transit-connections', name: 'Swiss Transit Connections', provider: 'Swiss Mobility', category: 'Utility',
+    description: 'Search Swiss public-transit connections by origin and destination with transfers and timing metadata.',
+    documentationUrl: 'https://transport.opendata.ch/docs.html', accent: '#009966', monogram: 'SCT',
+    fields: [
+      { id: 'from', label: 'Origin', type: 'text', defaultValue: 'Zurich', placeholder: 'e.g. Zurich', help: 'Enter a station or place name.' },
+      { id: 'to', label: 'Destination', type: 'text', defaultValue: 'Geneva', placeholder: 'e.g. Geneva', help: 'Enter a destination station or place name.' },
+      limitField({ label: 'Connections', defaultValue: '6', min: 1, max: 10, help: 'Return between 1 and 10 connections.' }),
+    ],
+    buildUrl: ({ from = 'Zurich', to = 'Geneva', count = '6' }) => {
+      const safeCount = clampInt(count, 1, 10, 6)
+      return `https://transport.opendata.ch/v1/connections?${new URLSearchParams({ from: from.trim() || 'Zurich', to: to.trim() || 'Geneva', limit: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'nasa-power-climate', name: 'NASA POWER Climate', provider: 'NASA POWER', category: 'Environment',
+    description: 'Fetch climate and weather variables such as temperature, humidity, solar radiation, and precipitation.',
+    documentationUrl: 'https://power.larc.nasa.gov/docs/', accent: '#0b3d91', monogram: 'PWR', risk: 'Review',
+    fields: [
+      ...latLongFields(),
+      { id: 'startDate', label: 'Start date', type: 'text', defaultValue: compactDate(daysAgo(30)), placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
+      { id: 'endDate', label: 'End date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
+      { id: 'parameters', label: 'Parameters', type: 'text', defaultValue: 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN', help: 'Comma-separated POWER parameter codes.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = compactDate(daysAgo(30)), endDate = today, parameters = 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN' }) => {
+      const safeStart = (startDate || compactDate(daysAgo(30))).replace(/\D/g, '')
+      const safeEnd = (endDate || today).replace(/\D/g, '')
+      return `https://power.larc.nasa.gov/api/temporal/daily/point?${new URLSearchParams({
+        parameters: parameters.trim() || 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN',
+        community: 'AG',
+        latitude,
+        longitude,
+        start: safeStart,
+        end: safeEnd,
+        format: 'JSON',
+      }).toString()}`
+    },
+  },
+  {
+    id: 'open-meteo-elevation', name: 'Open-Meteo Elevation', provider: 'Open-Meteo', category: 'Geo',
+    description: 'Fetch terrain elevation in meters for selected coordinates from Open-Meteo’s global model.',
+    documentationUrl: 'https://open-meteo.com/en/docs/elevation-api', accent: '#047857', monogram: 'ELV', usageNote: 'Use returned elevation for non-critical use. Data is typically around 90-metre terrain resolution.',
+    fields: [
+      ...latLongFields(),
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) =>
+      `https://api.open-meteo.com/v1/elevation?${new URLSearchParams({
+        latitude: latitude || '1.3521',
+        longitude: longitude || '103.8198',
+        format: 'json',
+      }).toString()}`,
+  },
+  {
+    id: 'zippopotam-postcode', name: 'Zippopotam Postcode', provider: 'Zippopotam', category: 'Geo',
+    description: 'Convert a country code and postal code into city, state, and coordinate metadata.',
+    documentationUrl: 'https://api.zippopotam.us', accent: '#2d9cdb', monogram: 'ZIP', risk: 'Review',
+    usageNote: 'Useful for form autofill and map context; keep requests focused to avoid unnecessary retries.',
+    fields: [
+      { id: 'country', label: 'Country code', type: 'text', defaultValue: 'us', placeholder: 'e.g. us', help: 'Use a supported two-letter ISO country code.' },
+      { id: 'postalCode', label: 'Postcode', type: 'text', defaultValue: '10001', placeholder: 'e.g. 10001', help: 'Provide a supported country-specific postcode.' },
+    ],
+    buildUrl: ({ country = 'us', postalCode = '10001' }) =>
+      `https://api.zippopotam.us/${encode((country || 'us').toLowerCase())}/${encode(postalCode || '10001')}`,
+  },
+  {
     id: 'irail-liveboard', name: 'Belgian Rail Liveboard', provider: 'iRail', category: 'Utility',
     description: 'Read live Belgian train departures or arrivals with platforms, delays, cancellations, and destinations.',
     documentationUrl: 'https://docs.irail.be/', accent: '#1257a6', monogram: 'IR',
@@ -1164,6 +1435,197 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://swapi.dev/documentation', accent: '#ca8a04', monogram: 'SW',
     fields: [queryField({ label: 'Character search', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' })],
     buildUrl: ({ query = 'Luke' }) => `https://swapi.dev/api/people/?${new URLSearchParams({ search: query.trim() || 'Luke' }).toString()}`,
+  },
+  {
+    id: 'malaysia-core-cpi', name: 'Malaysia Core CPI', provider: 'data.gov.my', category: 'Economy',
+    description: 'Load Malaysia core CPI points for core inflation monitoring and public-price snapshots.',
+    documentationUrl: 'https://data.gov.my/data-catalogue/cpi_core', accent: '#0284c7', monogram: 'MCC', risk: 'Review',
+    usageNote: 'Retain official attribution for Malaysia Public Data when redisplaying records.',
+    fields: [limitField({ label: 'Records', defaultValue: '12', min: 12, max: 120, help: 'Return between 12 and 120 rows.' })],
+    buildUrl: ({ count = '12' }) => {
+      const safeCount = clampInt(count, 12, 120, 12)
+      return `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'cpi_core', limit: String(safeCount), sort: '-date' }).toString()}`
+    },
+  },
+  {
+    id: 'malaysia-household-income', name: 'Malaysia Household Income', provider: 'data.gov.my', category: 'Economy',
+    description: 'Track Malaysian household income trends with household, mean, median, and distribution metadata.',
+    documentationUrl: 'https://data.gov.my/data-catalogue/hh_income', accent: '#0369a1', monogram: 'MHI', risk: 'Review',
+    usageNote: 'Retain official attribution for Malaysia Public Data when redisplaying records.',
+    fields: [limitField({ label: 'Records', defaultValue: '10', min: 6, max: 120, help: 'Return between 6 and 120 rows.' })],
+    buildUrl: ({ count = '10' }) => {
+      const safeCount = clampInt(count, 6, 120, 10)
+      return `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'hh_income', limit: String(safeCount), sort: '-date' }).toString()}`
+    },
+  },
+  {
+    id: 'malaysia-population', name: 'Malaysia Population', provider: 'data.gov.my', category: 'Economy',
+    description: 'Retrieve Malaysia population and demographic breakdowns for age, gender, and ethnicity.',
+    documentationUrl: 'https://data.gov.my/data-catalogue/population_malaysia', accent: '#0ea5e9', monogram: 'MPO', risk: 'Review',
+    usageNote: 'Retain official attribution for Malaysia Public Data when redisplaying records.',
+    fields: [limitField({ label: 'Records', defaultValue: '10', min: 6, max: 120, help: 'Return between 6 and 120 rows.' })],
+    buildUrl: ({ count = '10' }) => {
+      const safeCount = clampInt(count, 6, 120, 10)
+      return `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'population_malaysia', limit: String(safeCount), sort: '-date' }).toString()}`
+    },
+  },
+  {
+    id: 'openfda-food-recalls', name: 'openFDA Food Recalls', provider: 'U.S. FDA', category: 'Food',
+    description: 'Explore FDA food recall notices by product, manufacturer, reason, and enforcement event.',
+    documentationUrl: 'https://open.fda.gov/apis/food/enforcement/', accent: '#4f46e5', monogram: 'OFR', risk: 'Review',
+    fields: [
+      queryField({ label: 'Recall search', defaultValue: 'peanut', placeholder: 'e.g. peanut', help: 'Search food recall text by product or recall reason.' }),
+      limitField({ label: 'Records', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 records.' }),
+    ],
+    buildUrl: ({ query = 'peanut', count = '8' }) => {
+      const safeCount = clampInt(count, 1, 30, 8)
+      return `https://api.fda.gov/food/enforcement.json?${new URLSearchParams({
+        search: query.trim() || 'peanut',
+        limit: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'iconify-search', name: 'Iconify Search', provider: 'Iconify', category: 'Utility',
+    description: 'Search open-source icon sets and metadata, including icon names and licensing for UI prototyping.',
+    documentationUrl: 'https://iconify.design/docs/api/search.html', accent: '#7c3aed', monogram: 'ICS', usageNote: 'Show icon licensing and attribution context when exporting catalog entries.',
+    fields: [
+      queryField({ label: 'Icon keyword', defaultValue: 'home', placeholder: 'e.g. home', help: 'Search icon keywords across public sets.' }),
+      limitField({ label: 'Icons', defaultValue: '12', min: 1, max: 60, help: 'Return between 1 and 60 results.' }),
+    ],
+    buildUrl: ({ query = 'home', count = '12' }) => {
+      const safeCount = clampInt(count, 1, 60, 12)
+      return `https://api.iconify.design/search?${new URLSearchParams({ query: query.trim() || 'home', limit: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'homebrew-formula-json', name: 'Homebrew Formula JSON', provider: 'Homebrew', category: 'Developer',
+    description: 'Inspect Homebrew formula and cask metadata, including versions, dependencies, and metadata fields.',
+    documentationUrl: 'https://formulae.brew.sh/docs/api/', accent: '#ef4444', monogram: 'HBF',
+    usageNote: 'Homebrew API is community-maintained; keep request volume low for reliability.',
+    fields: [
+      { id: 'formula', label: 'Formula or cask name', type: 'text', defaultValue: 'node', placeholder: 'e.g. node', help: 'Search by formula/cask package name.' },
+      { id: 'collection', label: 'Collection', type: 'select', defaultValue: 'formula', help: 'Select Formula or Cask metadata source.',
+        options: [{ label: 'Formula', value: 'formula' }, { label: 'Cask', value: 'cask' }] },
+    ],
+    buildUrl: ({ formula = 'node', collection = 'formula' }) => {
+      const name = encode(formula || 'node')
+      return collection === 'cask'
+        ? `https://formulae.brew.sh/api/cask/${name}.json`
+        : `https://formulae.brew.sh/api/formula/${name}.json`
+    },
+  },
+  {
+    id: 'npm-download-counts', name: 'npm Download Counts', provider: 'npm', category: 'Developer',
+    description: 'Track npm package download counts via point windows suitable for popularity trend snapshots.',
+    documentationUrl: 'https://github.com/npm/registry/blob/main/docs/download-counts.md', accent: '#dc2626', monogram: 'NDC',
+    fields: [
+      { id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'react', placeholder: 'e.g. react', help: 'Use npm scope syntax if needed (left side only).' },
+      { id: 'period', label: 'Window', type: 'select', defaultValue: 'last-week', help: 'Choose a point download period.',
+        options: [{ label: 'Last week', value: 'last-week' }, { label: 'Last month', value: 'last-month' }, { label: 'Last day', value: 'last-day' }] },
+    ],
+    buildUrl: ({ packageName = 'react', period = 'last-week' }) => {
+      const safePeriod = ['last-day', 'last-week', 'last-month'].includes(period) ? period : 'last-week'
+      return `https://api.npmjs.org/downloads/point/${safePeriod}/${encode(packageName || 'react')}`
+    },
+  },
+  {
+    id: 'geoboundaries-admin-boundaries', name: 'geoBoundaries Admin Boundaries', provider: 'geoBoundaries', category: 'Geo',
+    description: 'Load open administrative boundary downloads and GeoJSON polygons across official ADM levels.',
+    documentationUrl: 'https://www.geoboundaries.org/api.html', accent: '#0369a1', monogram: 'GBD',
+    usageNote: 'Use downloaded geometry data for informational map views and attribution surfaces.',
+    fields: [
+      { id: 'countryIso', label: 'Country ISO', type: 'text', defaultValue: 'SGP', min: 3, max: 3, help: 'Use a three-letter country code.' },
+      { id: 'adminLevel', label: 'Admin level', type: 'select', defaultValue: 'ADM0', help: 'Choose the administrative level.',
+        options: [{ label: 'ADM0', value: 'ADM0' }, { label: 'ADM1', value: 'ADM1' }, { label: 'ADM2', value: 'ADM2' }, { label: 'ADM3', value: 'ADM3' }] },
+    ],
+    buildUrl: ({ countryIso = 'SGP', adminLevel = 'ADM0' }) =>
+      `https://www.geoboundaries.org/api/current/gbOpen/${encode((countryIso || 'SGP').toUpperCase())}/${encode(adminLevel || 'ADM0')}`,
+  },
+  {
+    id: 'osrm-route', name: 'OSRM Route', provider: 'Project OSRM', category: 'Geo',
+    description: 'Calculate route distance, duration, and turn-by-turn geometry on public roads from start to destination.',
+    documentationUrl: 'https://github.com/Project-OSRM/osrm-backend', accent: '#0f766e', monogram: 'OSR',
+    usageNote: 'Demonstration server is not production-grade; cache and throttle UI requests accordingly.',
+    fields: [
+      { id: 'startLatitude', label: 'Start latitude', type: 'number', defaultValue: '1.3521', min: -90, max: 90, help: 'Source latitude in degrees.' },
+      { id: 'startLongitude', label: 'Start longitude', type: 'number', defaultValue: '103.8198', min: -180, max: 180, help: 'Source longitude in degrees.' },
+      { id: 'endLatitude', label: 'End latitude', type: 'number', defaultValue: '1.290270', min: -90, max: 90, help: 'Destination latitude in degrees.' },
+      { id: 'endLongitude', label: 'End longitude', type: 'number', defaultValue: '103.851959', min: -180, max: 180, help: 'Destination longitude in degrees.' },
+      limitField({ label: 'Alternatives', defaultValue: '1', min: 1, max: 3, help: 'Request one to three route alternatives.' }),
+    ],
+    buildUrl: ({ startLatitude = '1.3521', startLongitude = '103.8198', endLatitude = '1.290270', endLongitude = '103.851959', count = '1' }) => {
+      const safeStartLatitude = Number.parseFloat(startLatitude)
+      const safeStartLongitude = Number.parseFloat(startLongitude)
+      const safeEndLatitude = Number.parseFloat(endLatitude)
+      const safeEndLongitude = Number.parseFloat(endLongitude)
+      const safeAlternatives = clampInt(count, 1, 3, 1)
+      const route = `${Number.isFinite(safeStartLongitude) ? safeStartLongitude : 103.8198},${Number.isFinite(safeStartLatitude) ? safeStartLatitude : 1.3521};${Number.isFinite(safeEndLongitude) ? safeEndLongitude : 103.851959},${Number.isFinite(safeEndLatitude) ? safeEndLatitude : 1.29027}`
+      return `https://router.project-osrm.org/route/v1/driving/${route}?${new URLSearchParams({
+        alternatives: String(safeAlternatives),
+        geometries: 'geojson',
+        overview: 'full',
+        steps: 'true',
+      }).toString()}`
+    },
+  },
+  {
+    id: 'opendota-pro-matches', name: 'OpenDota Matches', provider: 'OpenDota', category: 'Games',
+    description: 'Pull professional Dota 2 matches with patch, league, and team metadata for esports dashboarding.',
+    documentationUrl: 'https://docs.opendota.com/', accent: '#16a34a', monogram: 'ODT',
+    fields: [limitField({ label: 'Matches', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 matches.' })],
+    buildUrl: ({ count = '8' }) => `https://api.opendota.com/api/proMatches?${new URLSearchParams({ limit: String(clampInt(count, 1, 20, 8)) }).toString()}`,
+  },
+  {
+    id: 'openligadb-matches', name: 'OpenLigaDB', provider: 'OpenLigaDB', category: 'Sports',
+    description: 'Read community football match schedules and outcomes from OpenLigaDB leagues.',
+    documentationUrl: 'https://api.openligadb.de/', accent: '#0284c7', monogram: 'OLB',
+    fields: [
+      { id: 'league', label: 'League shortcut', type: 'text', defaultValue: 'bl1', placeholder: 'e.g. bl1', help: 'Use a short league identifier, such as bl1.' },
+      { id: 'season', label: 'Season year', type: 'number', defaultValue: '2026', min: 2000, max: localNow.getFullYear() + 1, help: 'Use a full numeric season year.' },
+    ],
+    buildUrl: ({ league = 'bl1', season = '2026' }) => {
+      const safeSeason = clampInt(season, 2000, localNow.getFullYear() + 1, 2026)
+      return `https://api.openligadb.de/api/getmatchdata/${encode(league || 'bl1')}/${String(safeSeason)}`
+    },
+  },
+  {
+    id: 'uk-parliament-members', name: 'UK Parliament Members', provider: 'UK Parliament', category: 'Government',
+    description: 'Search active MPs and Lords for current constituencies and party-group metadata.',
+    documentationUrl: 'https://developer.parliament.uk/apis/members-overview', accent: '#7c3aed', monogram: 'UKM',
+    fields: [
+      queryField({ label: 'Member name', defaultValue: 'Rishi', placeholder: 'e.g. Rishi', help: 'Search member names from official directories.' }),
+      limitField({ label: 'Members', defaultValue: '10', min: 1, max: 50, help: 'Return between 1 and 50 members.' }),
+    ],
+    buildUrl: ({ query = 'Rishi', count = '10' }) => {
+      const safeCount = clampInt(count, 1, 50, 10)
+      return `https://members-api.parliament.uk/api/Members/Search?${new URLSearchParams({
+        name: query.trim() || 'Rishi',
+        skip: '0',
+        limit: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'mlb-stats-api', name: 'MLB Stats', provider: 'MLB', category: 'Sports',
+    description: 'Pull MLB schedule snapshots and scoreboard data for date-based sports viewing and trend surfaces.',
+    documentationUrl: 'https://github.com/toddrob99/MLB-StatsAPI/wiki/Endpoints', accent: '#0891b2', monogram: 'MLBS', risk: 'Review',
+    usageNote: 'Unofficial endpoint; MLB content terms apply',
+    fields: [
+      { id: 'date', label: 'Schedule date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use a published game date (YYYY-MM-DD).' },
+      { id: 'sportId', label: 'Sport ID', type: 'number', defaultValue: '1', min: 1, max: 20, help: 'Use 1 for MLB regular schedule snapshots.' },
+      { id: 'teamId', label: 'Team ID', type: 'number', defaultValue: '', min: 1, max: 9999, help: 'Optional: filter by team ID.' },
+    ],
+    buildUrl: ({ date = today, sportId = '1', teamId = '' }) => {
+      const targetDate = (date || today).slice(0, 10)
+      const params = new URLSearchParams({
+        sportId: String(clampInt(sportId, 1, 20, 1)),
+        date: targetDate,
+        hydrate: 'team,venue',
+      })
+      if (teamId && Number.parseInt(teamId, 10)) params.set('teamId', encode(teamId))
+      return `https://statsapi.mlb.com/api/v1/schedule?${params.toString()}`
+    },
   },
 ]
 
@@ -1653,9 +2115,402 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [],
     buildUrl: () => 'https://randomfox.ca/floof',
   },
+  {
+    id: 'gleif-lei',
+    name: 'GLEIF LEI Explorer',
+    provider: 'GLEIF',
+    category: 'Finance',
+    description: 'Search official legal entities by name and review LEI status, headquarters, and parent/child relations.',
+    documentationUrl: 'https://www.gleif.org/en/lei-data/access-and-use-lei-data',
+    accent: '#0f7c90',
+    monogram: 'GLE',
+    fields: [
+      { id: 'query', label: 'Legal name', type: 'text', defaultValue: 'Royal Bank of Canada', placeholder: 'e.g. Royal Bank', help: 'Enter a legal name fragment to search public LEI records.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 50, help: 'Return between 1 and 50 records.' },
+    ],
+    buildUrl: ({ query = 'Royal Bank of Canada', count = '8' }) => {
+      const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 8))
+      return `https://api.gleif.org/api/v1/lei-records?${new URLSearchParams({
+        'filter[entity.legalName]': query.trim() || 'Royal Bank of Canada',
+        'page[size]': String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'fdic-bankfind',
+    name: 'FDIC BankFind Suite',
+    provider: 'FDIC',
+    category: 'Finance',
+    description: 'Inspect U.S. bank records, including assets, deposit volume, operation status, and branch history.',
+    documentationUrl: 'https://api.fdic.gov/banks/docs',
+    accent: '#0060a8',
+    monogram: 'FDI',
+    fields: [
+      { id: 'bankName', label: 'Bank name', type: 'text', defaultValue: 'Wells Fargo', placeholder: 'e.g. Wells Fargo', help: 'Search FDIC bank metadata by public institution name.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 institutions.' },
+    ],
+    buildUrl: ({ bankName = 'Wells Fargo', count = '6' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
+      return `https://banks.data.fdic.gov/api/institutions?${new URLSearchParams({
+        q: bankName.trim() || 'Wells Fargo',
+        limit: String(safeCount),
+        format: 'json',
+      }).toString()}`
+    },
+  },
+  {
+    id: 'uk-food-hygiene',
+    name: 'UK Food Hygiene Ratings',
+    provider: 'Food Standards Agency',
+    category: 'Food',
+    description: 'Search establishments by name and retrieve hygiene, structural, and management scores plus service classification.',
+    documentationUrl: 'https://api.ratings.food.gov.uk/help',
+    accent: '#0b5f66',
+    monogram: 'FKH',
+    fields: [
+      { id: 'name', label: 'Establishment name', type: 'text', defaultValue: 'Cafe', placeholder: 'e.g. Cafe', help: 'Search UK food businesses by name fragment.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 50, help: 'Return between 1 and 50 establishments.' },
+    ],
+    headers: { 'x-api-version': '2' },
+    buildUrl: ({ name = 'Cafe', count = '5' }) => {
+      const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 5))
+      return `https://api.ratings.food.gov.uk/Establishments?${new URLSearchParams({
+        name: name.trim() || 'Cafe',
+        pageSize: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'uk-flood-monitoring',
+    name: 'UK Flood Monitoring',
+    provider: 'DEFRA',
+    category: 'Environment',
+    description: 'Query active flood stations and reading points, including alerts, flow, and water-level metadata.',
+    documentationUrl: 'https://environment.data.gov.uk/flood-monitoring/doc/reference',
+    accent: '#065f46',
+    monogram: 'FLD',
+    fields: [
+      { id: 'query', label: 'Search keyword', type: 'text', defaultValue: 'river', placeholder: 'e.g. river', help: 'Search flood-monitoring stations by text keyword.' },
+      { id: 'count', label: 'Stations', type: 'number', defaultValue: '8', min: 1, max: 50, help: 'Return between 1 and 50 station records.' },
+    ],
+    buildUrl: ({ query = 'river', count = '8' }) => {
+      const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 8))
+      return `https://environment.data.gov.uk/flood-monitoring/id/stations?${new URLSearchParams({
+        q: query.trim() || 'river',
+        _limit: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'unhcr-refugees',
+    name: 'UNHCR Refugee Statistics',
+    provider: 'UNHCR',
+    category: 'Data',
+    description: 'Explore refuge and asylum-related humanitarian statistics with filters for origin country and reporting year.',
+    documentationUrl: 'https://www.unhcr.org/refugee-statistics/insights/explainers/forcibly-displaced-api.html',
+    accent: '#7c2d12',
+    monogram: 'UNH',
+    fields: [
+      { id: 'country', label: 'Country', type: 'text', defaultValue: 'Syrian Arab Republic', placeholder: 'e.g. Syrian Arab Republic', help: 'Filter records by country naming string.' },
+      { id: 'year', label: 'Year', type: 'number', defaultValue: '2026', min: 2010, max: 2026, help: 'Choose an annual snapshot year.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 20, help: 'Return between 1 and 20 records.' },
+    ],
+    buildUrl: ({ country = 'Syrian Arab Republic', year = '2026', count = '5' }) => {
+      const safeYear = Math.min(2026, Math.max(2010, Number.parseInt(year, 10) || 2026))
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 5))
+      return `https://api.unhcr.org/population/v1/refugees?${new URLSearchParams({
+        country: country.trim() || 'Syrian Arab Republic',
+        year: String(safeYear),
+        pageSize: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'hdx-humanitarian-datasets',
+    name: 'HDX Humanitarian Dataset Search',
+    provider: 'Humanitarian Data Exchange',
+    category: 'Data',
+    description: 'Search discoverable humanitarian datasets and inspect ownership, formats, and licensing metadata.',
+    documentationUrl: 'https://hdx-hapi.readthedocs.io/en/latest/data_usage_guides/metadata',
+    accent: '#0369a1',
+    monogram: 'HDX',
+    fields: [
+      { id: 'query', label: 'Topic or keyword', type: 'text', defaultValue: 'water', placeholder: 'e.g. water', help: 'Search humanitarian data by keyword or topic.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 dataset records.' },
+    ],
+    buildUrl: ({ query = 'water', count = '6' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
+      return `https://data.humdata.org/api/3/action/package_search?${new URLSearchParams({
+        q: query.trim() || 'water',
+        rows: String(safeCount),
+      }).toString()}`
+    },
+  },
+  {
+    id: 'open-meteo-climate',
+    name: 'Open-Meteo Climate',
+    provider: 'Open-Meteo',
+    category: 'Environment',
+    description: 'Retrieve climate-model projections and historical climate indicators for a chosen location and period.',
+    documentationUrl: 'https://open-meteo.com/en/docs/climate-api',
+    accent: '#1d4ed8',
+    monogram: 'CLM',
+    fields: [
+      ...latLongFields(),
+      { id: 'startYear', label: 'Start year', type: 'number', defaultValue: '2020', min: 1950, max: 2050, help: 'Choose a projection window start year.' },
+      { id: 'endYear', label: 'End year', type: 'number', defaultValue: '2026', min: 1950, max: 2050, help: 'Choose a projection window end year.' },
+      { id: 'model', label: 'Model', type: 'select', defaultValue: 'ecmwf_ifs04', help: 'Select a climate model source.',
+        options: [
+          { label: 'ECMWF IFS 04', value: 'ecmwf_ifs04' },
+          { label: 'NASA NEX-GDDP', value: 'nasa_nex_gddp' },
+        ] },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startYear = '2020', endYear = '2026', model = 'ecmwf_ifs04' }) => {
+      const safeStartYear = Math.min(2050, Math.max(1950, Number.parseInt(startYear, 10) || 2020))
+      const safeEndYear = Math.max(safeStartYear, Math.min(2050, Number.parseInt(endYear, 10) || 2026))
+      return `https://climate-api.open-meteo.com/v1/climate?${new URLSearchParams({
+        latitude: latitude || '1.3521',
+        longitude: longitude || '103.8198',
+        start_date: `${safeStartYear}-01-01`,
+        end_date: `${safeEndYear}-12-31`,
+        models: model,
+        daily: 'temperature_2m_mean,precipitation_sum',
+        format: 'json',
+      }).toString()}`
+    },
+    usageNote: 'Use climate projections for decision support contexts only; retain model details when presenting outcomes.',
+  },
+  {
+    id: 'models-dev',
+    name: 'models.dev Model Registry',
+    provider: 'models.dev',
+    category: 'Developer',
+    description: 'Search standardized AI model metadata and compare context limits, pricing model, API readiness, and modality details.',
+    documentationUrl: 'https://github.com/sst/models.dev',
+    accent: '#4f46e5',
+    monogram: 'MDL',
+    fields: [
+      { id: 'query', label: 'Model search', type: 'text', defaultValue: 'gpt', placeholder: 'e.g. gpt', help: 'Search model name or family across providers.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 25, help: 'Return between 1 and 25 models.' },
+    ],
+    buildUrl: ({ query = 'gpt', count = '8' }) => {
+      const safeCount = Math.min(25, Math.max(1, Number.parseInt(count, 10) || 8))
+      return `https://models.dev/api/v1/models?${new URLSearchParams({ q: query.trim() || 'gpt', limit: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'vatcomply',
+    name: 'VATComply API',
+    provider: 'VATComply',
+    category: 'Finance',
+    description: 'Retrieve currency exchange rates, VAT-number checks, and IBAN validation helpers for lightweight compliance demos.',
+    documentationUrl: 'https://api.vatcomply.com/docs',
+    accent: '#7c3aed',
+    monogram: 'VPC',
+    fields: [
+      { id: 'base', label: 'Base currency', type: 'text', defaultValue: 'EUR', placeholder: 'e.g. EUR', help: 'Choose the base currency for conversion output.' },
+      { id: 'symbols', label: 'Target currencies', type: 'text', defaultValue: 'USD,SGD,GBP', placeholder: 'e.g. USD,SGD,GBP', help: 'Comma-separate up to ten currency codes.' },
+    ],
+    buildUrl: ({ base = 'EUR', symbols = 'USD,SGD,GBP' }) => `https://api.vatcomply.com/rates?${new URLSearchParams({ base: base.toUpperCase() || 'EUR', symbols }).toString()}`,
+  },
+  {
+    id: 'mempool-space-btc',
+    name: 'mempool.space Bitcoin',
+    provider: 'mempool.space',
+    category: 'Finance',
+    description: 'Read Bitcoin mempool congestion, fee rates, and chain health signals from the public mempool service.',
+    documentationUrl: 'https://mempool.space/docs/api/rest',
+    accent: '#f59e0b',
+    monogram: 'MPB',
+    fields: [],
+    buildUrl: () => 'https://mempool.space/api/v1/fees/recommended',
+  },
+  {
+    id: 'metacpan',
+    name: 'MetaCPAN API',
+    provider: 'MetaCPAN',
+    category: 'Developer',
+    description: 'Search CPAN packages by module name, owner, release status, and ecosystem metadata.',
+    documentationUrl: 'https://metacpan.org/pod/MetaCPAN::API',
+    accent: '#1f2937',
+    monogram: 'MCP',
+    fields: [
+      { id: 'query', label: 'Module search', type: 'text', defaultValue: 'Mojolicious', placeholder: 'e.g. Mojolicious', help: 'Search CPAN module and release records.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 results.' },
+    ],
+    buildUrl: ({ query = 'Mojolicious', count = '6' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
+      return `https://fastapi.metacpan.org/v1/module/_search?${new URLSearchParams({ q: query.trim() || 'Mojolicious', size: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'hexpm',
+    name: 'Hex.pm Package API',
+    provider: 'Hex.pm',
+    category: 'Developer',
+    description: 'Fetch Elixir package metadata, maintainers, licensing, and versioning from the official package registry.',
+    documentationUrl: 'https://hex.pm/docs/api',
+    accent: '#0d9488',
+    monogram: 'HXP',
+    fields: [{ id: 'package', label: 'Package', type: 'text', defaultValue: 'ecto', placeholder: 'e.g. ecto', help: 'Enter an official Hex package name.' }],
+    buildUrl: ({ package = 'ecto' }) => `https://hex.pm/api/packages/${encode(package.trim() || 'ecto')}`,
+  },
+  {
+    id: 'pub-dev',
+    name: 'pub.dev Package Search',
+    provider: 'pub.dev',
+    category: 'Developer',
+    description: 'Search Dart and Flutter package metadata, pub scores, topics, and dependency relations.',
+    documentationUrl: 'https://pub.dev/help/api',
+    accent: '#0ea5e9',
+    monogram: 'PUB',
+    fields: [
+      { id: 'query', label: 'Package search', type: 'text', defaultValue: 'flutter', placeholder: 'e.g. flutter', help: 'Search Dart and Flutter package names and summaries.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 entries.' },
+    ],
+    buildUrl: ({ query = 'flutter', count = '6' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
+      return `https://pub.dev/api/search?${new URLSearchParams({ q: query.trim() || 'flutter', pageSize: String(safeCount) }).toString()}`
+    },
+  },
+  {
+    id: 'go-module-proxy',
+    name: 'Go Module Proxy',
+    provider: 'Go',
+    category: 'Developer',
+    description: 'Read the official Go proxy module index for tags, versions, and latest release coordinates.',
+    documentationUrl: 'https://go.dev/ref/mod',
+    accent: '#6366f1',
+    monogram: 'GOP',
+    fields: [
+      { id: 'module', label: 'Module path', type: 'text', defaultValue: 'github.com/gin-gonic/gin', placeholder: 'e.g. github.com/gin-gonic/gin', help: 'Enter a fully-qualified module path.' },
+    ],
+    buildUrl: ({ module = 'github.com/gin-gonic/gin' }) => {
+      const modulePath = encode(module.trim() || 'github.com/gin-gonic/gin').replace(/%2F/g, '/')
+      return `https://proxy.golang.org/${modulePath}/@v/list`
+    },
+  },
+  {
+    id: 'flathub-appstream',
+    name: 'Flathub Appstream',
+    provider: 'Flathub',
+    category: 'Developer',
+    description: 'Discover desktop applications with screenshots, license status, category tags, and installation metadata.',
+    documentationUrl: 'https://docs.flathub.org/docs/for-app-authors/appstream/',
+    accent: '#0f766e',
+    monogram: 'FLA',
+    fields: [
+      { id: 'query', label: 'App search', type: 'text', defaultValue: 'org.gnome.Calculator', placeholder: 'e.g. org.gnome.Calculator', help: 'Search Flathub app identifiers or display names.' },
+      { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 matches.' },
+    ],
+    buildUrl: ({ query = 'org.gnome.Calculator', count = '8' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 8))
+      return `https://flathub.org/api/v2/appstream?${new URLSearchParams({ q: query.trim() || 'org.gnome.Calculator', limit: String(safeCount) }).toString()}`
+    },
+  },
 ]
 
-export const apiCatalog: ApiDemo[] = [...coreApis, ...additionalInteractiveApis, ...importedRecommendedApis, ...nextKeylessApis, ...verifiedKeylessApis, ...verifiedExpansionApis, ...verifiedSecondExpansionApis, ...verifiedThirdExpansionApis]
+const verifiedFourthExpansionApis: ApiDemo[] = [
+  {
+    id: 'openssf-scorecard',
+    name: 'OpenSSF Scorecard',
+    provider: 'OpenSSF',
+    category: 'Security',
+    description: 'Review repository-level security scores, risk signals, and repository policy metadata from OpenSSF Scorecard.',
+    documentationUrl: 'https://github.com/ossf/scorecard',
+    accent: '#1d4ed8',
+    monogram: 'OSS',
+    usageNote: 'The score is heuristic; validate security posture independently before making operational decisions.',
+    fields: [
+      {
+        id: 'repository',
+        label: 'Repository',
+        type: 'text',
+        defaultValue: 'github.com/ossf/scorecard',
+        placeholder: 'github.com/owner/repo',
+        help: 'Enter owner/repo or a full github.com/owner/repo path.',
+      },
+    ],
+    buildUrl: ({ repository = 'github.com/ossf/scorecard' }) => {
+      const rawRepository = repository.trim() || 'github.com/ossf/scorecard'
+      const normalizedRepository = rawRepository.replace(/^https?:\\/\\//, '').replace(/^www\\./, '')
+      const repoPath = normalizedRepository.includes('github.com/')
+        ? normalizedRepository
+        : `github.com/${normalizedRepository}`
+      return `https://api.securityscorecards.dev/projects/${repoPath}`
+    },
+  },
+  {
+    id: 'opencitations-index',
+    name: 'OpenCitations Index',
+    provider: 'OpenCitations',
+    category: 'Research',
+    description: 'Look up citation links and citation counts for a DOI across the OpenCitations index.',
+    documentationUrl: 'https://opencitations.net/index/api/v2',
+    accent: '#0f766e',
+    monogram: 'OCI',
+    fields: [
+      {
+        id: 'doi',
+        label: 'DOI',
+        type: 'text',
+        defaultValue: '10.1109/5.771073',
+        placeholder: 'e.g. 10.1109/5.771073',
+        help: 'Use a valid DOI string.',
+      },
+    ],
+    buildUrl: ({ doi = '10.1109/5.771073' }) =>
+      `https://opencitations.net/index/api/v2/citation/${encodeURIComponent(doi.trim() || '10.1109/5.771073')}?format=json`,
+  },
+  {
+    id: 'vam-collections',
+    name: 'V&A Collections',
+    provider: 'V&A',
+    category: 'Media',
+    description: 'Browse artworks, objects, and exhibition-linked metadata from the V&A Collection API.',
+    documentationUrl: 'https://developers.vam.ac.uk/guide/v2/',
+    accent: '#b45309',
+    monogram: 'VAM',
+    fields: [
+      {
+        id: 'query',
+        label: 'Collection search',
+        type: 'text',
+        defaultValue: 'eastern',
+        placeholder: 'e.g. eastern',
+        help: 'Search museum records by keyword.',
+      },
+      {
+        id: 'count',
+        label: 'Records',
+        type: 'number',
+        defaultValue: '6',
+        min: 1,
+        max: 20,
+        help: 'Return between 1 and 20 records.',
+      },
+    ],
+    buildUrl: ({ query = 'eastern', count = '6' }) => {
+      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
+      return `https://api.vam.ac.uk/v2/objects/search?${new URLSearchParams({
+        q: query.trim() || 'eastern',
+        page_size: String(safeCount),
+      }).toString()}`
+    },
+  },
+]
+
+export const apiCatalog: ApiDemo[] = [
+  ...coreApis,
+  ...additionalInteractiveApis,
+  ...importedRecommendedApis,
+  ...nextKeylessApis,
+  ...verifiedKeylessApis,
+  ...verifiedExpansionApis,
+  ...verifiedSecondExpansionApis,
+  ...verifiedThirdExpansionApis,
+  ...verifiedFourthExpansionApis,
+]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>
   Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))

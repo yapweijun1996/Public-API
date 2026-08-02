@@ -74,20 +74,44 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'geocoding-search', category: 'Geo' })).toBe('location-map')
     expect(selectPreviewLayout({ id: 'carbon-intensity-gb', category: 'Environment' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'nws-weather', category: 'Weather' })).toBe('data-table')
+    expect(selectPreviewLayout({ id: 'nhtsa-vehicle-recalls', category: 'Vehicle' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('developer-feed')
     expect(selectPreviewLayout({ id: 'nvd-cves', category: 'Developer' })).toBe('security-center')
+    expect(selectPreviewLayout({ id: 'geoboundaries-admin-boundaries', category: 'Geo' })).toBe('location-map')
+    expect(selectPreviewLayout({ id: 'mlb-stats-api', category: 'Sports' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'europe-pmc-search', category: 'Research' })).toBe('research-library')
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
   })
 
-  it('registers 143 distinct React component functions with no shared identity', () => {
+  it('maps fourth-round catalog additions to explicit preview layouts', () => {
+    const catalogById = Object.fromEntries(apiCatalog.map((api) => [api.id, api]))
+    const expected: Record<string, string> = {
+      'openssf-scorecard': 'data-table',
+      'opencitations-index': 'data-table',
+      'vam-collections': 'media-gallery',
+      'usaspending': 'data-table',
+      'fiscal-data-treasury': 'market-chart',
+      'wikidata-sparql': 'data-table',
+      'met-museum-object-detail': 'media-gallery',
+      'met-museum-search': 'media-gallery',
+    }
+
+    for (const [id, layout] of Object.entries(expected)) {
+      const api = catalogById[id]
+      expect(api, `Missing API ${id}`).toBeDefined()
+      if (!api) continue
+      expect(selectPreviewLayout({ id, category: api.category })).toBe(layout)
+    }
+  })
+
+  it('registers 188 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(143)
-    expect(new Set(components).size).toBe(143)
-    expect(new Set(components.map((component) => component.name)).size).toBe(143)
+    expect(components).toHaveLength(188)
+    expect(new Set(components).size).toBe(188)
+    expect(new Set(components.map((component) => component.name)).size).toBe(188)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -101,7 +125,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(143)
+    expect(new Set(visualSignatures).size).toBe(188)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })
@@ -184,6 +208,154 @@ describe('new specialist API previews', () => {
     expect(preview).toHaveAttribute('data-preview-layout', 'awards-timeline')
     expect(within(preview).getByText('Geoffrey Hinton')).toBeInTheDocument()
     expect(preview).toHaveTextContent('foundational discoveries')
+  })
+
+  it('renders AniList media search as a media gallery', () => {
+    render(<ResponseDemoPreview api={api('anilist-graphql')} data={{
+      data: {
+        Page: {
+          media: [{
+            title: { romaji: 'Cowboy Bebop', english: 'Cowboy Bebop' },
+            coverImage: { medium: 'https://images.test/anilist-cowboy-bebop.jpg' },
+            type: 'ANIME',
+            episodes: 26,
+            startDate: '1998',
+          }],
+        },
+      },
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'AniList Media Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'media-gallery')
+    expect(within(preview).getByRole('img')).toHaveAttribute('src', 'https://images.test/anilist-cowboy-bebop.jpg')
+    expect(within(preview).getByText('Cowboy Bebop')).toBeInTheDocument()
+  })
+
+  it('renders HN search results as developer-feed cards', () => {
+    render(<ResponseDemoPreview api={api('hn-search-algolia')} data={{
+      hits: [{
+        objectID: '321',
+        title: 'How to ship offline-first',
+        author: 'hacker',
+        points: 57,
+        num_comments: 12,
+        created_at_i: 1722489600,
+        story_text: 'A practical discussion for resilient systems.',
+        tags: ['story'],
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'HN Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'developer-feed')
+    expect(within(preview).getByText('How to ship offline-first')).toBeInTheDocument()
+    expect(within(preview).getByText('hacker')).toBeInTheDocument()
+    expect(within(preview).getByText('12')).toBeInTheDocument()
+    expect(within(preview).getByText('57')).toBeInTheDocument()
+  })
+
+  it('renders NHTSA recall results as structured table data', () => {
+    render(<ResponseDemoPreview api={api('nhtsa-vehicle-recalls')} data={{
+      Count: 1,
+      results: [{
+        Make: 'Honda',
+        Model: 'Accord',
+        NHTSACampaignNumber: '20V771000',
+        Component: 'Engine',
+        RecallType: 'Safety Recall',
+        ReportReceivedDate: '2020-05-01',
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'NHTSA Vehicle Recalls' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'data-table')
+    expect(within(preview).getByText('20V771000')).toBeInTheDocument()
+    expect(within(preview).getByText('Honda')).toBeInTheDocument()
+  })
+
+  it('renders AlAdhan prayer times with Hijri/Gregorian context', () => {
+    render(<ResponseDemoPreview api={api('aladhan-prayer-times')} data={{
+      timings: {
+        Fajr: '05:12', Sunrise: '06:58', Dhuhr: '13:05', Asr: '16:25', Maghrib: '19:12', Isha: '20:34',
+      },
+      date: {
+        hijri: { date: '01-01-1448' },
+        gregorian: { date: '2026-08-02' },
+      },
+      meta: { method: { id: 11 } },
+    }} />)
+    const preview = screen.getByRole('region', { name: 'AlAdhan Prayer Times' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'data-table')
+    expect(within(preview).getByText('Fajr time')).toBeInTheDocument()
+    expect(within(preview).getByText('05:12')).toBeInTheDocument()
+    expect(within(preview).getByText('Method 11')).toBeInTheDocument()
+    expect(within(preview).getByText('01-01-1448')).toBeInTheDocument()
+  })
+
+  it('renders Packagist search results with package metadata', () => {
+    render(<ResponseDemoPreview api={api('packagist-search')} data={{
+      results: [{
+        name: 'laravel/laravel',
+        description: 'The Laravel framework.',
+        type: 'project',
+        repository: 'https://github.com/laravel/laravel',
+        maintainer: 'Taylor Otwell',
+        downloads: { total: 1200000 },
+        favers: 1500,
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Packagist Package Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'developer-feed')
+    expect(within(preview).getByText('laravel/laravel')).toBeInTheDocument()
+    expect(within(preview).getByText('The Laravel framework.')).toBeInTheDocument()
+    expect(within(preview).getByText('project')).toBeInTheDocument()
+  })
+
+  it('renders Openverse media results as gallery cards', () => {
+    render(<ResponseDemoPreview api={api('openverse-search')} data={{
+      results: [{
+        title: 'Neon city',
+        creator: 'OpenVerse Demo',
+        thumbnail: 'https://images.openverse.engineering/neon-city.jpg',
+        license: 'CC0',
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Openverse Media Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'media-gallery')
+    expect(within(preview).getByRole('img')).toHaveAttribute('src', 'https://images.openverse.engineering/neon-city.jpg')
+    expect(within(preview).getByText('Neon city')).toBeInTheDocument()
+    expect(within(preview).getByText('CC0')).toBeInTheDocument()
+  })
+
+  it('renders Apple iTunes results as media cards', () => {
+    render(<ResponseDemoPreview api={api('apple-itunes-search')} data={{
+      results: [{
+        trackName: 'Bohemian Rhapsody',
+        artistName: 'Queen',
+        artworkUrl100: 'https://images.test/queen-bohemian.jpg',
+        wrapperType: 'track',
+        kind: 'song',
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Apple iTunes Search' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'media-gallery')
+    expect(within(preview).getByRole('img')).toHaveAttribute('src', 'https://images.test/queen-bohemian.jpg')
+    expect(within(preview).getByText('Bohemian Rhapsody')).toBeInTheDocument()
+    expect(within(preview).getByText('Queen')).toBeInTheDocument()
+  })
+
+  it('renders Hebcal events as a calendar timeline', () => {
+    render(<ResponseDemoPreview api={api('hebcal-calendar')} data={{
+      items: [
+        {
+          date: '2026-09-11',
+          title: 'Yom Kippur',
+          hebrew: 'יום כיפור',
+          category: 'holiday',
+          className: 'major',
+        },
+      ],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Hebcal Calendar' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'calendar-timeline')
+    expect(within(preview).getByText('Yom Kippur')).toBeInTheDocument()
+    expect(within(preview).getByText('Hebcal')).toBeInTheDocument()
   })
 
   it('compares Chess.com ratings and match records by time control', () => {
@@ -269,6 +441,88 @@ describe('next keyless API previews', () => {
     rerender(<ResponseDemoPreview api={api('rick-morty-characters')} data={{ results: [{ id: 1, name: 'Rick Sanchez', status: 'Alive', species: 'Human', image: 'https://rickandmortyapi.com/api/character/avatar/1.jpeg', location: { name: 'Citadel of Ricks' } }] }}/>)
     expect(screen.getByRole('region', { name: 'Rick and Morty Characters' })).toHaveTextContent('Rick Sanchez')
     expect(screen.getByRole('region', { name: 'Rick and Morty Characters' })).toHaveTextContent('Alive · Human · Citadel of Ricks')
+  })
+
+  it('renders Jolpica F1 sessions as a data table', () => {
+    render(<ResponseDemoPreview api={api('jolpica-f1')} data={{
+      MRData: {
+        RaceTable: {
+          Races: [{
+            raceName: 'Singapore Grand Prix',
+            date: '2026-09-19',
+            Circuit: { Location: { locality: 'Marina Bay' } },
+          }],
+        },
+      },
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Jolpica F1 Data' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'data-table')
+    expect(preview).toHaveTextContent('Singapore Grand Prix')
+  })
+
+  it('renders Swiss transit connections and new market APIs as dedicated layouts', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('swiss-transit-connections')} data={{
+      connections: [{
+        from: { station: 'Zurich HB', departure: '10:05', platform: '2' },
+        to: { station: 'Bern' },
+        sections: [{ journeys: [{ name: 'IC 6', duration: '60', delay: 3 }] }],
+        delay: 5,
+      }],
+    }}/>)
+    expect(screen.getByRole('region', { name: 'Swiss Transit Connections' })).toHaveAttribute('data-preview-layout', 'transit-board')
+    expect(screen.getByRole('region', { name: 'Swiss Transit Connections' })).toHaveTextContent('Zurich HB → Bern')
+
+    rerender(<ResponseDemoPreview api={api('bank-of-canada-valet')} data={{
+      observations: [
+        { d: '2026-07-01', FXUSDCAD: '1.3500' },
+        { d: '2026-07-02', FXUSDCAD: '1.3600' },
+      ],
+    }}/>)
+    const bankPreview = screen.getByRole('region', { name: 'Bank of Canada Valet' })
+    expect(bankPreview).toHaveAttribute('data-preview-layout', 'market-chart')
+    expect(bankPreview).toHaveTextContent('1.36')
+    expect(bankPreview).toHaveTextContent('Series high')
+
+    rerender(<ResponseDemoPreview api={api('nasa-power-climate')} data={{
+      properties: {
+        parameters: {
+          T2M: {
+            data: { '2026-07-01': '28', '2026-07-02': '29' },
+            unit: '°C',
+            label: '2m Temperature',
+          },
+        },
+      },
+    }}/>)
+    const climatePreview = screen.getByRole('region', { name: 'NASA POWER Climate' })
+    expect(climatePreview).toHaveAttribute('data-preview-layout', 'market-chart')
+    expect(climatePreview).toHaveTextContent('NASA POWER')
+    expect(climatePreview).toHaveTextContent('29 °C')
+
+    rerender(<ResponseDemoPreview api={api('open-meteo-elevation')} data={{ latitude: 1.3521, longitude: 103.8198, elevation: 16.72 }}/>)
+    const elevationPreview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    expect(elevationPreview).toHaveAttribute('data-preview-layout', 'data-table')
+    expect(elevationPreview).toHaveTextContent('Point 1')
+    expect(elevationPreview).toHaveTextContent('16.72 m')
+  })
+
+  it('maps Zippopotam postcode results into a location explorer', () => {
+    render(<ResponseDemoPreview api={api('zippopotam-postcode')} data={{
+      'post code': '10001',
+      country: 'United States',
+      places: [{
+        'place name': 'New York',
+        state: 'New York',
+        'state abbreviation': 'NY',
+        latitude: '40.7128',
+        longitude: '-74.0060',
+      }],
+    }}/>)
+    const preview = screen.getByRole('region', { name: 'Zippopotam Postcode' })
+    expect(preview).toHaveAttribute('data-preview-layout', 'location-map')
+    expect(within(preview).getByRole('img', { name: /Map with 1 response locations/ })).toBeInTheDocument()
+    expect(within(preview).getByText('New York')).toBeInTheDocument()
+    expect(within(preview).getByText('New York · United States')).toBeInTheDocument()
   })
 })
 

@@ -34,7 +34,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(143)
+    expect(apiCatalog).toHaveLength(188)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -255,6 +255,240 @@ describe('API catalog', () => {
 
     const diceBearApi = getApiById('dicebear-avatar')
     expect(diceBearApi?.parseResponse?.('<svg></svg>')).toEqual({ note: 'Raw SVG image response — see the rendered avatar below.', approximateBytes: 11 })
+  })
+
+  it('builds the thirteen newly prioritized keyless API requests', () => {
+    const ids = [
+      'packagist-search', 'anilist-graphql', 'openverse-search', 'apple-itunes-search', 'jolpica-f1', 'hn-search-algolia', 'bank-of-canada-valet', 'swiss-transit-connections', 'nasa-power-climate', 'open-meteo-elevation', 'zippopotam-postcode', 'hebcal-calendar', 'aladhan-prayer-times',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['packagist-search'].hostname).toBe('packagist.org')
+    expect(urls['packagist-search'].searchParams.get('q')).toBe('react')
+    expect(urls['packagist-search'].searchParams.get('per_page')).toBe('8')
+    expect(urls['anilist-graphql'].pathname).toBe('/')
+    expect(urls['openverse-search'].pathname).toBe('/v1/images/')
+    expect(urls['openverse-search'].searchParams.get('q')).toBe('space')
+    expect(urls['openverse-search'].searchParams.get('page_size')).toBe('8')
+    expect(urls['apple-itunes-search'].hostname).toBe('itunes.apple.com')
+    expect(urls['apple-itunes-search'].pathname).toBe('/search')
+    expect(urls['apple-itunes-search'].searchParams.get('term')).toBe('Beatles')
+    expect(urls['apple-itunes-search'].searchParams.get('media')).toBe('music')
+    expect(urls['apple-itunes-search'].searchParams.get('entity')).toBe('song')
+    expect(urls['apple-itunes-search'].searchParams.get('country')).toBe('sg')
+    expect(urls['apple-itunes-search'].searchParams.get('limit')).toBe('8')
+    expect(urls['jolpica-f1'].pathname).toBe('/ergast/f1/2025/drivers.json')
+    expect(urls['jolpica-f1'].searchParams.get('limit')).toBe('8')
+    expect(urls['hn-search-algolia'].pathname).toBe('/api/v1/search')
+    expect(urls['hn-search-algolia'].searchParams.get('query')).toBe('OpenAI')
+    expect(urls['hn-search-algolia'].searchParams.get('hitsPerPage')).toBe('6')
+    expect(urls['bank-of-canada-valet'].pathname).toBe('/valet/observations/FXUSDCAD/json')
+    expect(urls['swiss-transit-connections'].pathname).toBe('/v1/connections')
+    expect(urls['swiss-transit-connections'].searchParams.get('from')).toBe('Zurich')
+    expect(urls['nasa-power-climate'].pathname).toBe('/api/temporal/daily/point')
+    expect(urls['nasa-power-climate'].searchParams.get('community')).toBe('AG')
+    expect(urls['nasa-power-climate'].searchParams.get('format')).toBe('JSON')
+    expect(urls['nasa-power-climate'].searchParams.get('parameters')).toBe('T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN')
+    expect(urls['open-meteo-elevation'].pathname).toBe('/v1/elevation')
+    expect(urls['open-meteo-elevation'].searchParams.get('latitude')).toBe('1.3521')
+    expect(urls['open-meteo-elevation'].searchParams.get('longitude')).toBe('103.8198')
+    expect(urls['open-meteo-elevation'].searchParams.get('format')).toBe('json')
+    expect(urls['zippopotam-postcode'].hostname).toBe('api.zippopotam.us')
+    expect(urls['zippopotam-postcode'].pathname).toBe('/us/10001')
+
+    expect(urls['hebcal-calendar'].hostname).toBe('www.hebcal.com')
+    expect(urls['hebcal-calendar'].pathname).toBe('/hebcal/')
+    expect(urls['aladhan-prayer-times'].hostname).toBe('api.aladhan.com')
+    expect(urls['aladhan-prayer-times'].pathname).toContain('/v1/timings/')
+    expect(urls['aladhan-prayer-times'].searchParams.get('method')).toBe('11')
+    expect(urls['aladhan-prayer-times'].searchParams.get('latitude')).toBe('1.3521')
+    expect(urls['aladhan-prayer-times'].searchParams.get('longitude')).toBe('103.8198')
+
+    const anilist = getApiById('anilist-graphql')
+    expect(anilist?.method).toBe('POST')
+    expect(anilist?.buildBody?.({ query: 'Steins Gate', mediaType: 'MANGA', count: '4', page: '2' })).toEqual(expect.objectContaining({
+      variables: expect.objectContaining({ search: 'Steins Gate', perPage: 4, page: 2, type: 'MANGA' }),
+    }))
+  })
+
+  it('builds the latest 13 priority keyless API requests from the 2026-08-02 audit', () => {
+    const ids = [
+      'malaysia-core-cpi', 'malaysia-household-income', 'malaysia-population',
+      'openfda-food-recalls', 'iconify-search', 'homebrew-formula-json',
+      'npm-download-counts', 'geoboundaries-admin-boundaries', 'osrm-route',
+      'opendota-pro-matches', 'openligadb-matches', 'uk-parliament-members', 'mlb-stats-api',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['malaysia-core-cpi'].hostname).toBe('api.data.gov.my')
+    expect(urls['malaysia-core-cpi'].searchParams.get('id')).toBe('cpi_core')
+    expect(urls['malaysia-household-income'].hostname).toBe('api.data.gov.my')
+    expect(urls['malaysia-household-income'].searchParams.get('id')).toBe('hh_income')
+    expect(urls['malaysia-population'].hostname).toBe('api.data.gov.my')
+    expect(urls['malaysia-population'].searchParams.get('id')).toBe('population_malaysia')
+    expect(urls['openfda-food-recalls'].hostname).toBe('api.fda.gov')
+    expect(urls['openfda-food-recalls'].pathname).toBe('/food/enforcement.json')
+    expect(urls['openfda-food-recalls'].searchParams.get('search')).toBe('peanut')
+    expect(urls['iconify-search'].hostname).toBe('api.iconify.design')
+    expect(urls['iconify-search'].pathname).toBe('/search')
+    expect(urls['iconify-search'].searchParams.get('query')).toBe('home')
+    expect(urls['iconify-search'].searchParams.get('limit')).toBe('12')
+    expect(urls['homebrew-formula-json'].hostname).toBe('formulae.brew.sh')
+    expect(urls['homebrew-formula-json'].pathname).toBe('/api/formula/node.json')
+    expect(urls['npm-download-counts'].hostname).toBe('api.npmjs.org')
+    expect(urls['npm-download-counts'].pathname).toBe('/downloads/point/last-week/react')
+    expect(urls['geoboundaries-admin-boundaries'].hostname).toBe('www.geoboundaries.org')
+    expect(urls['geoboundaries-admin-boundaries'].pathname).toBe('/api/current/gbOpen/SGP/ADM0')
+    expect(urls['osrm-route'].hostname).toBe('router.project-osrm.org')
+    expect(urls['osrm-route'].pathname).toBe('/route/v1/driving/103.8198,1.3521;103.851959,1.29027')
+    expect(urls['osrm-route'].searchParams.get('alternatives')).toBe('1')
+    expect(urls['opendota-pro-matches'].hostname).toBe('api.opendota.com')
+    expect(urls['opendota-pro-matches'].pathname).toBe('/api/proMatches')
+    expect(urls['opendota-pro-matches'].searchParams.get('limit')).toBe('8')
+    expect(urls['openligadb-matches'].hostname).toBe('api.openligadb.de')
+    expect(urls['openligadb-matches'].pathname).toBe('/api/getmatchdata/bl1/2026')
+    expect(urls['uk-parliament-members'].hostname).toBe('members-api.parliament.uk')
+    expect(urls['uk-parliament-members'].pathname).toBe('/api/Members/Search')
+    expect(urls['uk-parliament-members'].searchParams.get('name')).toBe('Rishi')
+    expect(urls['mlb-stats-api'].hostname).toBe('statsapi.mlb.com')
+    expect(urls['mlb-stats-api'].pathname).toBe('/api/v1/schedule')
+    expect(urls['mlb-stats-api'].searchParams.get('sportId')).toBe('1')
+  })
+
+  it('builds the latest 15 browser-ready third-round API requests from the 2026-08-02 audit', () => {
+    const ids = [
+      'gleif-lei', 'fdic-bankfind', 'uk-food-hygiene', 'uk-flood-monitoring', 'unhcr-refugees',
+      'hdx-humanitarian-datasets', 'open-meteo-climate', 'models-dev', 'vatcomply', 'mempool-space-btc',
+      'metacpan', 'hexpm', 'pub-dev', 'go-module-proxy', 'flathub-appstream',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['gleif-lei'].hostname).toBe('api.gleif.org')
+    expect(urls['gleif-lei'].searchParams.get('filter[entity.legalName]')).toBe('Royal Bank of Canada')
+    expect(urls['gleif-lei'].searchParams.get('page[size]')).toBe('8')
+    expect(urls['fdic-bankfind'].hostname).toBe('banks.data.fdic.gov')
+    expect(urls['fdic-bankfind'].searchParams.get('q')).toBe('Wells Fargo')
+    expect(urls['fdic-bankfind'].searchParams.get('limit')).toBe('6')
+
+    const foodHygiene = getApiById('uk-food-hygiene')
+    expect(foodHygiene?.headers).toEqual({ 'x-api-version': '2' })
+    expect(urls['uk-food-hygiene'].hostname).toBe('api.ratings.food.gov.uk')
+    expect(urls['uk-food-hygiene'].pathname).toBe('/Establishments')
+    expect(urls['uk-food-hygiene'].searchParams.get('name')).toBe('Cafe')
+
+    expect(urls['uk-flood-monitoring'].hostname).toBe('environment.data.gov.uk')
+    expect(urls['uk-flood-monitoring'].pathname).toBe('/flood-monitoring/id/stations')
+    expect(urls['uk-flood-monitoring'].searchParams.get('q')).toBe('river')
+    expect(urls['unhcr-refugees'].hostname).toBe('api.unhcr.org')
+    expect(urls['unhcr-refugees'].pathname).toBe('/population/v1/refugees')
+    expect(urls['unhcr-refugees'].searchParams.get('country')).toBe('Syrian Arab Republic')
+    expect(urls['hdx-humanitarian-datasets'].hostname).toBe('data.humdata.org')
+    expect(urls['hdx-humanitarian-datasets'].pathname).toBe('/api/3/action/package_search')
+    expect(urls['hdx-humanitarian-datasets'].searchParams.get('q')).toBe('water')
+    expect(urls['open-meteo-climate'].hostname).toBe('climate-api.open-meteo.com')
+    expect(urls['open-meteo-climate'].pathname).toBe('/v1/climate')
+    expect(urls['open-meteo-climate'].searchParams.get('daily')).toBe('temperature_2m_mean,precipitation_sum')
+    expect(urls['models-dev'].hostname).toBe('models.dev')
+    expect(urls['models-dev'].pathname).toBe('/api/v1/models')
+    expect(urls['models-dev'].searchParams.get('q')).toBe('gpt')
+    expect(urls['models-dev'].searchParams.get('limit')).toBe('8')
+    expect(urls['vatcomply'].hostname).toBe('api.vatcomply.com')
+    expect(urls['vatcomply'].pathname).toBe('/rates')
+    expect(urls['vatcomply'].searchParams.get('base')).toBe('EUR')
+    expect(urls['mempool-space-btc'].hostname).toBe('mempool.space')
+    expect(urls['mempool-space-btc'].pathname).toBe('/api/v1/fees/recommended')
+
+    expect(urls['metacpan'].hostname).toBe('fastapi.metacpan.org')
+    expect(urls['metacpan'].pathname).toBe('/v1/module/_search')
+    expect(urls['metacpan'].searchParams.get('q')).toBe('Mojolicious')
+    expect(urls['metacpan'].searchParams.get('size')).toBe('6')
+    expect(urls['hexpm'].hostname).toBe('hex.pm')
+    expect(urls['hexpm'].pathname).toBe('/api/packages/ecto')
+    expect(urls['pub-dev'].hostname).toBe('pub.dev')
+    expect(urls['pub-dev'].pathname).toBe('/api/search')
+    expect(urls['pub-dev'].searchParams.get('q')).toBe('flutter')
+    expect(urls['go-module-proxy'].hostname).toBe('proxy.golang.org')
+    expect(urls['go-module-proxy'].pathname).toBe('/github.com/gin-gonic/gin/@v/list')
+    expect(urls['flathub-appstream'].hostname).toBe('flathub.org')
+    expect(urls['flathub-appstream'].pathname).toBe('/api/v2/appstream')
+    expect(urls['flathub-appstream'].searchParams.get('q')).toBe('org.gnome.Calculator')
+    expect(urls['flathub-appstream'].searchParams.get('limit')).toBe('8')
+  })
+
+  it('builds the legacy fourth-round URLs still used by UI mappings', () => {
+    const ids = ['usgs', 'usaspending', 'fiscal-data-treasury', 'wikidata-sparql', 'carbon-intensity-gb', 'met-museum-object-detail', 'met-museum-search', 'holidays']
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['usgs'].pathname).toBe('/earthquakes/feed/v1.0/summary/2.5_day.geojson')
+    expect(urls['usaspending'].pathname).toBe('/api/v2/search/spending_by_award/')
+    expect(urls['fiscal-data-treasury'].hostname).toBe('api.fiscaldata.treasury.gov')
+    expect(urls['fiscal-data-treasury'].pathname).toBe('/services/api/fiscal_service/v2/accounting/od/debt_to_penny')
+    expect(urls['fiscal-data-treasury'].searchParams.get('page[size]')).toBe('8')
+    expect(urls['wikidata-sparql'].hostname).toBe('query.wikidata.org')
+    expect(urls['wikidata-sparql'].pathname).toBe('/sparql')
+    expect(urls['wikidata-sparql'].searchParams.get('format')).toBe('json')
+    expect(urls['carbon-intensity-gb'].hostname).toBe('api.carbonintensity.org.uk')
+    expect(urls['carbon-intensity-gb'].pathname).toBe('/intensity')
+    expect(urls['met-museum-object-detail'].pathname).toBe('/public/collection/v1/objects/436535')
+    expect(urls['met-museum-search'].pathname).toBe('/public/collection/v1/search')
+    expect(urls['met-museum-search'].searchParams.get('q')).toBe('singapore')
+    expect(urls['met-museum-search'].searchParams.get('hasImages')).toBe('true')
+    expect(urls['holidays'].hostname).toBe('date.nager.at')
+    expect(urls['holidays'].pathname).toBe('/api/v3/PublicHolidays/2026/SG')
+  })
+
+  it('builds the latest 3 browser-ready fourth-round API requests from the 2026-08-02 audit', () => {
+    const ids = ['openssf-scorecard', 'opencitations-index', 'vam-collections']
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['openssf-scorecard'].hostname).toBe('api.securityscorecards.dev')
+    expect(urls['openssf-scorecard'].pathname).toBe('/projects/github.com/ossf/scorecard')
+    expect(urls['opencitations-index'].hostname).toBe('opencitations.net')
+    expect(urls['opencitations-index'].pathname).toBe('/index/api/v2/citation/10.1109%2F5.771073')
+    expect(urls['opencitations-index'].searchParams.get('format')).toBe('json')
+    expect(urls['vam-collections'].hostname).toBe('api.vam.ac.uk')
+    expect(urls['vam-collections'].pathname).toBe('/v2/objects/search')
+    expect(urls['vam-collections'].searchParams.get('q')).toBe('eastern')
+    expect(urls['vam-collections'].searchParams.get('page_size')).toBe('6')
+  })
+
+  it('builds the NHTSA vehicle recall request', () => {
+    const api = getApiById('nhtsa-vehicle-recalls')
+    expect(api, 'nhtsa-vehicle-recalls').toBeDefined()
+    if (!api) return
+
+    const url = new URL(api.buildUrl(getDefaultParameters(api)))
+    expect(url.hostname).toBe('api.nhtsa.gov')
+    expect(url.pathname).toBe('/recalls/recallsByVehicle')
+    expect(url.searchParams.get('make')).toBe('honda')
+    expect(url.searchParams.get('model')).toBe('accord')
+    expect(url.searchParams.get('modelYear')).toBe('2020')
+    expect(url.searchParams.get('format')).toBe('json')
   })
 
   it('finds API demos by ID', () => {

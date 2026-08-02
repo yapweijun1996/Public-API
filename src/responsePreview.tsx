@@ -470,6 +470,50 @@ function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
       ],
     }
   }
+  if (api.id === 'open-meteo-elevation' && isRecord(data)) {
+    const elevationValues = Array.isArray(root.elevation) ? root.elevation : root.elevation === undefined ? [] : [root.elevation]
+    const latitudes = Array.isArray(root.latitude) ? root.latitude : [root.latitude]
+    const longitudes = Array.isArray(root.longitude) ? root.longitude : [root.longitude]
+    records = elevationValues.map((value, index) => ({
+      title: `Point ${index + 1}`,
+      latitude: textValue(latitudes[index]) ?? textValue(latitudes[0]) ?? '—',
+      longitude: textValue(longitudes[index]) ?? textValue(longitudes[0]) ?? '—',
+      elevation: numberValue(value) !== undefined ? `${formatNumber(numberValue(value)!, 2)} m` : textValue(value) ?? '—',
+    }))
+  }
+  if (api.id === 'bank-of-canada-valet' && isRecord(data)) {
+    const observations = recordArray(recordValue(data, 'observations'))
+    const observedValueKeys = new Set<string>()
+    observations.forEach((observation) => {
+      Object.entries(observation).forEach(([key, value]) => {
+        if (key === 'd' || key === 'date') return
+        if (numberValue(value) !== undefined) observedValueKeys.add(key)
+      })
+    })
+    const observedKey = [...observedValueKeys][0]
+    const seriesRows = observations
+      .map((observation) => ({ date: textValue(observation.d) ?? textValue(observation.date) ?? '', value: observedKey ? numberValue(observation[observedKey]) : undefined }))
+      .filter((entry): entry is { date: string; value: number } => entry.value !== undefined)
+    const points = seriesRows.map((entry) => entry.value)
+    const dates = seriesRows.map((entry) => entry.date)
+    const unit = observedKey ?? 'value'
+    if (!points.length) return {
+      label: 'Bank of Canada series',
+      value: 0,
+      points: [0],
+      dates: ['No series'],
+      metrics: [{ label: 'Data points', value: '0' }, { label: 'Series', value: observedKey ?? '—' }],
+    }
+    return {
+      label: `${cleanText(recordValue(data, 'name')) ?? cleanText(recordValue(data, 'title')) ?? textValue(recordValue(data, 'series')) ?? api.name} · Bank of Canada`,
+      value: points.at(-1) ?? 0, currency: unit, points: points, dates,
+      metrics: [
+        { label: 'Latest value', value: `${formatNumber(points.at(-1) ?? 0)} ${unit}` },
+        { label: 'Series high', value: formatNumber(Math.max(...points), 4) },
+        { label: 'Series low', value: formatNumber(Math.min(...points), 4) },
+      ],
+    }
+  }
   if (api.id === 'kraken-public-ticker' && isRecord(data)) {
     const result = isRecord(data.result) ? data.result : {}
     const ticker = Object.values(result).find(isRecord) ?? {}
@@ -504,6 +548,35 @@ function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
         { label: 'Total views', value: compactNumber(total) },
         { label: 'Daily average', value: points.length ? compactNumber(total / points.length) : '—' },
         { label: 'Peak day', value: points.length ? compactNumber(Math.max(...points)) : '—' },
+      ],
+    }
+  }
+  if (api.id === 'nasa-power-climate' && isRecord(data)) {
+    const properties = isRecord(data.properties) ? data.properties : {}
+    const parameterSources = isRecord(properties.parameters) ? properties.parameters : isRecord(data.parameters) ? data.parameters : {}
+    const preferredKeys = ['T2M', 'T2M_MAX', 'T2M_MIN', 'RH2M', 'WS2M', 'PRECTOT']
+    const selectedKey = preferredKeys.find((key) => isRecord(parameterSources[key])) ?? Object.keys(parameterSources)[0]
+    const selected = selectedKey ? (isRecord(parameterSources[selectedKey]) ? parameterSources[selectedKey] : {}) : {}
+    const selectedData = isRecord(selected.data) ? selected.data : isRecord(selected.values) ? selected.values : selected
+    const rawSeries = isRecord(selectedData) ? Object.entries(selectedData) : []
+    const series = rawSeries
+      .map(([date, value]) => ({ date, value: numberValue(value) }))
+      .filter((entry): entry is { date: string; value: number } => entry.value !== undefined)
+      .slice(-180)
+    const points = series.map((entry) => entry.value)
+    const dates = series.map((entry) => entry.date)
+    const latest = points.at(-1) ?? 0
+    const unit = cleanText(selected.unit) || cleanText(selected.units) || 'units'
+    return {
+      label: `NASA POWER · ${selectedKey ?? 'climate'} · ${cleanText(selected.label) ?? 'Climate metric'}`,
+      value: latest,
+      currency: unit,
+      points,
+      dates,
+      metrics: [
+        { label: 'Latest value', value: `${formatNumber(latest)} ${unit}` },
+        { label: 'Series length', value: String(series.length) },
+        { label: 'Range', value: points.length ? `${formatNumber(Math.min(...points), 4)} – ${formatNumber(Math.max(...points), 4)}` : '—' },
       ],
     }
   }
@@ -771,6 +844,38 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
       subtitle: `${cleanText(observation.place_guess) ?? 'Location unavailable'} · ${previewValue(observation.observed_on)}`,
     }
   }).filter((item) => item.image)
+  if (api.id === 'openverse-search' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((item) => {
+    const thumbnails = isRecord(item.thumbnail) ? item.thumbnail : {}
+    return {
+      image: textValue(item.thumbnail) ?? textValue(item.thumbnail_url) ?? textValue(thumbnails.url) ?? textValue(item.thumbnailUrl) ?? textValue(item.url) ?? '',
+      title: cleanText(item.title) ?? cleanText(item.name) ?? cleanText(item.id) ?? 'Openverse result',
+      subtitle: `${cleanText(item.creator) ?? cleanText(item.creator_name) ?? 'Openverse'} · ${cleanText(item.license) ?? cleanText(item.license_title) ?? 'Public license'}`,
+    }
+  }).filter((item) => item.image)
+  if (api.id === 'apple-itunes-search' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((item) => ({
+    image: textValue(item.artworkUrl100) ?? textValue(item.artworkUrl60) ?? '',
+    title: cleanText(item.trackName) ?? cleanText(item.collectionName) ?? cleanText(item.artistName) ?? 'Apple media item',
+    subtitle: [cleanText(item.artistName), cleanText(item.wrapperType) ?? cleanText(item.kind)].filter(Boolean).join(' · ') || 'iTunes media',
+  })).filter((item) => item.image)
+  if (api.id === 'anilist-graphql' && isRecord(data)) {
+    const root = isRecord(data.data) ? data.data : {}
+    const pageMedia = isRecord(root.Page) ? recordArray(root.Page.media) : []
+    const directMedia = recordArray(root.media)
+    const singleMedia = isRecord(root.Media) ? [root.Media] : []
+    const media = pageMedia.length ? pageMedia : directMedia.length ? directMedia : singleMedia
+    return media.slice(0, 8).map((entry) => {
+      const title = isRecord(entry.title) ? entry.title : {}
+      const cover = isRecord(entry.coverImage) ? entry.coverImage : {}
+      const image = textValue(cover.extraLarge ?? cover.large ?? cover.medium ?? entry.bannerImage) ?? ''
+      const formattedTitle = cleanText(title.romaji ?? title.english ?? title.native ?? title.userPreferred) ?? cleanText(entry.name) ?? 'Anime or manga title'
+      const status = cleanText(entry.status) ?? ''
+      const type = cleanText(entry.type) || cleanText(entry.format) || 'Media'
+      const release = textValue(entry.startDate) ?? previewValue(entry.seasonYear) ?? previewValue(entry.startYear)
+      const chapters = entry.chapters !== undefined ? `${previewValue(entry.chapters)} ch` : (entry.episodes !== undefined ? `${previewValue(entry.episodes)} ep` : undefined)
+      const description = [type, release, chapters, status].filter(Boolean).join(' · ')
+      return { image, title: formattedTitle, subtitle: description || cleanText(title.native) || type }
+    }).filter((item) => item.image)
+  }
   if (api.id === 'art-institute-search' && isRecord(data)) {
     const base = isRecord(data.config) ? textValue(data.config.iiif_url) : undefined
     if (base && Array.isArray(data.data)) return data.data.filter(isRecord).filter((item) => item.image_id).slice(0, 6).map((item) => ({ image: `${base}/2/${item.image_id}/full/500,/0/default.jpg`, title: textValue(item.title) ?? 'Artwork', subtitle: textValue(item.artist_title) }))
@@ -820,6 +925,14 @@ function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint
     label: cleanText(brewery.name) ?? `Brewery ${index + 1}`,
     detail: `${previewLabel(cleanText(brewery.brewery_type) ?? 'Brewery')} · ${cleanText(brewery.city) ?? cleanText(brewery.country) ?? 'Location available'}`,
   })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  if (api?.id === 'zippopotam-postcode') return (isRecord(data) ? recordArray(data.places) : []).slice(0, 8).map((place, index) => {
+    return {
+      latitude: numberValue(place.latitude) ?? 0,
+      longitude: numberValue(place.longitude) ?? 0,
+      label: cleanText(place['place name']) ?? `Postcode place ${index + 1}`,
+      detail: `${cleanText(place.state) ?? cleanText(place['state abbreviation']) ?? 'Location'} · ${cleanText(data.country) ?? 'Postcode lookup'}`,
+    }
+  }).filter((point) => point.latitude !== 0 || point.longitude !== 0)
   const points: LocationPoint[] = []
   const visit = (value: unknown, depth = 0) => {
     if (depth > 7 || points.length >= 8) return
@@ -979,6 +1092,24 @@ function TransitBoardPreview({ data }: { data: unknown }) {
       return <article key={`${vehicle}-${departure.time}-${index}`} style={{ '--route-color': departure.canceled === '1' ? '#b42318' : delay > 0 ? '#d97706' : '#16805b' } as CSSProperties}><span>{previewValue(departure.platform)}</span><div><small>{delay > 0 ? `Delayed ${Math.round(delay / 60)} min` : 'On schedule'}</small><h3>{cleanText(departure.station) ?? 'Destination unavailable'}</h3><p>{vehicle.replace('BE.NMBS.', '')} · {time ?? previewValue(departure.time)}</p></div><em>{departure.canceled === '1' ? 'Cancelled' : 'Train'}</em></article>
     })}</div></div>
   }
+  if (isRecord(root.connections)) {
+    const connections = recordArray(root.connections).slice(0, 10)
+    if (!connections.length) return <div className="weather-empty"><strong>No transit connections found</strong><span>The Swiss open-data response did not return connection records.</span></div>
+    return <div className="transit-preview"><div className="transit-summary"><span>Swiss public transport</span><strong>{connections.length}</strong><b>live connections</b><small>Origin, destination and delay details</small></div><div className="transit-routes">{connections.map((connection, index) => {
+      const from = isRecord(connection.from) ? connection.from : {}
+      const to = isRecord(connection.to) ? connection.to : recordArray(connection.to)[0] ?? {}
+      const section = Array.isArray(connection.sections) ? connection.sections.find(isRecord) : undefined
+      const leg = Array.isArray(section?.journeys) ? section.journeys[0] : undefined
+      const journey = isRecord(leg) ? leg : section
+      const delay = numberValue(connection.delay) ?? numberValue(journey?.delay) ?? 0
+      const departure = cleanText(from.departure) ?? cleanText(from.departureTime) ?? cleanText(from.time) ?? '—'
+      const arrival = cleanText(to.arrival) ?? cleanText(to.arrivalTime) ?? cleanText(to.time) ?? '—'
+      const line = cleanText(journey?.name) ?? cleanText(journey?.category) ?? cleanText(from.name) ?? 'Transit connection'
+      const platform = cleanText(from.platform) || cleanText(to.platform) || '—'
+      const duration = cleanText(connection.duration) || cleanText(journey?.duration) || 'scheduled'
+      return <article key={`${departure}-${arrival}-${index}`}><span>{platform}</span><div><small>{delay > 0 ? `Delayed ${delay} min` : 'On schedule'}</small><h3>{cleanText(from.station) ?? cleanText(from.name) ?? 'Unknown origin'} → {cleanText(to.station) ?? cleanText(to.name) ?? 'Unknown destination'}</h3><p>{line} · {duration}</p></div><em>{arrival}</em></article>
+    })}</div></div>
+  }
   const routes = Array.isArray(root.data) ? root.data.filter(isRecord).slice(0, 10) : []
   if (!routes.length) return <div className="weather-empty"><strong>No transit routes found</strong><span>The response did not include MBTA route records.</span></div>
   return <div className="transit-preview"><div className="transit-summary"><span>Boston network</span><strong>{routes.length}</strong><b>routes in this view</b><small>Live MBTA route catalogue</small></div><div className="transit-routes">{routes.map((route, index) => {
@@ -1088,6 +1219,30 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
     tags: textArray(record.topics ?? record.tag_list),
   }))
   else if (api.id === 'hacker-news') cards = [root].map((record) => ({ title: cleanText(record.title) ?? 'Hacker News item', eyebrow: `${previewValue(record.type)} by ${previewValue(record.by)}`, badge: `${previewValue(record.score)} points`, metrics: [{ label: 'Comments', value: previewValue(record.descendants) }, { label: 'Published', value: epochDate(record.time) ?? '—' }, { label: 'Item ID', value: previewValue(record.id) }] }))
+  else if (api.id === 'hn-search-algolia') {
+    cards = recordArray(root.hits).map((hit) => ({
+      title: cleanText(hit.title ?? hit.story_title) ?? 'Hacker News result',
+      eyebrow: `${cleanText(hit._tags?.[0] ?? hit.tags?.[0]) ?? 'Hacker News'} · ${cleanText(hit.author) ?? 'Anonymous'}`,
+      description: cleanText(hit.story_text ?? hit.comment_text) ?? `Open on ${cleanText(hit.url) ?? 'Hacker News'}`,
+      badge: cleanText(hit.story_type) ?? 'Story',
+      metrics: [
+        { label: 'Points', value: previewValue(hit.points) },
+        { label: 'Comments', value: previewValue(hit.num_comments) },
+        { label: 'Published', value: epochDate(hit.created_at_i) ?? previewValue(hit.created_at) ?? '—' },
+      ],
+    }))
+  } else if (api.id === 'packagist-search') {
+    cards = recordArray(root.results).map((record) => {
+      const downloads = isRecord(record.downloads) ? record.downloads : {}
+      return {
+        title: cleanText(record.name) ?? 'Packagist package',
+        eyebrow: `Packagist · ${cleanText(record.type) || 'Composer package'}`,
+        description: cleanText(record.description),
+        badge: `${compactNumber(numberValue(downloads.total) ?? 0)} downloads`,
+        metrics: [{ label: 'Favourites', value: previewValue(record.favers) }, { label: 'Repository', value: cleanText(record.repository) || '—' }, { label: 'Maintainer', value: cleanText(record.maintainer) || cleanText(record.author) || '—' }],
+      }
+    })
+  }
   else if (api.id === 'npm-search') cards = recordArray(root.objects).map((record) => {
     const pkg = isRecord(record.package) ? record.package : {}
     const downloads = isRecord(record.downloads) ? record.downloads : {}
@@ -1441,6 +1596,25 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     records = root.success ? [{ title: `${previewValue(root.city)}, ${previewValue(root.country)}`, ip: previewValue(root.ip), isp: previewValue(connection.isp), timezone: previewValue(recordValue(root.timezone, 'id')) }] : []
   } else if (api.id === 'newton-math-solver') {
     records = Object.keys(root).length ? [{ title: previewValue(root.expression), operation: previewValue(root.operation), result: previewValue(root.result) }] : []
+  } else if (api.id === 'aladhan-prayer-times') {
+    const payload = isRecord(root.data) ? root.data : root
+    const timings = isRecord(payload.timings) ? payload.timings : {}
+    const date = isRecord(payload.date) ? payload.date : {}
+    const gregorian = isRecord(date.gregorian) ? date.gregorian : {}
+    const hijri = isRecord(date.hijri) ? date.hijri : {}
+    const metadata = isRecord(payload.meta) ? payload.meta : {}
+    const method = isRecord(metadata.method) ? metadata.method : {}
+    const methodLabel = cleanText(method.name) || `Method ${previewValue(method.id) || '11'}`
+    const dateLabel = cleanText(hijri.date) || cleanText(gregorian.date) || 'Today'
+    records = Object.entries(timings).slice(0, 10).map(([name, value]) => ({
+      title: `${cleanText(name)} time`,
+      time: cleanText(value) ?? previewValue(value),
+      method: methodLabel,
+      date: dateLabel,
+    }))
+    if (!records.length) {
+      records = [{ title: 'Prayer times', method: methodLabel, date: dateLabel }]
+    }
   } else if (api.id === 'datamuse-rhymes') {
     records = recordArray(data).slice(0, 10).map((entry) => ({ title: cleanText(entry.word) ?? 'Word', score: previewValue(entry.score), syllables: previewValue(entry.numSyllables) }))
   } else if (api.id === 'open5e-monster-search') {
@@ -1496,6 +1670,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   posts: defineApiPreview('posts', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   holidays: defineApiPreview('holidays', ({ api, data }) => <CalendarPreview api={api} data={data}/>),
   'geocoding-search': defineApiPreview('geocoding-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'aladhan-prayer-times': defineApiPreview('aladhan-prayer-times', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'open-meteo-air-quality': defineApiPreview('open-meteo-air-quality', ({ api, data }) => <AirQualityForecastPreview data={data}/>),
   'sunrise-sunset': defineApiPreview('sunrise-sunset', ({ data }) => <SolarCyclePreview data={data}/>),
   'nasa-eonet-events': defineApiPreview('nasa-eonet-events', ({ data }) => <NaturalEventsPreview data={data}/>),
@@ -1525,6 +1700,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'met-museum-object-detail': defineApiPreview('met-museum-object-detail', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'met-museum-search': defineApiPreview('met-museum-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'nhtsa-vehicle-recalls': defineApiPreview('nhtsa-vehicle-recalls', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'npm-search': defineApiPreview('npm-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'nvd-cpe-search': defineApiPreview('nvd-cpe-search', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
   'nvd-cve-detail': defineApiPreview('nvd-cve-detail', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
@@ -1535,9 +1711,12 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'pypi-json': defineApiPreview('pypi-json', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'stack-exchange': defineApiPreview('stack-exchange', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'uk-bank-holidays': defineApiPreview('uk-bank-holidays', ({ api, data }) => <CalendarPreview api={api} data={data}/>),
+  'hebcal-calendar': defineApiPreview('hebcal-calendar', ({ api, data }) => <CalendarPreview api={api} data={data}/>),
   usaspending: defineApiPreview('usaspending', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   usgs: defineApiPreview('usgs', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'wikidata-sparql': defineApiPreview('wikidata-sparql', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'openssf-scorecard': defineApiPreview('openssf-scorecard', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'opencitations-index': defineApiPreview('opencitations-index', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'world-bank-gdp': defineApiPreview('world-bank-gdp', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'world-bank-population': defineApiPreview('world-bank-population', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'frankfurter-sgd-myr-history': defineApiPreview('frankfurter-sgd-myr-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
@@ -1562,6 +1741,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'osv-vulnerability': defineApiPreview('osv-vulnerability', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
   'federal-register-documents': defineApiPreview('federal-register-documents', ({ data }) => <FederalRegisterPreview data={data}/>),
   'wikipedia-search': defineApiPreview('wikipedia-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'open-meteo-elevation': defineApiPreview('open-meteo-elevation', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'open-meteo-flood': defineApiPreview('open-meteo-flood', ({ data }) => <FloodForecastPreview data={data}/>),
   'open-meteo-history': defineApiPreview('open-meteo-history', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'kraken-public-ticker': defineApiPreview('kraken-public-ticker', ({ api, data }) => <MarketPreview api={api} data={data}/>),
@@ -1570,6 +1750,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'open-brewery-directory': defineApiPreview('open-brewery-directory', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'rick-morty-characters': defineApiPreview('rick-morty-characters', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'wikimedia-pageviews': defineApiPreview('wikimedia-pageviews', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'vam-collections': defineApiPreview('vam-collections', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'openf1-historical': defineApiPreview('openf1-historical', ({ data }) => <OpenF1SessionsPreview data={data}/>),
   'irail-liveboard': defineApiPreview('irail-liveboard', ({ data }) => <TransitBoardPreview data={data}/>),
   'spaceflight-news': defineApiPreview('spaceflight-news', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
@@ -1632,6 +1813,44 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'dicebear-avatar': defineApiPreview('dicebear-avatar', ({ api, requestUrl }) => <GeneratedImagePreview api={api} requestUrl={requestUrl}/>),
   'catfacts': defineApiPreview('catfacts', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'randomfox-photo': defineApiPreview('randomfox-photo', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'anilist-graphql': defineApiPreview('anilist-graphql', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'openverse-search': defineApiPreview('openverse-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'apple-itunes-search': defineApiPreview('apple-itunes-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'packagist-search': defineApiPreview('packagist-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'jolpica-f1': defineApiPreview('jolpica-f1', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'hn-search-algolia': defineApiPreview('hn-search-algolia', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'bank-of-canada-valet': defineApiPreview('bank-of-canada-valet', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'swiss-transit-connections': defineApiPreview('swiss-transit-connections', ({ api, data }) => <TransitBoardPreview api={api} data={data}/>),
+  'nasa-power-climate': defineApiPreview('nasa-power-climate', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'zippopotam-postcode': defineApiPreview('zippopotam-postcode', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'malaysia-core-cpi': defineApiPreview('malaysia-core-cpi', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'malaysia-household-income': defineApiPreview('malaysia-household-income', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'malaysia-population': defineApiPreview('malaysia-population', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'openfda-food-recalls': defineApiPreview('openfda-food-recalls', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'iconify-search': defineApiPreview('iconify-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'homebrew-formula-json': defineApiPreview('homebrew-formula-json', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'npm-download-counts': defineApiPreview('npm-download-counts', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'geoboundaries-admin-boundaries': defineApiPreview('geoboundaries-admin-boundaries', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'osrm-route': defineApiPreview('osrm-route', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'opendota-pro-matches': defineApiPreview('opendota-pro-matches', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'openligadb-matches': defineApiPreview('openligadb-matches', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'uk-parliament-members': defineApiPreview('uk-parliament-members', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'mlb-stats-api': defineApiPreview('mlb-stats-api', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'gleif-lei': defineApiPreview('gleif-lei', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'fdic-bankfind': defineApiPreview('fdic-bankfind', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'uk-food-hygiene': defineApiPreview('uk-food-hygiene', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'uk-flood-monitoring': defineApiPreview('uk-flood-monitoring', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'unhcr-refugees': defineApiPreview('unhcr-refugees', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'hdx-humanitarian-datasets': defineApiPreview('hdx-humanitarian-datasets', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'open-meteo-climate': defineApiPreview('open-meteo-climate', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'models-dev': defineApiPreview('models-dev', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'vatcomply': defineApiPreview('vatcomply', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'mempool-space-btc': defineApiPreview('mempool-space-btc', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'metacpan': defineApiPreview('metacpan', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'hexpm': defineApiPreview('hexpm', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'pub-dev': defineApiPreview('pub-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'go-module-proxy': defineApiPreview('go-module-proxy', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'flathub-appstream': defineApiPreview('flathub-appstream', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
