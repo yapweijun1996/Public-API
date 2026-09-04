@@ -1,20 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   apiCategories,
   apiCatalog,
   getDefaultParameters,
+  getApiById,
   validateParameters,
   type ApiCategory,
   type ApiDemo,
 } from './apiCatalog'
-import { ResponseDemoPreview } from './responsePreview'
 import { useWebMcp, WEBMCP_TOOL_COUNT, WEBMCP_TOOL_UI_LIST, type AdminSection } from './webmcp'
+import { buildRequestLabHash, readHashPath, readRequestLabApiId } from './routes'
+
+const loadResponsePreview = () => import('./responsePreview')
+const LazyResponseDemoPreview = lazy(() => loadResponsePreview().then(({ ResponseDemoPreview }) => ({ default: ResponseDemoPreview })))
+
+type RequestErrorKind = 'rate-limit' | 'provider-unavailable' | 'http-error' | 'network-or-cors' | 'timeout' | 'unknown'
+
+export const REQUEST_TIMEOUT_MS = 20_000
 
 type RequestState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'success'; data: unknown; httpStatus: number; elapsed: number; size: number; url: string }
-  | { status: 'error'; message: string; url: string }
+  | { status: 'error'; message: string; url: string; errorType: RequestErrorKind; httpStatus?: number }
 
 type AdminPage =
   | 'overview'
@@ -88,7 +96,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
 
-async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
+async function fetchApi(api: ApiDemo, parameters: Record<string, string>, signal?: AbortSignal) {
   const url = api.buildUrl(parameters)
   const method = api.method ?? DEFAULT_HTTP_METHOD
   const body = api.buildBody?.(parameters)
@@ -102,6 +110,7 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   const response = await fetch(url, {
     method,
     headers: requestHeaders,
+    signal,
     ...(body === undefined ? {} : { body: isForm ? new URLSearchParams(body as Record<string, string>).toString() : JSON.stringify(body) }),
   })
   const text = await response.text()
@@ -111,7 +120,12 @@ async function fetchApi(api: ApiDemo, parameters: Record<string, string>) {
   } else {
     try { data = JSON.parse(text) as unknown } catch { data = text }
   }
-  if (!response.ok) throw new Error(`The API returned ${response.status} ${response.statusText}.`)
+  if (!response.ok) {
+    const error = new Error(`The API returned ${response.status} ${response.statusText}.`) as Error & { httpStatus: number; errorType: RequestErrorKind }
+    error.httpStatus = response.status
+    error.errorType = response.status === 429 ? 'rate-limit' : response.status >= 500 ? 'provider-unavailable' : 'http-error'
+    throw error
+  }
   return { data, httpStatus: response.status, elapsed: Math.round(performance.now() - started), size: new Blob([text]).size, url }
 }
 
@@ -143,6 +157,18 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
 
 const sidebarPreferenceKey = 'api-console.sidebar-collapsed'
 
+const classifyRequestError = (error: unknown): { message: string; errorType: RequestErrorKind; httpStatus?: number } => {
+  const candidate = typeof error === 'object' && error !== null
+    ? error as { name?: string; message?: string; httpStatus?: number; errorType?: RequestErrorKind }
+    : undefined
+  const httpStatus = candidate?.httpStatus
+  const isTimeout = candidate?.name === 'TimeoutError'
+  const errorType = candidate?.errorType
+    ?? (isTimeout ? 'timeout' : error instanceof TypeError ? 'network-or-cors' : 'unknown')
+  const message = isTimeout ? `The request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.` : candidate?.message ?? 'The request failed.'
+  return { message, errorType, ...(httpStatus === undefined ? {} : { httpStatus }) }
+}
+
 const DEFAULT_HTTP_METHOD: NonNullable<ApiDemo['method']> = 'GET'
 const DEFAULT_RISK: NonNullable<ApiDemo['risk']> = 'Low'
 const KEYLESS_TAG_LABEL = 'no-key'
@@ -162,7 +188,7 @@ const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: strin
 const pageFromPath = Object.fromEntries(Object.entries(pageMeta).map(([page, meta]) => [meta.path, page])) as Record<string, AdminPage>
 
 function readPageFromLocation(): AdminPage {
-  const hashPath = window.location.hash.replace(/^#/, '')
+  const hashPath = readHashPath()
   return pageFromPath[hashPath] ?? pageFromPath[window.location.pathname] ?? 'catalog'
 }
 
@@ -227,8 +253,11 @@ if (import.meta.env.DEV) {
 
 function App() {
   const [currentPage, setCurrentPage] = useState<AdminPage>(readPageFromLocation)
-  const [selectedId, setSelectedId] = useState(apiCatalog[0].id)
-  const [parameters, setParameters] = useState<Record<string, string>>(getDefaultParameters(apiCatalog[0]))
+  const [selectedId, setSelectedId] = useState(() => getApiById(readRequestLabApiId() ?? '')?.id ?? apiCatalog[0].id)
+  const [parameters, setParameters] = useState<Record<string, string>>(() => {
+    const initialApi = getApiById(readRequestLabApiId() ?? '') ?? apiCatalog[0]
+    return getDefaultParameters(initialApi)
+  })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [request, setRequest] = useState<RequestState>({ status: 'idle' })
   const [query, setQuery] = useState('')
@@ -242,35 +271,65 @@ function App() {
   const [detailOpen, setDetailOpen] = useState(() => !window.matchMedia('(max-width: 1180px)').matches)
   const [outputTab, setOutputTab] = useState<'response' | 'code'>('response')
   const [copied, setCopied] = useState(false)
+  const requestRunIdRef = useRef(0)
+  const requestAbortRef = useRef<AbortController | null>(null)
+
+  const cancelActiveRequest = useCallback(() => {
+    requestRunIdRef.current += 1
+    requestAbortRef.current?.abort(new DOMException('Request superseded.', 'AbortError'))
+    requestAbortRef.current = null
+  }, [])
 
   const activeApi = apiCatalog.find((api) => api.id === selectedId) ?? apiCatalog[0]
   const activePage = pageMeta[currentPage]
   const supportingPage = currentPage in supportingPages ? supportingPages[currentPage as SupportingPage] : null
 
-  const navigatePage = useCallback((page: AdminPage, replace = false) => {
+  const navigatePage = useCallback((page: AdminPage, replace = false, requestLabApiId?: string) => {
     const path = pageMeta[page].path
-    const hash = `#${path}`
+    const hash = page === 'request-lab' ? buildRequestLabHash(requestLabApiId ?? selectedId) : `#${path}`
     if (window.location.hash !== hash) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', `${import.meta.env.BASE_URL}${hash}`)
     }
     setCurrentPage(page)
     setMobileNav(false)
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [])
+  }, [selectedId])
 
   useEffect(() => {
-    if (!pageFromPath[window.location.hash.replace(/^#/, '')]) navigatePage(readPageFromLocation(), true)
-    const handleRouteChange = () => {
-      setCurrentPage(readPageFromLocation())
+    const syncRoute = (canonicalizeRequestLab = false) => {
+      const page = readPageFromLocation()
+      setCurrentPage(page)
       setMobileNav(false)
+      if (page !== 'request-lab') return
+
+      const requestedId = readRequestLabApiId()
+      const requestedApi = requestedId ? getApiById(requestedId) : undefined
+      if (!requestedApi) {
+        if (canonicalizeRequestLab) navigatePage('request-lab', true, selectedId)
+        return
+      }
+      if (requestedApi.id === selectedId) return
+      cancelActiveRequest()
+      setSelectedId(requestedApi.id)
+      setParameters(getDefaultParameters(requestedApi))
+      setErrors({})
+      setRequest({ status: 'idle' })
+      setOutputTab('response')
     }
+
+    if (!pageFromPath[readHashPath()]) navigatePage(readPageFromLocation(), true)
+    else syncRoute(true)
+
+    const handleRouteChange = () => syncRoute(true)
     window.addEventListener('popstate', handleRouteChange)
     window.addEventListener('hashchange', handleRouteChange)
     return () => {
       window.removeEventListener('popstate', handleRouteChange)
       window.removeEventListener('hashchange', handleRouteChange)
     }
-  }, [navigatePage])
+  }, [cancelActiveRequest, navigatePage, selectedId])
+
+  useEffect(() => () => cancelActiveRequest(), [cancelActiveRequest])
 
   useEffect(() => {
     document.title = `${activePage.title} — Public API Admin`
@@ -336,34 +395,48 @@ function App() {
   const selectApi = useCallback((id: string, openOnMobile = true) => {
     const api = apiCatalog.find((candidate) => candidate.id === id)
     if (!api) return
+    cancelActiveRequest()
     setSelectedId(id)
     setParameters(getDefaultParameters(api))
     setErrors({})
     setRequest({ status: 'idle' })
     setOutputTab('response')
     if (openOnMobile) setDetailOpen(true)
-  }, [])
+  }, [cancelActiveRequest])
 
   const runForAgent = useCallback(async (api: ApiDemo, values: Record<string, string>) => {
     const nextErrors = validateParameters(api, values)
     if (Object.keys(nextErrors).length) throw new Error(Object.values(nextErrors).join(' '))
+    cancelActiveRequest()
+    const runId = requestRunIdRef.current
+    const controller = new AbortController()
+    requestAbortRef.current = controller
+    const timeoutId = window.setTimeout(() => {
+      controller.abort(new DOMException('Request timed out.', 'TimeoutError'))
+    }, REQUEST_TIMEOUT_MS)
     setSelectedId(api.id)
     setParameters(values)
     setRequest({ status: 'loading' })
+    void loadResponsePreview()
     try {
-      const result = await fetchApi(api, values)
-      setRequest({ status: 'success', ...result })
+      const result = await fetchApi(api, values, controller.signal)
+      if (runId === requestRunIdRef.current) setRequest({ status: 'success', ...result })
       return result.data
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'The request failed.'
-      setRequest({ status: 'error', message, url: api.buildUrl(values) })
+      if (runId === requestRunIdRef.current) {
+        const classified = classifyRequestError(error)
+        setRequest({ status: 'error', ...classified, url: api.buildUrl(values) })
+      }
       throw error
+    } finally {
+      window.clearTimeout(timeoutId)
+      if (requestAbortRef.current === controller) requestAbortRef.current = null
     }
-  }, [])
+  }, [cancelActiveRequest])
 
   const selectApiForAgent = useCallback((id: string) => {
     selectApi(id, false)
-    navigatePage('request-lab')
+    navigatePage('request-lab', false, id)
   }, [navigatePage, selectApi])
 
   const webMcpStatus = useWebMcp({ onSelectApi: selectApiForAgent, onRunApi: runForAgent, onNavigate: navigateSection, onFilter: filterCatalog })
@@ -379,9 +452,27 @@ function App() {
   }, [runForAgent])
 
   const updateParameter = (fieldId: string, value: string) => {
+    cancelActiveRequest()
     setParameters((current) => ({ ...current, [fieldId]: value }))
     if (request.status !== 'idle') setRequest({ status: 'idle' })
     setOutputTab('response')
+  }
+
+  const handleOutputTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    const tabs = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])
+    if (!tabs.length) return
+    const currentIndex = tabs.indexOf(event.currentTarget)
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+    const nextTab = tabs[nextIndex]
+    if (!nextTab) return
+    event.preventDefault()
+    setOutputTab(nextTab.dataset.outputTab === 'code' ? 'code' : 'response')
+    nextTab.focus()
   }
 
   const submitRequest = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -391,7 +482,7 @@ function App() {
 
   const trySelectedApi = () => {
     setDetailOpen(false)
-    navigatePage('request-lab')
+    navigatePage('request-lab', false, activeApi.id)
     void executeRequest(activeApi, parameters)
   }
 
@@ -499,7 +590,6 @@ function App() {
             <div className="catalog-toolbar">
               <label className="module-search"><Icon name="search" size={16} /><span className="sr-only">Search catalog</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, description, or provider…" /></label>
               <select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option value={item} key={item}>{item === 'All' ? 'All categories' : item}</option>)}</select>
-              <button className="toolbar-button" type="button"><Icon name="filter" size={15} /> Filters</button>
               <span className="result-count">{filteredApis.length} APIs</span>
             </div>
 
@@ -523,31 +613,31 @@ function App() {
               </table>
               {filteredApis.length === 0 && <div className="catalog-empty"><Icon name="search" /><b>No matching APIs</b><p>Clear the search or choose another category.</p></div>}
             </div>
-            <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled aria-label="Previous page">‹</button><button type="button" className="current" aria-label="Page 1, current page">1</button><button type="button" disabled aria-label="Next page">›</button></div></div>
+            <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled aria-label="Previous page">‹</button><span className="current" aria-current="page">1</span><button type="button" disabled aria-label="Next page">›</button></div></div>
           </section>}
 
-          {currentPage === 'request-lab' && <section className={`request-lab page-section ${request.status === 'success' ? 'has-ssot-result' : ''}`} aria-labelledby="lab-heading">
+          {currentPage === 'request-lab' && <section className={`request-lab page-section ${request.status === 'success' ? 'has-ssot-result' : ''}`} aria-labelledby="lab-heading" data-api-id={activeApi.id} data-request-state={request.status}>
             <div className="section-title"><span><Icon name="activity" /></span><div><h2 id="lab-heading">Request lab</h2><p>Run the selected public API, review its SSOT card, then inspect raw JSON or fetch code when needed.</p></div></div>
-            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} runtime={{ httpStatus: request.httpStatus, elapsed: request.elapsed, size: request.size }} />}
+            {request.status === 'success' && <Suspense fallback={<div className="response-preview-loading" role="status" aria-live="polite">Preparing semantic API preview…</div>}><LazyResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} runtime={{ httpStatus: request.httpStatus, elapsed: request.elapsed, size: request.size }} /></Suspense>}
             <div className="lab-grid">
-              <form className="parameter-card" onSubmit={submitRequest} noValidate>
+              <form className="parameter-card" aria-label={`Configure ${activeApi.name}`} data-api-id={activeApi.id} onSubmit={submitRequest} noValidate>
                 <div className="active-api"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><small>Selected module</small><b>{activeApi.name}</b></div><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Docs <Icon name="external" size={12} /></a></div>
                 <div className="endpoint-box"><span>{activeApi.method ?? DEFAULT_HTTP_METHOD}</span><code>{endpoint}</code></div>
                 <div className="parameter-heading"><b>Parameters</b><small>{activeApi.fields.length ? `${activeApi.fields.length} required` : 'No input required'}</small></div>
                 <div className="parameter-fields">
                   {activeApi.fields.map((field) => (
                     <label key={field.id} htmlFor={`parameter-${field.id}`}><span>{field.label}<em>required</em></span>
-                      {field.type === 'select' ? <select id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} onChange={(event) => updateParameter(field.id, event.target.value)}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input id={`parameter-${field.id}`} name={field.id} type={field.type} min={field.min} max={field.max} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.id])} onChange={(event) => updateParameter(field.id, event.target.value)} />}
-                      <small className={errors[field.id] ? 'error' : ''}>{errors[field.id] ?? field.help}</small>
+                      {field.type === 'select' ? <select id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input id={`parameter-${field.id}`} name={field.id} type={field.type} min={field.min} max={field.max} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)} />}
+                      <small id={`parameter-${field.id}-help`} className={errors[field.id] ? 'error' : ''}>{errors[field.id] ?? field.help}</small>
                     </label>
                   ))}
                 </div>
                 <button className="primary-action" type="submit" disabled={request.status === 'loading'}>{request.status === 'loading' ? <span className="spinner" /> : <Icon name="play" size={16} />}{request.status === 'loading' ? 'Running request…' : 'Try live API'}</button>
               </form>
-              <div className="response-card">
-                <div className="response-head"><div role="tablist" aria-label="Request output"><button role="tab" aria-selected={outputTab === 'response'} type="button" onClick={() => setOutputTab('response')}>Raw JSON</button><button role="tab" aria-selected={outputTab === 'code'} type="button" onClick={() => setOutputTab('code')}>Fetch code</button></div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyOutput}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copied' : outputTab === 'code' ? 'Copy code' : 'Copy JSON'}</button></div>
-                <div className="response-body" aria-live="polite">
-                  {outputTab === 'code' ? <pre>{codeSample(activeApi, parameters)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>Ready to test</b><p>Configure the parameters and run this API.</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>Contacting {activeApi.provider}</b><p>Waiting for the public endpoint…</p></div> : request.status === 'error' ? <div className="response-error"><Icon name="alert" /><b>Request failed</b><p>{request.message}</p></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
+              <div className="response-card" role="region" aria-label={`${activeApi.name} request output`} data-api-id={activeApi.id} data-request-state={request.status} data-error-type={request.status === 'error' ? request.errorType : undefined}>
+                <div className="response-head"><div role="tablist" aria-label="Request output"><button id="request-output-response-tab" data-output-tab="response" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'response'} tabIndex={outputTab === 'response' ? 0 : -1} type="button" onClick={() => setOutputTab('response')} onKeyDown={handleOutputTabKeyDown}>Raw JSON</button><button id="request-output-code-tab" data-output-tab="code" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'code'} tabIndex={outputTab === 'code' ? 0 : -1} type="button" onClick={() => setOutputTab('code')} onKeyDown={handleOutputTabKeyDown}>Fetch code</button></div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyOutput}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copied' : outputTab === 'code' ? 'Copy code' : 'Copy JSON'}</button></div>
+                <div id="request-output-panel" className="response-body" role="tabpanel" aria-labelledby={outputTab === 'response' ? 'request-output-response-tab' : 'request-output-code-tab'} tabIndex={0} aria-live="polite">
+                  {outputTab === 'code' ? <pre>{codeSample(activeApi, parameters)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>Ready to test</b><p>Configure the parameters and run this API.</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>Contacting {activeApi.provider}</b><p>Waiting for the public endpoint…</p></div> : request.status === 'error' ? <div className="response-error" role="alert" aria-label={`Request failed: ${request.errorType}`} data-error-type={request.errorType} data-http-status={request.httpStatus}><Icon name="alert" /><b>Request failed</b><p>{request.message}</p><small className="sr-only">Error type: {request.errorType}{request.httpStatus ? `; HTTP ${request.httpStatus}` : ''}</small></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
                 </div>
               </div>
             </div>

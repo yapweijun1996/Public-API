@@ -15,6 +15,7 @@ A reusable Vite + React + TypeScript admin console for demonstrating public APIs
 - Desktop catalog table, mobile API cards, navigation drawer, and selected-module drawer
 - Five WebMCP tools registered through `document.modelContext`
 - Typed catalog tests that validate every default endpoint
+- Bounded live requests with a 20-second timeout and superseded-request cancellation
 
 ## Product North Star and AI-agent architecture
 
@@ -77,7 +78,7 @@ A catalog addition is not complete until its Request Lab SSOT card is defined. A
 
 When `document.modelContext` is available, the app registers:
 
-- `list_public_api_demos`
+- `list_public_api_demos` — supports optional `query` / `category` discovery and returns total/matched counts, deterministic Request Lab URLs, parameter help, numeric bounds, and select options from the catalog SSOT.
 - `filter_public_api_catalog`
 - `navigate_api_console`
 - `open_public_api_demo`
@@ -86,3 +87,5 @@ When `document.modelContext` is available, the app registers:
 The API is currently experimental. The visual explorer remains fully usable when WebMCP is unavailable.
 
 Agent actions reuse the same application logic as human interactions. They can filter the visible catalog, navigate the console, select a module, and execute a live request while keeping the UI synchronized.
+
+Request Lab routes are deterministic per API: `#/request-lab?api=<api-id>`. Opening that URL directly selects the requested catalog entry and its default parameters; invalid IDs fail closed to a valid canonical selection. WebMCP discovery returns the same per-API Request Lab URL so structured agents and ordinary browser agents share one navigation contract.

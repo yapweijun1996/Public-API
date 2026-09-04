@@ -161,9 +161,9 @@ A future build-time artifact such as `/api-catalog.json` should expose the same 
 
 Candidate fields include ID, name, category, capabilities, input schema, key requirement, browser readiness, health, attribution, and Request Lab deep link.
 
-### Planned deterministic deep links
+### Deterministic Request Lab deep links
 
-Request Lab should support stable per-API routing so an agent can jump directly to the required form instead of replaying a long click sequence.
+Request Lab uses stable per-API routing in the form `#/request-lab?api=<api-id>`, generated from the same catalog ID contract. Direct navigation selects the requested API and default parameters, and WebMCP discovery exposes the same canonical URL. Invalid API IDs fail closed to a valid canonical selection instead of creating an ambiguous UI state.
 
 ### Optional discovery helper
 

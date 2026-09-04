@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import App, { REQUEST_TIMEOUT_MS } from './App'
 import { apiCatalog } from './apiCatalog'
 import { apiPreviewComponentIds, apiPreviewComponents, apiSsotCardIds, apiSsotCardRegistry, buildDemoPreview, ResponseDemoPreview, selectPreviewLayout, selectWeatherPreviewVariant } from './responsePreview'
 
@@ -25,6 +25,7 @@ describe('catalog live API flow', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -42,7 +43,7 @@ describe('catalog live API flow', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
 
-    expect(window.location.hash).toBe('#/request-lab')
+    expect(window.location.hash).toBe('#/request-lab?api=countries')
     expect(await screen.findByRole('heading', { name: 'Request lab' })).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(await screen.findByText(/"name": "Singapore"/)).toBeInTheDocument()
@@ -57,6 +58,185 @@ describe('catalog live API flow', () => {
     expect(screen.getByRole('heading', { name: 'Singapore' })).toBeInTheDocument()
     expect(screen.getByText('East Asia & Pacific')).toBeInTheDocument()
   }, 8000)
+  it('opens a deterministic Request Lab deep link with the requested API selected', () => {
+    window.location.hash = '#/request-lab?api=open5e-monster-search'
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Request lab' })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Configure Open5e Monster Search' })).toHaveAttribute('data-api-id', 'open5e-monster-search')
+    expect(screen.getByRole('textbox', { name: 'Monster search' })).toHaveValue('dragon')
+    expect(window.location.hash).toBe('#/request-lab?api=open5e-monster-search')
+  })
+
+  it('canonicalizes an invalid Request Lab API id to the current valid selection', async () => {
+    window.location.hash = '#/request-lab?api=does-not-exist'
+    render(<App />)
+
+    await waitFor(() => expect(window.location.hash).toBe('#/request-lab?api=countries'))
+    expect(screen.getByRole('form', { name: 'Configure Country Explorer' })).toHaveAttribute('data-api-id', 'countries')
+  })
+
+  it('does not expose no-op catalog controls as actionable buttons', () => {
+    render(<App />)
+    expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Page 1, current page' })).not.toBeInTheDocument()
+    expect(document.querySelector('.table-footer [aria-current="page"]')).toHaveTextContent('1')
+  })
+
+  it('exposes deterministic request state and error semantics for browser agents', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Too many requests' }), {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
+
+    const alert = await screen.findByRole('alert', { name: 'Request failed: rate-limit' })
+    expect(alert).toHaveAttribute('data-error-type', 'rate-limit')
+    expect(alert).toHaveAttribute('data-http-status', '429')
+    expect(alert).toHaveTextContent('Error type: rate-limit; HTTP 429')
+    expect(screen.getByRole('region', { name: 'Country Explorer request output' })).toHaveAttribute('data-request-state', 'error')
+    expect(screen.getByRole('region', { name: 'Country Explorer request output' })).toHaveAttribute('data-error-type', 'rate-limit')
+    expect(screen.getByRole('form', { name: 'Configure Country Explorer' })).toHaveAttribute('data-api-id', 'countries')
+  })
+
+  it('fails a stalled browser request with a deterministic timeout error', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal
+      if (!signal) return reject(new Error('Missing AbortSignal'))
+      signal.addEventListener('abort', () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError')), { once: true })
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1)
+    })
+
+    const alert = screen.getByRole('alert', { name: 'Request failed: timeout' })
+    expect(alert).toHaveAttribute('data-error-type', 'timeout')
+    expect(alert).toHaveTextContent('The request timed out after 20 seconds.')
+    expect(screen.getByRole('region', { name: 'Country Explorer request output' })).toHaveAttribute('data-request-state', 'error')
+  })
+
+  it('cancels an in-flight request when parameters change so stale data cannot overwrite the next run', async () => {
+    let firstSignal: AbortSignal | undefined
+    const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) {
+        firstSignal = init?.signal ?? undefined
+        return new Promise<Response>((_resolve, reject) => {
+          firstSignal?.addEventListener('abort', () => reject(firstSignal?.reason ?? new DOMException('Aborted', 'AbortError')), { once: true })
+        })
+      }
+      return Promise.resolve(new Response(JSON.stringify([
+        { page: 1, pages: 1, total: 1 },
+        [{ id: 'MYS', name: 'Malaysia', capitalCity: 'Kuala Lumpur', region: { value: 'East Asia & Pacific' } }],
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    const countryCode = await screen.findByRole('textbox', { name: 'Country code' })
+    fireEvent.change(countryCode, { target: { value: 'MY' } })
+    expect(firstSignal?.aborted).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText(/\"name\": \"Malaysia\"/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Malaysia' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('implements the Request Lab output as a keyboard-operable ARIA tab set', () => {
+    window.location.hash = '#/request-lab'
+    render(<App />)
+    const rawTab = screen.getByRole('tab', { name: 'Raw JSON' })
+    const codeTab = screen.getByRole('tab', { name: 'Fetch code' })
+    const panel = screen.getByRole('tabpanel')
+
+    expect(rawTab).toHaveAttribute('aria-controls', 'request-output-panel')
+    expect(rawTab).toHaveAttribute('aria-selected', 'true')
+    expect(rawTab).toHaveAttribute('tabindex', '0')
+    expect(codeTab).toHaveAttribute('tabindex', '-1')
+    expect(panel).toHaveAttribute('aria-labelledby', 'request-output-response-tab')
+
+    rawTab.focus()
+    fireEvent.keyDown(rawTab, { key: 'ArrowRight' })
+    expect(codeTab).toHaveFocus()
+    expect(codeTab).toHaveAttribute('aria-selected', 'true')
+    expect(codeTab).toHaveAttribute('tabindex', '0')
+    expect(rawTab).toHaveAttribute('tabindex', '-1')
+    expect(panel).toHaveAttribute('aria-labelledby', 'request-output-code-tab')
+
+    fireEvent.keyDown(codeTab, { key: 'Home' })
+    expect(rawTab).toHaveFocus()
+    expect(rawTab).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('associates Request Lab field help with native controls', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ name: { common: 'Singapore' } }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try live API' }))
+    const control = await screen.findByRole('textbox', { name: 'Country code' })
+    expect(control).toHaveAttribute('aria-describedby', 'parameter-code-help')
+    expect(document.getElementById('parameter-code-help')).toHaveTextContent('Use an ISO 2- or 3-letter country code.')
+  })
+
+})
+
+
+describe('WebMCP discovery contract', () => {
+  beforeEach(() => {
+    window.location.hash = '#/catalog'
+    vi.stubGlobal('matchMedia', matchMedia)
+    vi.stubGlobal('scrollTo', vi.fn())
+  })
+
+  afterEach(() => {
+    cleanup()
+    delete (document as Document & { modelContext?: unknown }).modelContext
+    vi.unstubAllGlobals()
+  })
+
+  it('lets agents search the catalog and discover select options and numeric bounds from the SSOT', async () => {
+    const registered = new Map<string, { execute: (input: Record<string, unknown>) => unknown | Promise<unknown> }>()
+    const registerTool = vi.fn(async (tool: { name: string; execute: (input: Record<string, unknown>) => unknown | Promise<unknown> }) => {
+      registered.set(tool.name, tool)
+    })
+    Object.defineProperty(document, 'modelContext', { configurable: true, value: { registerTool } })
+
+    render(<App />)
+    await waitFor(() => expect(registerTool).toHaveBeenCalledTimes(5))
+
+    const listTool = registered.get('list_public_api_demos')
+    expect(listTool).toBeDefined()
+    const result = await listTool?.execute({ query: 'People Generator', category: 'People' }) as {
+      total: number
+      count: number
+      category: string
+      demos: Array<{ category: string; requestLabUrl: string; parameters: Array<{ id: string; min?: number; max?: number; options?: Array<{ label: string; value: string }> }> }>
+    }
+
+    expect(result.total).toBe(200)
+    expect(result.count).toBe(1)
+    expect(result.category).toBe('People')
+    expect(result.demos[0]?.category).toBe('People')
+    expect(new URL(result.demos[0]?.requestLabUrl ?? 'http://invalid/').hash).toBe('#/request-lab?api=people')
+    expect(result.demos[0]?.parameters.find((field) => field.id === 'count')).toMatchObject({ min: 1, max: 10 })
+    expect(result.demos[0]?.parameters.find((field) => field.id === 'nationality')?.options).toContainEqual({ label: 'Australia', value: 'au' })
+  })
 })
 
 describe('demo preview mapping', () => {
