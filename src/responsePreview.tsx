@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
-import type { ApiDemo } from './apiCatalog'
+import { apiCatalog, type ApiDemo } from './apiCatalog'
 import { getPreviewProfile, type PreviewLayout } from './previewProfiles'
 
 export type { PreviewLayout } from './previewProfiles'
@@ -14,6 +14,9 @@ export type DemoPreviewItem = {
 type MediaItem = { image: string; title: string; subtitle?: string }
 type LocationPoint = { latitude: number; longitude: number; label: string; detail?: string }
 type MarketSnapshot = { label: string; value: number; currency?: string; points: number[]; dates: string[]; metrics: Array<{ label: string; value: string }> }
+
+export type SsotRuntimeMeta = { httpStatus: number; elapsed: number; size: number }
+const formatResponseBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 const previewTitleKeys = ['name', 'title', 'label', 'commonname', 'country', 'city', 'id', 'code']
@@ -822,6 +825,63 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
       subtitle: `${cleanText(item.creator) ?? 'Internet Archive'} · ${previewValue(item.date)}`,
     })).filter((item) => item.image)
   }
+  if (api.id === 'data-gov-traffic-images' && isRecord(data)) {
+    const first = recordArray(data.items)[0]
+    return recordArray(first?.cameras).slice(0, 8).map((camera, index) => ({
+      image: textValue(camera.image) ?? '',
+      title: `Traffic camera ${cleanText(camera.camera_id) ?? index + 1}`,
+      subtitle: `${previewValue(recordValue(camera.location, 'latitude'))}, ${previewValue(recordValue(camera.location, 'longitude'))} · ${previewValue(camera.timestamp)}`,
+    })).filter((item) => item.image)
+  }
+  if (api.id === 'pokeapi' && isRecord(data)) {
+    const sprites = isRecord(data.sprites) ? data.sprites : {}
+    const types = recordArray(data.types).map((entry) => cleanText(recordValue(entry.type, 'name'))).filter((value): value is string => Boolean(value))
+    const image = textValue(sprites.front_default ?? sprites.front_shiny ?? sprites.back_default) ?? ''
+    return image ? [{ image, title: cleanText(data.name) ?? 'Pokémon', subtitle: `${types.join(' / ') || 'Pokémon'} · #${previewValue(data.id)}` }] : []
+  }
+  if (api.id === 'tvmaze-search') return recordArray(data).slice(0, 8).map((entry) => {
+    const show = isRecord(entry.show) ? entry.show : {}
+    const image = isRecord(show.image) ? show.image : {}
+    const rating = isRecord(show.rating) ? show.rating : {}
+    return {
+      image: textValue(image.medium ?? image.original) ?? '',
+      title: cleanText(show.name) ?? 'TV show',
+      subtitle: `${cleanText(show.status) ?? 'Series'} · ★ ${previewValue(rating.average)} · ${textArray(show.genres).slice(0, 2).join(', ') || 'TV'}`,
+    }
+  }).filter((item) => item.image)
+  if (api.id === 'open-food-facts' && isRecord(data)) {
+    const product = isRecord(data.product) ? data.product : {}
+    const image = textValue(product.image_front_url ?? product.image_url ?? product.image_front_small_url) ?? ''
+    return image ? [{
+      image,
+      title: cleanText(product.product_name ?? product.abbreviated_product_name) ?? 'Food product',
+      subtitle: `${cleanText(product.brands) ?? 'Open Food Facts'} · Nutri-Score ${previewValue(product.nutriscore_grade).toUpperCase()}`,
+    }] : []
+  }
+  if (api.id === 'flathub-appstream' && isRecord(data)) {
+    const screenshots = recordArray(data.screenshots)
+    const items = screenshots.slice(0, 6).map((shot, index) => {
+      const sizes = recordArray(shot.sizes)
+      const preferred = sizes.find((size) => numberValue(size.width) !== undefined && (numberValue(size.width) ?? 0) >= 500) ?? sizes[0]
+      return {
+        image: textValue(preferred?.src) ?? '',
+        title: cleanText(shot.caption) ?? `${cleanText(data.name) ?? 'Flathub app'} screenshot ${index + 1}`,
+        subtitle: `${cleanText(data.developer_name) ?? 'Flathub'} · ${cleanText(data.project_license) ?? 'License available'}`,
+      }
+    }).filter((item) => item.image)
+    if (items.length) return items
+    const icon = textValue(data.icon) ?? ''
+    return icon ? [{ image: icon, title: cleanText(data.name) ?? cleanText(data.id) ?? 'Flathub app', subtitle: cleanText(data.summary) }] : []
+  }
+  if (api.id === 'vam-collections' && isRecord(data)) return recordArray(data.records).slice(0, 8).map((record) => {
+    const images = isRecord(record._images) ? record._images : {}
+    const maker = isRecord(record._primaryMaker) ? record._primaryMaker : {}
+    return {
+      image: textValue(images._primary_thumbnail) ?? '',
+      title: cleanText(record._primaryTitle) ?? cleanText(record.objectType) ?? 'V&A object',
+      subtitle: `${cleanText(maker.name) ?? cleanText(record._primaryPlace) ?? 'V&A'} · ${cleanText(record._primaryDate) ?? previewValue(record.accessionNumber)}`,
+    }
+  }).filter((item) => item.image)
   if (api.id === 'randomfox-photo' && isRecord(data)) return textValue(data.image) ? [{ image: textValue(data.image) ?? '', title: 'Random fox', subtitle: 'randomfox.ca' }] : []
   if (api.id === 'cleveland-museum-search' && isRecord(data)) return recordArray(data.data).slice(0, 8).map((artwork) => {
     const images = isRecord(artwork.images) ? artwork.images : {}
@@ -988,6 +1048,28 @@ function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint
     label: cleanText(occurrence.scientificName) ?? cleanText(occurrence.species) ?? `Occurrence ${index + 1}`,
     detail: `${cleanText(occurrence.locality) ?? cleanText(occurrence.stateProvince) ?? cleanText(occurrence.country) ?? 'Locality unavailable'} · ${previewValue(occurrence.eventDate ?? occurrence.year)}`,
   })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  if (api?.id === 'data-gov-taxi' && isRecord(data)) {
+    const feature = recordArray(data.features)[0]
+    const geometry = feature && isRecord(feature.geometry) ? feature.geometry : {}
+    const coordinates = Array.isArray(geometry.coordinates) ? geometry.coordinates : []
+    return coordinates.filter((entry): entry is unknown[] => Array.isArray(entry) && entry.length >= 2).slice(0, 8).map((entry, index) => ({
+      latitude: numberValue(entry[1]) ?? 0,
+      longitude: numberValue(entry[0]) ?? 0,
+      label: `Available taxi ${index + 1}`,
+      detail: `${formatNumber(numberValue(entry[1]) ?? 0, 4)}, ${formatNumber(numberValue(entry[0]) ?? 0, 4)}`,
+    })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  }
+  if (api?.id === 'usgs' && isRecord(data)) return recordArray(data.features).slice(0, 8).map((feature, index) => {
+    const geometry = isRecord(feature.geometry) ? feature.geometry : {}
+    const coordinates = Array.isArray(geometry.coordinates) ? geometry.coordinates : []
+    const properties = isRecord(feature.properties) ? feature.properties : {}
+    return {
+      latitude: numberValue(coordinates[1]) ?? 0,
+      longitude: numberValue(coordinates[0]) ?? 0,
+      label: cleanText(properties.title) ?? cleanText(properties.place) ?? `Earthquake ${index + 1}`,
+      detail: `Magnitude ${previewValue(properties.mag)} · ${cleanText(properties.status) ?? 'USGS'}`,
+    }
+  }).filter((point) => point.latitude !== 0 || point.longitude !== 0)
   if (api?.id === 'uk-police-street-crime') return recordArray(data).slice(0, 8).map((crime, index) => {
     const location = isRecord(crime.location) ? crime.location : {}
     const street = isRecord(location.street) ? location.street : {}
@@ -1018,8 +1100,8 @@ function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint
     if (isRecord(value)) {
       const geometry = isRecord(value.geometry) ? value.geometry : undefined
       const coordinates = geometry && Array.isArray(geometry.coordinates) ? geometry.coordinates : undefined
-      const latitude = numberValue(value.latitude ?? value.lat ?? (coordinates && coordinates.length === 2 ? coordinates[1] : undefined))
-      const longitude = numberValue(value.longitude ?? value.lon ?? value.lng ?? (coordinates && coordinates.length === 2 ? coordinates[0] : undefined))
+      const latitude = numberValue(value.latitude ?? value.lat ?? (coordinates && coordinates.length >= 2 ? coordinates[1] : undefined))
+      const longitude = numberValue(value.longitude ?? value.lon ?? value.lng ?? (coordinates && coordinates.length >= 2 ? coordinates[0] : undefined))
       if (latitude !== undefined && longitude !== undefined) {
         const properties = isRecord(value.properties) ? value.properties : value
         points.push({ latitude, longitude, label: textValue(properties.title ?? properties.place ?? properties.name ?? properties.camera_id ?? properties.postcode) ?? `Location ${points.length + 1}`, detail: properties.mag !== undefined ? `Magnitude ${previewValue(properties.mag)}` : undefined })
@@ -1645,6 +1727,119 @@ function DndSpellPreview({ data }: { data: unknown }) {
   return <div className="dictionary-preview dnd-spell-preview"><div className="dictionary-hero"><div><span>{school ?? 'D&amp;D 5e'} spell · Level {previewValue(root.level)}</span><strong>{cleanText(root.name) ?? 'Spell'}</strong><b>{cleanText(root.range) ?? 'Range unavailable'} · {root.concentration ? 'Concentration' : 'No concentration'}</b></div><span aria-hidden="true">✦</span></div><div className="dictionary-meanings"><section><header><span>1</span><h3>Effect</h3></header><ol>{textArray(root.desc).map((paragraph, index) => <li key={index}><p>{paragraph}</p></li>)}</ol>{textArray(root.higher_level).length ? <footer><b>At higher levels</b><span>{textArray(root.higher_level).join(' ')}</span></footer> : null}</section></div><dl className="country-facts"><div><dt>Casting time</dt><dd>{previewValue(root.casting_time)}</dd></div><div><dt>Components</dt><dd>{textArray(root.components).join(', ') || '—'}</dd></div><div><dt>Duration</dt><dd>{previewValue(root.duration)}</dd></div><div><dt>Classes</dt><dd>{classes.join(', ') || '—'}</dd></div></dl></div>
 }
 
+type SsotStat = { label: string; value: string; note?: string }
+
+function SsotStatStrip({ eyebrow, title, stats }: { eyebrow: string; title: string; stats: SsotStat[] }) {
+  return <div className="ssot-stat-strip"><div className="ssot-stat-heading"><small>{eyebrow}</small><strong>{title}</strong></div><div className="ssot-stat-grid">{stats.map((stat) => <article key={stat.label}><small>{stat.label}</small><strong>{stat.value}</strong>{stat.note && <span>{stat.note}</span>}</article>)}</div></div>
+}
+
+function CarparkAvailabilityPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const snapshot = recordArray(root.items)[0] ?? {}
+  const carparks = recordArray(snapshot.carpark_data)
+  const normalized = carparks.map((carpark) => {
+    const lotTypes = recordArray(carpark.carpark_info)
+    const total = lotTypes.reduce((sum, info) => sum + (numberValue(info.total_lots) ?? 0), 0)
+    const available = lotTypes.reduce((sum, info) => sum + (numberValue(info.lots_available) ?? 0), 0)
+    const labels = lotTypes.map((info) => cleanText(info.lot_type)).filter((value): value is string => Boolean(value))
+    return { carpark, total, available, lotTypes: labels, occupancy: total > 0 ? ((total - available) / total) * 100 : 0 }
+  })
+  const totalLots = normalized.reduce((sum, item) => sum + item.total, 0)
+  const totalAvailable = normalized.reduce((sum, item) => sum + item.available, 0)
+  const occupancy = totalLots > 0 ? ((totalLots - totalAvailable) / totalLots) * 100 : 0
+  const cards: SemanticCard[] = normalized.slice(0, 8).map(({ carpark, total, available, lotTypes, occupancy: itemOccupancy }) => ({
+    title: cleanText(carpark.carpark_number) ?? 'Carpark',
+    eyebrow: `Updated ${cleanText(carpark.update_datetime) ?? 'recently'}`,
+    badge: `${formatNumber(itemOccupancy, 0)}% occupied`,
+    metrics: [
+      { label: 'Available lots', value: compactNumber(available) },
+      { label: 'Total lots', value: compactNumber(total) },
+      { label: 'Lot types', value: lotTypes.join(', ') || '—' },
+    ],
+  }))
+  if (!cards.length) return <div className="weather-empty"><strong>Carpark availability unavailable</strong><span>No carpark records were returned.</span></div>
+  return <div className="ssot-stack"><SsotStatStrip eyebrow="Singapore public carpark network" title={dateParts(snapshot.timestamp).full || previewValue(snapshot.timestamp)} stats={[
+    { label: 'Carparks', value: compactNumber(carparks.length), note: 'live records' },
+    { label: 'Available lots', value: compactNumber(totalAvailable), note: 'across returned carparks' },
+    { label: 'Network occupancy', value: `${formatNumber(occupancy, 1)}%`, note: 'computed from lot totals' },
+  ]}/><SemanticCards cards={cards} emptyTitle="Carpark records unavailable"/></div>
+}
+
+function MetMuseumSearchPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const ids = Array.isArray(root.objectIDs) ? root.objectIDs.filter((value): value is number => typeof value === 'number') : []
+  const total = numberValue(root.total) ?? ids.length
+  return <div className="ssot-stack"><SsotStatStrip eyebrow="The Met collection index" title="Singapore search results" stats={[
+    { label: 'Matching objects', value: compactNumber(total), note: 'collection records' },
+    { label: 'IDs returned', value: compactNumber(ids.length), note: 'ready for object lookup' },
+  ]}/><div className="ssot-id-grid" aria-label="Met Museum object IDs">{ids.slice(0, 18).map((id) => <code key={id}>{id}</code>)}</div></div>
+}
+
+function NhtsaMakesPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const results = recordArray(root.Results)
+  const cards: SemanticCard[] = results.slice(0, 8).map((make) => ({
+    title: cleanText(make.Make_Name) ?? 'Vehicle make',
+    eyebrow: 'NHTSA vPIC manufacturer registry',
+    badge: `ID ${previewValue(make.Make_ID)}`,
+    metrics: [{ label: 'Make ID', value: previewValue(make.Make_ID) }],
+  }))
+  return <div className="ssot-stack"><SsotStatStrip eyebrow="U.S. vehicle product information catalog" title="Manufacturer directory" stats={[
+    { label: 'Registry count', value: compactNumber(numberValue(root.Count) ?? results.length), note: 'manufacturers' },
+    { label: 'Previewed', value: String(Math.min(results.length, 8)), note: 'first records' },
+  ]}/><SemanticCards cards={cards} emptyTitle="Vehicle makes unavailable"/></div>
+}
+
+function GbifTaxonomyPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const results = recordArray(root.results)
+  const cards: SemanticCard[] = results.slice(0, 8).map((taxon) => ({
+    title: cleanText(taxon.scientificName ?? taxon.canonicalName) ?? 'Taxon',
+    eyebrow: [cleanText(taxon.kingdom), cleanText(taxon.phylum), cleanText(taxon.class)].filter(Boolean).join(' › ') || 'GBIF taxonomy',
+    badge: cleanText(taxon.rank) ?? 'Taxon',
+    description: cleanText(taxon.authorship),
+    metrics: [
+      { label: 'Status', value: previewValue(taxon.taxonomicStatus) },
+      { label: 'Family', value: previewValue(taxon.family) },
+      { label: 'Genus', value: previewValue(taxon.genus) },
+    ],
+    tags: [cleanText(taxon.order), cleanText(taxon.nameType), taxon.synonym ? 'Synonym' : 'Accepted name'].filter((value): value is string => Boolean(value)),
+  }))
+  return <div className="ssot-stack"><SsotStatStrip eyebrow="Global Biodiversity Information Facility" title="Taxonomy matches" stats={[
+    { label: 'Matching taxa', value: compactNumber(numberValue(root.count) ?? results.length), note: 'search result count' },
+    { label: 'Previewed', value: String(Math.min(results.length, 8)), note: 'taxonomic records' },
+  ]}/><SemanticCards cards={cards} emptyTitle="Taxonomy records unavailable"/></div>
+}
+
+function GoModuleVersionsPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const versions = Array.isArray(root.versions) ? root.versions.filter((value): value is string => typeof value === 'string') : []
+  if (!versions.length) return <div className="weather-empty"><strong>Go module versions unavailable</strong><span>The proxy response did not contain parsed version tags.</span></div>
+  const stable = versions.filter((version) => !/-/.test(version))
+  return <div className="ssot-stack"><SsotStatStrip eyebrow="Official Go module proxy" title="Published module versions" stats={[
+    { label: 'Versions', value: compactNumber(versions.length), note: 'published tags' },
+    { label: 'Stable tags', value: compactNumber(stable.length), note: 'without prerelease suffix' },
+    { label: 'Latest listed', value: versions.at(-1) ?? versions[0], note: 'proxy order' },
+  ]}/><div className="ssot-version-grid">{versions.slice(-24).reverse().map((version) => <code key={version}>{version}</code>)}</div></div>
+}
+
+function JsDelivrPackagePreview({ api, data, requestUrl }: { api: ApiDemo; data: unknown; requestUrl?: string }) {
+  const root = isRecord(data) ? data : {}
+  const tags = isRecord(root.tags) ? root.tags : {}
+  const versions = Array.isArray(root.versions) ? root.versions.filter((value): value is string => typeof value === 'string') : []
+  let packageName = api.name
+  try { packageName = requestUrl ? decodeURIComponent(new URL(requestUrl).pathname.split('/').filter(Boolean).at(-1) ?? api.name) : api.name } catch { /* Keep API name. */ }
+  const channels = [
+    ['Latest stable', tags.latest],
+    ['Release candidate', tags.rc],
+    ['Next', tags.next],
+    ['Canary', tags.canary],
+    ['Backport', tags.backport],
+    ['Experimental', tags.experimental],
+  ].filter((entry) => entry[1] !== undefined)
+  return <div className="package-release-preview" data-ssot-reference="jsdelivr-package"><header><div><small>npm package · jsDelivr data API</small><h3>{packageName}</h3><p>Release channels and published versions from the live package registry metadata.</p></div><div className="package-release-hero"><span>Latest stable</span><strong>{previewValue(tags.latest)}</strong><small>{compactNumber(versions.length)} published versions</small></div></header><div className="package-channel-grid">{channels.map(([label, value]) => <article key={String(label)}><small>{String(label)}</small><strong>{previewValue(value)}</strong></article>)}</div><div className="package-version-list"><div><strong>Recent published versions</strong><span>{Math.min(versions.length, 12)} shown</span></div><div>{versions.slice(0, 12).map((version) => <code key={version}>{version}</code>)}</div></div></div>
+}
+
 function GeneratedImagePreview({ api, requestUrl }: { api: ApiDemo; requestUrl?: string }) {
   if (!requestUrl) return <div className="weather-empty"><strong>Image unavailable</strong><span>No request URL was captured for this response.</span></div>
   return <div className="media-preview single"><article><img src={requestUrl} alt={api.name} loading="lazy"/><div><small>{api.category}</small><h3>{api.name}</h3><p>Rendered directly from the live request URL.</p></div></article></div>
@@ -1819,7 +2014,7 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
 
 function ResultListPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const items = buildDemoPreview(data)
-  return <div className="demo-preview-grid">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
+  return <div className="demo-preview-grid" data-generic-fallback="true">{items.map((item, index) => <article className="demo-preview-card" aria-label={`${item.title} preview`} key={`${item.title}-${index}`}><div className="demo-preview-card-title"><span style={{ '--api-color': api.accent } as CSSProperties}>{api.monogram}</span><div><small>{api.name}</small><h3>{item.title}</h3></div></div><dl>{item.fields.map((field, fieldIndex) => <div key={`${field.label}-${fieldIndex}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div>
 }
 
 type ApiPreviewProps = { api: ApiDemo; data: unknown; requestUrl?: string }
@@ -1866,7 +2061,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'data-gov-24hr-forecast': defineApiPreview('data-gov-24hr-forecast', ({ data }) => <TwentyFourHourForecastPreview data={data}/>),
   'data-gov-4day-forecast': defineApiPreview('data-gov-4day-forecast', ({ data }) => <FourDayForecastPreview data={data}/>),
   'data-gov-air-temperature': defineApiPreview('data-gov-air-temperature', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
-  'data-gov-carpark': defineApiPreview('data-gov-carpark', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'data-gov-carpark': defineApiPreview('data-gov-carpark', ({ data }) => <CarparkAvailabilityPreview data={data}/>),
   'data-gov-forecast-2hr': defineApiPreview('data-gov-forecast-2hr', ({ data }) => <AreaForecastPreview data={data}/>),
   'data-gov-pm25': defineApiPreview('data-gov-pm25', ({ api, data }) => <RegionalAirQualityPreview api={api} data={data}/>),
   'data-gov-psi': defineApiPreview('data-gov-psi', ({ api, data }) => <RegionalAirQualityPreview api={api} data={data}/>),
@@ -1884,8 +2079,8 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'hacker-news': defineApiPreview('hacker-news', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'ipify-public-ip': defineApiPreview('ipify-public-ip', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'met-museum-object-detail': defineApiPreview('met-museum-object-detail', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
-  'met-museum-search': defineApiPreview('met-museum-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
-  'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'met-museum-search': defineApiPreview('met-museum-search', ({ data }) => <MetMuseumSearchPreview data={data}/>),
+  'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ data }) => <NhtsaMakesPreview data={data}/>),
   'nhtsa-vehicle-recalls': defineApiPreview('nhtsa-vehicle-recalls', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'npm-search': defineApiPreview('npm-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'nvd-cpe-search': defineApiPreview('nvd-cpe-search', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
@@ -1912,7 +2107,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'art-institute-search': defineApiPreview('art-institute-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'tvmaze-search': defineApiPreview('tvmaze-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'open-food-facts': defineApiPreview('open-food-facts', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
-  'gbif-species-search': defineApiPreview('gbif-species-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'gbif-species-search': defineApiPreview('gbif-species-search', ({ data }) => <GbifTaxonomyPreview data={data}/>),
   'clinical-trials-search': defineApiPreview('clinical-trials-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'europe-pmc-search': defineApiPreview('europe-pmc-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'openfda-drug-labels': defineApiPreview('openfda-drug-labels', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
@@ -2035,14 +2230,14 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'metacpan': defineApiPreview('metacpan', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'hexpm': defineApiPreview('hexpm', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'pub-dev': defineApiPreview('pub-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
-  'go-module-proxy': defineApiPreview('go-module-proxy', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'go-module-proxy': defineApiPreview('go-module-proxy', ({ data }) => <GoModuleVersionsPreview data={data}/>),
   'flathub-appstream': defineApiPreview('flathub-appstream', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'github-global-advisories': defineApiPreview('github-global-advisories', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
   'dblp-search': defineApiPreview('dblp-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'citybikes-network': defineApiPreview('citybikes-network', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'wikimedia-commons-search': defineApiPreview('wikimedia-commons-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'nominatim-search': defineApiPreview('nominatim-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
-  'jsdelivr-package': defineApiPreview('jsdelivr-package', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'jsdelivr-package': defineApiPreview('jsdelivr-package', ({ api, data, requestUrl }) => <JsDelivrPackagePreview api={api} data={data} requestUrl={requestUrl}/>),
   'canada-open-data-search': defineApiPreview('canada-open-data-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'gbif-occurrence-search': defineApiPreview('gbif-occurrence-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'open-meteo-ensemble': defineApiPreview('open-meteo-ensemble', ({ api, data }) => <MarketPreview api={api} data={data}/>),
@@ -2052,6 +2247,32 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
+
+
+export type ApiSsotCardDefinition = {
+  id: string
+  layout: PreviewLayout
+  label: string
+  Component: ApiPreviewComponent
+  source: 'live-response'
+  fallbackPolicy: 'forbidden'
+}
+
+export const apiSsotCardRegistry: Partial<Record<string, ApiSsotCardDefinition>> = Object.fromEntries(apiCatalog.map((api) => {
+  const profile = getPreviewProfile(api.id)
+  const Component = apiPreviewComponents[api.id]
+  if (!profile || !Component) throw new Error(`Missing SSOT card definition for ${api.id}`)
+  return [api.id, {
+    id: api.id,
+    layout: profile.layout,
+    label: profile.label,
+    Component,
+    source: 'live-response' as const,
+    fallbackPolicy: 'forbidden' as const,
+  }]
+}))
+
+export const apiSsotCardIds = Object.keys(apiSsotCardRegistry)
 
 const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title: string; description: string }> = {
   'weather-dashboard': { icon: '☀', eyebrow: 'Live response · Weather layout', title: 'Current conditions', description: 'A ready-to-use weather dashboard built from observations, units, and location data.' },
@@ -2088,11 +2309,12 @@ const weatherPreviewMeta: Record<WeatherPreviewVariant, { icon: string; eyebrow:
   'uv-index': { icon: '☀', eyebrow: 'Live response · UV monitoring', title: 'UV index', description: 'The latest ultraviolet exposure level and its reporting timeline.' },
 }
 
-export function ResponseDemoPreview({ api, data, requestUrl }: { api: ApiDemo; data: unknown; requestUrl?: string }) {
-  const layout = selectPreviewLayout(api)
+export function ResponseDemoPreview({ api, data, requestUrl, runtime }: { api: ApiDemo; data: unknown; requestUrl?: string; runtime?: SsotRuntimeMeta }) {
+  const ssotDefinition = apiSsotCardRegistry[api.id]
+  const layout = ssotDefinition?.layout ?? selectPreviewLayout(api)
   const weatherVariant = layout === 'weather-dashboard' ? selectWeatherPreviewVariant(api) : undefined
-  const profileLabel = getPreviewProfile(api.id)?.label ?? previewMeta[layout].eyebrow
-  const PreviewComponent = apiPreviewComponents[api.id]
+  const profileLabel = ssotDefinition?.label ?? getPreviewProfile(api.id)?.label ?? previewMeta[layout].eyebrow
+  const PreviewComponent = ssotDefinition?.Component ?? apiPreviewComponents[api.id]
   const content: ReactNode = PreviewComponent
     ? <PreviewComponent api={api} data={data} requestUrl={requestUrl}/>
     : <ResultListPreview data={data} api={api}/>
@@ -2103,14 +2325,17 @@ export function ResponseDemoPreview({ api, data, requestUrl }: { api: ApiDemo; d
     aria-labelledby={headingId}
     aria-live="polite"
     data-webmcp-surface="api-demo-preview"
+    data-ssot-card={api.id}
+    data-ssot-adapter={PreviewComponent ? componentName(api.id) : 'generic-fallback'}
+    data-ssot-fallback={PreviewComponent ? 'false' : 'true'}
     data-preview-layout={layout}
     data-preview-variant={weatherVariant}
     data-preview-component={PreviewComponent ? api.id : 'generic-fallback'}
     data-api-id={api.id}
     style={{ '--preview-accent': api.accent } as CSSProperties}
   >
-    <div className="demo-preview-head"><span aria-hidden="true">{api.monogram}</span><div><small>Live response · {profileLabel} · Dedicated component</small><h2 id={headingId}>{api.name}</h2><p>{api.description}</p></div><em><span aria-hidden="true">✓</span> API-specific UI</em></div>
+    <div className="demo-preview-head"><span aria-hidden="true">{api.monogram}</span><div><small>Live SSOT card · {profileLabel}</small><h2 id={headingId}>{api.name}</h2><p>{api.description}</p></div><div className="ssot-runtime" aria-label="Live request metadata">{runtime ? <><b>{runtime.httpStatus} OK</b><span>{runtime.elapsed} ms</span><span>{formatResponseBytes(runtime.size)}</span></> : <span>Semantic response</span>}</div></div>
     {content}
-    <p className="demo-preview-note">Generated only from the live JSON response · Component: {componentName(api.id)}</p>
+    <p className="demo-preview-note">SSOT adapter: {componentName(api.id)} · Source: live API response only</p>
   </section>
 }

@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { apiCatalog } from './apiCatalog'
-import { apiPreviewComponentIds, apiPreviewComponents, buildDemoPreview, ResponseDemoPreview, selectPreviewLayout, selectWeatherPreviewVariant } from './responsePreview'
+import { apiPreviewComponentIds, apiPreviewComponents, apiSsotCardIds, apiSsotCardRegistry, buildDemoPreview, ResponseDemoPreview, selectPreviewLayout, selectWeatherPreviewVariant } from './responsePreview'
 
 const matchMedia = (query: string): MediaQueryList => ({
   matches: false,
@@ -48,6 +48,12 @@ describe('catalog live API flow', () => {
     expect(await screen.findByText(/"name": "Singapore"/)).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Country Explorer' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Country Explorer' })).toHaveAttribute('data-preview-layout', 'country-profile')
+    const ssotPreview = screen.getByRole('region', { name: 'Country Explorer' })
+    const labGrid = document.querySelector('.lab-grid')
+    expect(labGrid).not.toBeNull()
+    expect(Boolean(ssotPreview.compareDocumentPosition(labGrid as Node) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true)
+    expect(screen.getByRole('tab', { name: 'Raw JSON' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy JSON' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Singapore' })).toBeInTheDocument()
     expect(screen.getByText('East Asia & Pacific')).toBeInTheDocument()
   })
@@ -93,7 +99,7 @@ describe('demo preview mapping', () => {
       'fiscal-data-treasury': 'market-chart',
       'wikidata-sparql': 'data-table',
       'met-museum-object-detail': 'media-gallery',
-      'met-museum-search': 'media-gallery',
+      'met-museum-search': 'data-table',
     }
 
     for (const [id, layout] of Object.entries(expected)) {
@@ -101,6 +107,21 @@ describe('demo preview mapping', () => {
       expect(api, `Missing API ${id}`).toBeDefined()
       if (!api) continue
       expect(selectPreviewLayout({ id, category: api.category })).toBe(layout)
+    }
+  })
+
+  it('registers every catalog API in the fail-closed SSOT card registry', () => {
+    const catalogIds = apiCatalog.map((api) => api.id).sort()
+    expect([...apiSsotCardIds].sort()).toEqual(catalogIds)
+    expect(apiSsotCardIds).toHaveLength(200)
+    for (const id of catalogIds) {
+      const definition = apiSsotCardRegistry[id]
+      expect(definition, `Missing SSOT card ${id}`).toBeDefined()
+      if (!definition) throw new Error(`Missing SSOT card ${id}`)
+      expect(definition.id).toBe(id)
+      expect(definition.source).toBe('live-response')
+      expect(definition.fallbackPolicy).toBe('forbidden')
+      expect(definition.Component).toBe(apiPreviewComponents[id])
     }
   })
 
@@ -559,6 +580,102 @@ describe('catalog-wide semantic previews', () => {
   })
 })
 
+
+describe('Request Lab SSOT card adapters', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  const expectNoGenericFallback = (name: string) => {
+    const preview = screen.getByRole('region', { name })
+    expect(preview.querySelector('[data-generic-fallback="true"]')).toBeNull()
+    return preview
+  }
+
+  it('renders Singapore transport responses without generic Result 1 cards', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('data-gov-carpark')} data={{ items: [{ timestamp: '2026-09-04T18:06:37+08:00', carpark_data: [{ carpark_number: 'HE12', update_datetime: '2026-09-04T18:06:22', carpark_info: [{ total_lots: '105', lot_type: 'C', lots_available: '31' }] }] }] }} />)
+    expect(expectNoGenericFallback('data.gov.sg Carpark Availability')).toHaveTextContent('Available lots')
+
+    rerender(<ResponseDemoPreview api={api('data-gov-taxi')} data={{ type: 'FeatureCollection', features: [{ geometry: { type: 'MultiPoint', coordinates: [[103.8, 1.30], [103.81, 1.31]] } }] }} />)
+    const taxi = expectNoGenericFallback('data.gov.sg Taxi Availability')
+    expect(within(taxi).getByRole('img', { name: /Map with 2 response locations/ })).toBeInTheDocument()
+    expect(taxi).toHaveTextContent('Available taxi 1')
+
+    rerender(<ResponseDemoPreview api={api('data-gov-traffic-images')} data={{ items: [{ cameras: [{ camera_id: '2701', timestamp: '2026-09-04T18:06:19+08:00', image: 'https://images.test/traffic.jpg', location: { latitude: 1.447, longitude: 103.772 } }] }] }} />)
+    const traffic = expectNoGenericFallback('data.gov.sg Traffic Images')
+    expect(within(traffic).getByRole('img')).toHaveAttribute('src', 'https://images.test/traffic.jpg')
+    expect(traffic).toHaveTextContent('Traffic camera 2701')
+  })
+
+  it('renders collection, vehicle, earthquake, and taxonomy responses semantically', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('met-museum-search')} data={{ total: 53, objectIDs: [892409, 908184, 264585] }} />)
+    const met = expectNoGenericFallback('Met Museum Search')
+    expect(met).toHaveTextContent('53')
+    expect(met).toHaveTextContent('892409')
+
+    rerender(<ResponseDemoPreview api={api('nhtsa-vpic')} data={{ Count: 12356, Results: [{ Make_ID: 12858, Make_Name: '#1 ALPINE CUSTOMS' }] }} />)
+    const nhtsa = expectNoGenericFallback('NHTSA vPIC Vehicle API')
+    expect(nhtsa).toHaveTextContent('#1 ALPINE CUSTOMS')
+    expect(nhtsa).toHaveTextContent('12.4K')
+
+    rerender(<ResponseDemoPreview api={api('usgs')} data={{ type: 'FeatureCollection', features: [{ properties: { mag: 3.7, title: 'M 3.7 - off the coast of Oregon', status: 'reviewed' }, geometry: { type: 'Point', coordinates: [-129.0824, 43.6383, 10] } }] }} />)
+    const usgs = expectNoGenericFallback('USGS Earthquakes')
+    expect(within(usgs).getByRole('img', { name: /Map with 1 response locations/ })).toBeInTheDocument()
+    expect(usgs).toHaveTextContent('M 3.7 - off the coast of Oregon')
+
+    rerender(<ResponseDemoPreview api={api('gbif-species-search')} data={{ count: 1759, results: [{ scientificName: 'Panthera', kingdom: 'Animalia', phylum: 'Chordata', class: 'Mammalia', order: 'Carnivora', family: 'Felidae', genus: 'Panthera', rank: 'GENUS', taxonomicStatus: 'ACCEPTED' }] }} />)
+    const gbif = expectNoGenericFallback('GBIF Species Search')
+    expect(gbif).toHaveTextContent('Panthera')
+    expect(gbif).toHaveTextContent('Felidae')
+  })
+
+  it('renders media APIs from their actual nested image contracts', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('pokeapi')} data={{ id: 25, name: 'pikachu', sprites: { front_default: 'https://images.test/pikachu.png' }, types: [{ type: { name: 'electric' } }] }} />)
+    const poke = expectNoGenericFallback('PokéAPI Explorer')
+    expect(within(poke).getByRole('img')).toHaveAttribute('src', 'https://images.test/pikachu.png')
+    expect(poke).toHaveTextContent('pikachu')
+
+    rerender(<ResponseDemoPreview api={api('tvmaze-search')} data={[{ score: 0.9, show: { name: 'Severance', status: 'Running', genres: ['Drama'], rating: { average: 7.6 }, image: { medium: 'https://images.test/severance.jpg' } } }]} />)
+    const tv = expectNoGenericFallback('TVmaze Show Search')
+    expect(within(tv).getByRole('img')).toHaveAttribute('src', 'https://images.test/severance.jpg')
+    expect(tv).toHaveTextContent('Severance')
+
+    rerender(<ResponseDemoPreview api={api('open-food-facts')} data={{ product: { product_name: 'Nutella', brands: 'Ferrero', nutriscore_grade: 'e', image_front_url: 'https://images.test/nutella.jpg' } }} />)
+    const food = expectNoGenericFallback('Open Food Facts')
+    expect(within(food).getByRole('img')).toHaveAttribute('src', 'https://images.test/nutella.jpg')
+    expect(food).toHaveTextContent('Nutella')
+
+    rerender(<ResponseDemoPreview api={api('flathub-appstream')} data={{ name: 'Calculator', developer_name: 'The GNOME Project', project_license: 'GPL-3.0-or-later', screenshots: [{ caption: 'Basic Mode', sizes: [{ width: 750, src: 'https://images.test/calculator.png' }] }] }} />)
+    const flathub = expectNoGenericFallback('Flathub Appstream')
+    expect(within(flathub).getByRole('img')).toHaveAttribute('src', 'https://images.test/calculator.png')
+    expect(flathub).toHaveTextContent('Basic Mode')
+
+    rerender(<ResponseDemoPreview api={api('vam-collections')} data={{ records: [{ _primaryTitle: 'The Yorkshire Dales', _primaryDate: 'c.1923', _primaryMaker: { name: 'Brown, F. Gregory' }, _images: { _primary_thumbnail: 'https://images.test/vam.jpg' } }] }} />)
+    const vam = expectNoGenericFallback('V&A Collections')
+    expect(within(vam).getByRole('img')).toHaveAttribute('src', 'https://images.test/vam.jpg')
+    expect(vam).toHaveTextContent('The Yorkshire Dales')
+  })
+
+  it('renders parsed Go versions and the jsDelivr reference SSOT card', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('go-module-proxy')} data={{ versions: ['v1.11.0', 'v1.12.0'] }} />)
+    const go = expectNoGenericFallback('Go Module Proxy')
+    expect(go).toHaveTextContent('Published module versions')
+    expect(go).toHaveTextContent('v1.12.0')
+
+    rerender(<ResponseDemoPreview api={api('jsdelivr-package')} requestUrl="https://data.jsdelivr.com/v1/package/npm/react" runtime={{ httpStatus: 200, elapsed: 58, size: 106496 }} data={{ tags: { latest: '19.2.8', rc: '19.0.0-rc.1', next: '19.3.0-canary' }, versions: ['19.2.8', '19.2.7', '19.1.0'] }} />)
+    const jsdelivr = expectNoGenericFallback('jsDelivr Package Metadata')
+    expect(jsdelivr.querySelector('[data-ssot-reference="jsdelivr-package"]')).not.toBeNull()
+    expect(jsdelivr).toHaveTextContent('Latest stable')
+    expect(jsdelivr).toHaveTextContent('19.2.8')
+    expect(jsdelivr).toHaveTextContent('200 OK')
+    expect(jsdelivr).toHaveTextContent('104.0 KB')
+  })
+})
+
 describe('data.gov.sg adaptive weather previews', () => {
   afterEach(cleanup)
 
@@ -762,7 +879,7 @@ describe('Public-API 200 milestone previews', () => {
     const { rerender } = render(<ResponseDemoPreview api={api('jsdelivr-package')} data={{ tags: { latest: '19.2.8', rc: '19.0.0-rc.1', next: '19.3.0-canary' }, versions: ['19.2.8', '19.2.7', '19.1.0'] }}/>)
     const jsdelivr = screen.getByRole('region', { name: 'jsDelivr Package Metadata' })
     expect(jsdelivr).toHaveTextContent('19.2.8')
-    expect(jsdelivr).toHaveTextContent('3 versions')
+    expect(jsdelivr).toHaveTextContent('3 published versions')
 
     rerender(<ResponseDemoPreview api={api('canada-open-data-search')} data={{ result: { results: [{ title: 'Artificial Intelligence - ITSAP.00.040', type: 'info', organization: { title: 'Government of Canada' }, date_published: '2025-12-10', notes: 'AI awareness guidance.' }] } }}/>)
     const canada = screen.getByRole('region', { name: 'Canada Open Data Search' })

@@ -425,9 +425,8 @@ describe('API catalog', () => {
     expect(urls['go-module-proxy'].hostname).toBe('proxy.golang.org')
     expect(urls['go-module-proxy'].pathname).toBe('/github.com/gin-gonic/gin/@v/list')
     expect(urls['flathub-appstream'].hostname).toBe('flathub.org')
-    expect(urls['flathub-appstream'].pathname).toBe('/api/v2/appstream')
-    expect(urls['flathub-appstream'].searchParams.get('q')).toBe('org.gnome.Calculator')
-    expect(urls['flathub-appstream'].searchParams.get('limit')).toBe('8')
+    expect(urls['flathub-appstream'].pathname).toBe('/api/v2/appstream/org.gnome.Calculator')
+    expect(urls['flathub-appstream'].search).toBe('')
   })
 
   it('builds the legacy fourth-round URLs still used by UI mappings', () => {
