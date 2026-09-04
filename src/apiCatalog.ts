@@ -2501,6 +2501,150 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
   },
 ]
 
+const publicApi200MilestoneApis: ApiDemo[] = [
+  {
+    id: 'github-global-advisories', name: 'GitHub Global Advisories', provider: 'GitHub', category: 'Security',
+    description: 'Search GitHub-reviewed global security advisories by ecosystem and severity without authentication.',
+    documentationUrl: 'https://docs.github.com/en/rest/security-advisories/global-advisories', accent: '#24292f', monogram: 'GHA',
+    usageNote: 'Public global advisories are available without authentication. Keep anonymous request volume modest and review upstream package guidance before acting on a result.',
+    fields: [
+      { id: 'ecosystem', label: 'Ecosystem', type: 'select', defaultValue: 'npm', help: 'Filter advisories by package ecosystem.', options: [
+        { label: 'npm', value: 'npm' }, { label: 'pip', value: 'pip' }, { label: 'Maven', value: 'maven' }, { label: 'NuGet', value: 'nuget' }, { label: 'RubyGems', value: 'rubygems' }, { label: 'Composer', value: 'composer' }, { label: 'Go', value: 'go' }, { label: 'Rust', value: 'rust' },
+      ] },
+      { id: 'severity', label: 'Severity', type: 'select', defaultValue: 'high', help: 'Filter by GitHub advisory severity.', options: [
+        { label: 'Low', value: 'low' }, { label: 'Moderate', value: 'moderate' }, { label: 'High', value: 'high' }, { label: 'Critical', value: 'critical' },
+      ] },
+      limitField({ label: 'Advisories', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 advisories.' }),
+    ],
+    headers: { Accept: 'application/vnd.github+json' },
+    buildUrl: ({ ecosystem = 'npm', severity = 'high', limit = '6' }) => `https://api.github.com/advisories?${new URLSearchParams({ ecosystem, severity, per_page: String(clampInt(limit, 1, 20, 6)) }).toString()}`,
+  },
+  {
+    id: 'dblp-search', name: 'DBLP Publication Search', provider: 'DBLP', category: 'Research',
+    description: 'Search computer-science publications with authors, venues, years, and persistent bibliography links.',
+    documentationUrl: 'https://dblp.org/faq/How+to+use+the+dblp+search+API.html', accent: '#1f6f8b', monogram: 'DBL',
+    fields: [
+      queryField({ label: 'Publication search', defaultValue: 'large language models', placeholder: 'e.g. retrieval augmented generation', help: 'Search publication titles, authors, and venue metadata.' }),
+      limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 publication hits.' }),
+    ],
+    buildUrl: ({ query = 'large language models', limit = '6' }) => `https://dblp.org/search/publ/api?${new URLSearchParams({ q: query.trim() || 'large language models', h: String(clampInt(limit, 1, 20, 6)), format: 'json' }).toString()}`,
+  },
+  {
+    id: 'citybikes-network', name: 'CityBikes Live Stations', provider: 'CityBikes', category: 'Geo',
+    description: 'Inspect live bike-sharing stations, available bicycles, empty docks, and coordinates for a selected city network.',
+    documentationUrl: 'https://api.citybik.es/v2/', accent: '#16a34a', monogram: 'CBK',
+    usageNote: 'CityBikes documents a 300 requests/hour limit. Cache repeated network reads and avoid aggressive polling.',
+    fields: [{ id: 'network', label: 'Bike network', type: 'select', defaultValue: 'youbike-taipei', help: 'Choose a public bike-sharing network.', options: [
+      { label: 'Taipei · YouBike', value: 'youbike-taipei' }, { label: 'Paris · Vélib', value: 'velib' }, { label: 'London · Santander Cycles', value: 'santander-cycles' }, { label: 'New York · Citi Bike', value: 'citi-bike-nyc' }, { label: 'Barcelona · Bicing', value: 'bicing' },
+    ] }],
+    buildUrl: ({ network = 'youbike-taipei' }) => `https://api.citybik.es/v2/networks/${encode(network || 'youbike-taipei')}`,
+  },
+  {
+    id: 'wikimedia-commons-search', name: 'Wikimedia Commons Search', provider: 'Wikimedia Foundation', category: 'Media',
+    description: 'Search Wikimedia Commons files and return browser-ready thumbnails with license metadata.',
+    documentationUrl: 'https://www.mediawiki.org/wiki/API:Main_page', accent: '#006699', monogram: 'WMC',
+    usageNote: 'Respect the license and attribution metadata attached to each media result; Commons content does not share one universal license.',
+    fields: [
+      queryField({ label: 'Media search', defaultValue: 'Singapore skyline', placeholder: 'e.g. Singapore skyline', help: 'Search file titles and descriptions on Wikimedia Commons.' }),
+      limitField({ label: 'Results', defaultValue: '6', min: 1, max: 12, help: 'Return between 1 and 12 media files.' }),
+    ],
+    buildUrl: ({ query = 'Singapore skyline', limit = '6' }) => `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim() || 'Singapore skyline', gsrnamespace: '6', gsrlimit: String(clampInt(limit, 1, 12, 6)), prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '400', format: 'json', origin: '*' }).toString()}`,
+  },
+
+  {
+    id: 'nominatim-search', name: 'OpenStreetMap Nominatim', provider: 'OpenStreetMap', category: 'Geo',
+    description: 'Geocode places and addresses into OpenStreetMap coordinates and structured address metadata.',
+    documentationUrl: 'https://nominatim.org/release-docs/latest/api/Search/', accent: '#7ebc6f', monogram: 'NOM',
+    usageNote: 'The public Nominatim service requires OpenStreetMap attribution, identifiable browser requests, and no more than one request per second. Do not use it for autocomplete or bulk geocoding.',
+    fields: [
+      queryField({ label: 'Place or address', defaultValue: 'Singapore', placeholder: 'e.g. Marina Bay Singapore', help: 'Enter a place, landmark, postal address, or locality.' }),
+      limitField({ label: 'Results', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 geocoding matches.' }),
+    ],
+    buildUrl: ({ query = 'Singapore', limit = '5' }) => `https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: query.trim() || 'Singapore', format: 'jsonv2', limit: String(clampInt(limit, 1, 10, 5)), addressdetails: '1' }).toString()}`,
+  },
+  {
+    id: 'jsdelivr-package', name: 'jsDelivr Package Metadata', provider: 'jsDelivr', category: 'Developer',
+    description: 'Inspect npm package tags and published versions from the jsDelivr public package metadata API.',
+    documentationUrl: 'https://www.jsdelivr.com/docs/data.jsdelivr.com', accent: '#f97316', monogram: 'JSD',
+    fields: [{ id: 'packageName', label: 'npm package', type: 'text', defaultValue: 'react', placeholder: 'e.g. react', help: 'Enter an npm package name available through jsDelivr.' }],
+    buildUrl: ({ packageName = 'react' }) => `https://data.jsdelivr.com/v1/package/npm/${encode(packageName.trim() || 'react')}`,
+  },
+  {
+    id: 'canada-open-data-search', name: 'Canada Open Data Search', provider: 'Government of Canada', category: 'Government',
+    description: 'Search Canada’s open-government dataset and publication catalogue through its CKAN API.',
+    documentationUrl: 'https://open.canada.ca/en/access-our-application-programming-interface-api', accent: '#d52b1e', monogram: 'CAN',
+    fields: [
+      queryField({ label: 'Catalogue search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', help: 'Search Canadian datasets and publications by keyword.' }),
+      limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 catalogue records.' }),
+    ],
+    buildUrl: ({ query = 'artificial intelligence', limit = '6' }) => `https://open.canada.ca/data/api/3/action/package_search?${new URLSearchParams({ q: query.trim() || 'artificial intelligence', rows: String(clampInt(limit, 1, 20, 6)) }).toString()}`,
+  },
+  {
+    id: 'gbif-occurrence-search', name: 'GBIF Occurrence Search', provider: 'GBIF', category: 'Biodiversity',
+    description: 'Find real-world biodiversity occurrence records with species, observation date, locality, and coordinates.',
+    documentationUrl: 'https://techdocs.gbif.org/en/openapi/v1/occurrence', accent: '#65a30d', monogram: 'GBO',
+    usageNote: 'Occurrence records come from many publishers with varying licences and data quality. Treat locations and identifications as source data rather than authoritative ground truth.',
+    fields: [
+      { id: 'scientificName', label: 'Scientific name', type: 'text', defaultValue: 'Panthera leo', placeholder: 'e.g. Panthera leo', help: 'Use a scientific species or taxon name.' },
+      limitField({ label: 'Records', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 occurrence records.' }),
+    ],
+    buildUrl: ({ scientificName = 'Panthera leo', limit = '6' }) => `https://api.gbif.org/v1/occurrence/search?${new URLSearchParams({ scientificName: scientificName.trim() || 'Panthera leo', limit: String(clampInt(limit, 1, 20, 6)) }).toString()}`,
+  },
+
+  {
+    id: 'open-meteo-ensemble', name: 'Open-Meteo Ensemble Forecast', provider: 'Open-Meteo', category: 'Weather',
+    description: 'Compare ensemble forecast members to understand uncertainty around temperature, rain, and wind predictions.',
+    documentationUrl: 'https://open-meteo.com/en/docs/ensemble-api', accent: '#3b82f6', monogram: 'OME',
+    usageNote: 'Ensemble members represent forecast uncertainty, not independent observations. Communicate the spread or range instead of treating any one member as certain.',
+    fields: [
+      ...latLongFields(),
+      { id: 'variable', label: 'Forecast variable', type: 'select', defaultValue: 'temperature_2m', help: 'Choose the hourly quantity to compare across ensemble members.', options: [
+        { label: 'Temperature · 2 m', value: 'temperature_2m' }, { label: 'Precipitation', value: 'precipitation' }, { label: 'Wind speed · 10 m', value: 'wind_speed_10m' },
+      ] },
+      { id: 'forecastDays', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, help: 'Request between 1 and 7 forecast days.' },
+    ],
+    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', variable = 'temperature_2m', forecastDays = '3' }) => `https://ensemble-api.open-meteo.com/v1/ensemble?${new URLSearchParams({ latitude, longitude, hourly: variable, forecast_days: String(clampInt(forecastDays, 1, 7, 3)), timezone: 'Asia/Singapore' }).toString()}`,
+  },
+  {
+    id: 'world-bank-indicator-explorer', name: 'World Bank Indicator Explorer', provider: 'World Bank', category: 'Economy',
+    description: 'Explore selectable World Bank development indicators by country and year range instead of relying on one hard-coded series.',
+    documentationUrl: 'https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation', accent: '#1d4ed8', monogram: 'WBI',
+    fields: [
+      { id: 'country', label: 'Country code', type: 'text', defaultValue: 'SGP', placeholder: 'e.g. SGP', help: 'Use an ISO 2- or 3-letter country code.' },
+      { id: 'indicator', label: 'Indicator', type: 'select', defaultValue: 'SP.DYN.LE00.IN', help: 'Choose a commonly used World Bank indicator.', options: [
+        { label: 'Life expectancy', value: 'SP.DYN.LE00.IN' }, { label: 'GDP · current US$', value: 'NY.GDP.MKTP.CD' }, { label: 'GDP per capita · current US$', value: 'NY.GDP.PCAP.CD' }, { label: 'Population', value: 'SP.POP.TOTL' }, { label: 'Inflation · consumer prices %', value: 'FP.CPI.TOTL.ZG' }, { label: 'Unemployment · %', value: 'SL.UEM.TOTL.ZS' }, { label: 'Internet users · %', value: 'IT.NET.USER.ZS' },
+      ] },
+      { id: 'startYear', label: 'Start year', type: 'number', defaultValue: '2015', min: 1960, max: 2100, help: 'Beginning of the requested time series.' },
+      { id: 'endYear', label: 'End year', type: 'number', defaultValue: '2025', min: 1960, max: 2100, help: 'End of the requested time series.' },
+    ],
+    buildUrl: ({ country = 'SGP', indicator = 'SP.DYN.LE00.IN', startYear = '2015', endYear = '2025' }) => {
+      const safeStart = clampInt(startYear, 1960, 2100, 2015)
+      const safeEnd = clampInt(endYear, 1960, 2100, 2025)
+      const from = Math.min(safeStart, safeEnd)
+      const to = Math.max(safeStart, safeEnd)
+      return `https://api.worldbank.org/v2/country/${encode(country || 'SGP').toUpperCase()}/indicator/${encode(indicator || 'SP.DYN.LE00.IN')}?${new URLSearchParams({ format: 'json', date: `${from}:${to}`, per_page: '100' }).toString()}`
+    },
+  },
+  {
+    id: 'exchange-rate-current', name: 'Current FX Rates', provider: 'ExchangeRate-API', category: 'Finance',
+    description: 'Read a current keyless exchange-rate table for a selected base currency.',
+    documentationUrl: 'https://www.exchangerate-api.com/docs/free', accent: '#0f766e', monogram: 'ERX',
+    usageNote: 'The open endpoint is intended for lightweight current-rate use. Review the provider terms before building financial or commercial decision systems around the feed.',
+    fields: [{ id: 'base', label: 'Base currency', type: 'select', defaultValue: 'SGD', help: 'Choose the currency whose current cross-rates should be displayed.', options: [
+      { label: 'SGD · Singapore Dollar', value: 'SGD' }, { label: 'MYR · Malaysian Ringgit', value: 'MYR' }, { label: 'USD · US Dollar', value: 'USD' }, { label: 'EUR · Euro', value: 'EUR' }, { label: 'GBP · Pound Sterling', value: 'GBP' }, { label: 'JPY · Japanese Yen', value: 'JPY' }, { label: 'AUD · Australian Dollar', value: 'AUD' },
+    ] }],
+    buildUrl: ({ base = 'SGD' }) => `https://open.er-api.com/v6/latest/${encode(base || 'SGD').toUpperCase()}`,
+  },
+  {
+    id: 'circl-vulnerability', name: 'CIRCL Vulnerability Lookup', provider: 'CIRCL', category: 'Security',
+    description: 'Fetch a normalized CVE 5 record from CIRCL Vulnerability-Lookup with CNA descriptions and affected products.',
+    documentationUrl: 'https://vulnerability.circl.lu/api/', accent: '#7c3aed', monogram: 'CIR', risk: 'Review',
+    usageNote: 'Use vulnerability records as investigation evidence, not as an automatic patching decision. Confirm affected versions and remediation guidance from the vendor or package ecosystem.',
+    fields: [{ id: 'cve', label: 'CVE ID', type: 'text', defaultValue: 'CVE-2021-44228', placeholder: 'e.g. CVE-2021-44228', help: 'Enter a published CVE identifier.' }],
+    buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://vulnerability.circl.lu/api/cve/${encode(cve.trim().toUpperCase() || 'CVE-2021-44228')}`,
+  },
+]
+
 export const apiCatalog: ApiDemo[] = [
   ...coreApis,
   ...additionalInteractiveApis,
@@ -2511,6 +2655,7 @@ export const apiCatalog: ApiDemo[] = [
   ...verifiedSecondExpansionApis,
   ...verifiedThirdExpansionApis,
   ...verifiedFourthExpansionApis,
+  ...publicApi200MilestoneApis,
 ]
 
 export const getDefaultParameters = (api: ApiDemo): Record<string, string> =>

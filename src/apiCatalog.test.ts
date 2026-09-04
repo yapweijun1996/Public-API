@@ -34,7 +34,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(188)
+    expect(apiCatalog).toHaveLength(200)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -475,6 +475,49 @@ describe('API catalog', () => {
     expect(urls['vam-collections'].pathname).toBe('/v2/objects/search')
     expect(urls['vam-collections'].searchParams.get('q')).toBe('eastern')
     expect(urls['vam-collections'].searchParams.get('page_size')).toBe('6')
+  })
+
+  it('builds the twelve Public-API 200 milestone requests', () => {
+    const ids = [
+      'github-global-advisories', 'dblp-search', 'citybikes-network', 'wikimedia-commons-search',
+      'nominatim-search', 'jsdelivr-package', 'canada-open-data-search', 'gbif-occurrence-search',
+      'open-meteo-ensemble', 'world-bank-indicator-explorer', 'exchange-rate-current', 'circl-vulnerability',
+    ]
+    const urls = Object.fromEntries(ids.map((id) => {
+      const api = getApiById(id)
+      expect(api, id).toBeDefined()
+      if (!api) throw new Error(`Missing API: ${id}`)
+      return [id, new URL(api.buildUrl(getDefaultParameters(api)))]
+    }))
+
+    expect(urls['github-global-advisories'].hostname).toBe('api.github.com')
+    expect(urls['github-global-advisories'].pathname).toBe('/advisories')
+    expect(urls['github-global-advisories'].searchParams.get('ecosystem')).toBe('npm')
+    expect(urls['github-global-advisories'].searchParams.get('severity')).toBe('high')
+    expect(urls['dblp-search'].hostname).toBe('dblp.org')
+    expect(urls['dblp-search'].pathname).toBe('/search/publ/api')
+    expect(urls['dblp-search'].searchParams.get('format')).toBe('json')
+    expect(urls['citybikes-network'].pathname).toBe('/v2/networks/youbike-taipei')
+    expect(urls['wikimedia-commons-search'].hostname).toBe('commons.wikimedia.org')
+    expect(urls['wikimedia-commons-search'].searchParams.get('origin')).toBe('*')
+    expect(urls['wikimedia-commons-search'].searchParams.get('gsrnamespace')).toBe('6')
+    expect(urls['nominatim-search'].hostname).toBe('nominatim.openstreetmap.org')
+    expect(urls['nominatim-search'].searchParams.get('format')).toBe('jsonv2')
+    expect(urls['jsdelivr-package'].hostname).toBe('data.jsdelivr.com')
+    expect(urls['jsdelivr-package'].pathname).toBe('/v1/package/npm/react')
+    expect(urls['canada-open-data-search'].hostname).toBe('open.canada.ca')
+    expect(urls['canada-open-data-search'].pathname).toBe('/data/api/3/action/package_search')
+    expect(urls['gbif-occurrence-search'].hostname).toBe('api.gbif.org')
+    expect(urls['gbif-occurrence-search'].pathname).toBe('/v1/occurrence/search')
+    expect(urls['open-meteo-ensemble'].hostname).toBe('ensemble-api.open-meteo.com')
+    expect(urls['open-meteo-ensemble'].searchParams.get('hourly')).toBe('temperature_2m')
+    expect(urls['world-bank-indicator-explorer'].hostname).toBe('api.worldbank.org')
+    expect(urls['world-bank-indicator-explorer'].pathname).toBe('/v2/country/SGP/indicator/SP.DYN.LE00.IN')
+    expect(urls['world-bank-indicator-explorer'].searchParams.get('date')).toBe('2015:2025')
+    expect(urls['exchange-rate-current'].hostname).toBe('open.er-api.com')
+    expect(urls['exchange-rate-current'].pathname).toBe('/v6/latest/SGD')
+    expect(urls['circl-vulnerability'].hostname).toBe('vulnerability.circl.lu')
+    expect(urls['circl-vulnerability'].pathname).toBe('/api/cve/CVE-2021-44228')
   })
 
   it('builds the NHTSA vehicle recall request', () => {

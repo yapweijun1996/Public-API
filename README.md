@@ -6,7 +6,7 @@ A reusable Vite + React + TypeScript admin console for demonstrating public APIs
 
 ## What is included
 
-- A searchable catalog of keyless public APIs
+- A searchable catalog of 200 keyless public API demos
 - Generated parameter forms with validation
 - Live JSON requests with loading, success, and error states
 - Copyable JavaScript examples

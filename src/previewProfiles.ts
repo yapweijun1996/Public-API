@@ -215,6 +215,18 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['go-module-proxy', 'data-table', 'Go module version catalog'],
   ['flathub-appstream', 'media-gallery', 'Linux desktop appstream browser'],
   ['mlb-stats-api', 'data-table', 'MLB schedule data'],
+  ['github-global-advisories', 'security-center', 'GitHub global advisory watchlist'],
+  ['dblp-search', 'research-library', 'DBLP computer-science publication search'],
+  ['citybikes-network', 'location-map', 'Live bike-sharing station map'],
+  ['wikimedia-commons-search', 'media-gallery', 'Wikimedia Commons licensed media wall'],
+  ['nominatim-search', 'location-map', 'OpenStreetMap geocoding explorer'],
+  ['jsdelivr-package', 'developer-feed', 'jsDelivr npm release metadata'],
+  ['canada-open-data-search', 'data-table', 'Canada open-data catalogue search'],
+  ['gbif-occurrence-search', 'location-map', 'GBIF biodiversity occurrence map'],
+  ['open-meteo-ensemble', 'market-chart', 'Ensemble forecast uncertainty chart'],
+  ['world-bank-indicator-explorer', 'market-chart', 'World Bank selectable indicator trend'],
+  ['exchange-rate-current', 'data-table', 'Current keyless FX cross-rate board'],
+  ['circl-vulnerability', 'security-center', 'CIRCL CVE investigation record'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)

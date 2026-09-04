@@ -104,14 +104,14 @@ describe('demo preview mapping', () => {
     }
   })
 
-  it('registers 188 distinct React component functions with no shared identity', () => {
+  it('registers 200 distinct React component functions with no shared identity', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(188)
-    expect(new Set(components).size).toBe(188)
-    expect(new Set(components.map((component) => component.name)).size).toBe(188)
+    expect(components).toHaveLength(200)
+    expect(new Set(components).size).toBe(200)
+    expect(new Set(components.map((component) => component.name)).size).toBe(200)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -125,7 +125,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(188)
+    expect(new Set(visualSignatures).size).toBe(200)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 })
@@ -689,5 +689,112 @@ describe('new verified keyless API previews', () => {
     expect(starWars).toHaveTextContent('Luke Skywalker')
     expect(starWars).toHaveTextContent('172 cm')
     expect(starWars).toHaveTextContent('2')
+  })
+})
+
+describe('Public-API 200 milestone previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('renders GitHub, CIRCL, and DBLP investigation records', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('github-global-advisories')} data={[{
+      ghsa_id: 'GHSA-demo-1234', cve_id: 'CVE-2026-7000', severity: 'high', summary: 'Demo package advisory',
+      published_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-03T00:00:00Z',
+      vulnerabilities: [{ package: { ecosystem: 'npm', name: 'demo-package' } }],
+    }]}/>)
+    const github = screen.getByRole('region', { name: 'GitHub Global Advisories' })
+    expect(github).toHaveTextContent('GHSA-demo-1234')
+    expect(github).toHaveTextContent('demo-package')
+    expect(github).toHaveTextContent('High')
+
+    rerender(<ResponseDemoPreview api={api('circl-vulnerability')} data={{
+      dataType: 'CVE_RECORD', dataVersion: '5.1',
+      cveMetadata: { cveId: 'CVE-2021-44228', state: 'PUBLISHED', assignerShortName: 'apache', datePublished: '2021-12-10T00:00:00Z', dateUpdated: '2025-10-21T00:00:00Z' },
+      containers: { cna: { descriptions: [{ lang: 'en', value: 'Log4j JNDI remote code execution.' }], affected: [{ vendor: 'Apache', product: 'Log4j' }] } },
+    }}/>)
+    const circl = screen.getByRole('region', { name: 'CIRCL Vulnerability Lookup' })
+    expect(circl).toHaveTextContent('CVE-2021-44228')
+    expect(circl).toHaveTextContent('Log4j')
+
+    rerender(<ResponseDemoPreview api={api('dblp-search')} data={{ result: { hits: { hit: [{ info: {
+      title: 'Retrieval-Augmented Generation for Enterprise Systems', year: '2026', venue: 'DemoConf', type: 'Conference and Workshop Papers', doi: '10.1/demo',
+      authors: { author: [{ text: 'Wei Developer' }, { text: 'AI Researcher' }] },
+    } }] } } }}/>)
+    const dblp = screen.getByRole('region', { name: 'DBLP Publication Search' })
+    expect(dblp).toHaveTextContent('Retrieval-Augmented Generation for Enterprise Systems')
+    expect(dblp).toHaveTextContent('Wei Developer')
+    expect(dblp).toHaveTextContent('DemoConf')
+  })
+
+  it('renders live-location and licensed-media response shapes', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('citybikes-network')} data={{ network: { stations: [{
+      name: '示範站', latitude: 25.03, longitude: 121.56, free_bikes: 12, empty_slots: 8, extra: { en: { name: 'Demo Bike Station' } },
+    }] } }}/>)
+    const bikes = screen.getByRole('region', { name: 'CityBikes Live Stations' })
+    expect(bikes).toHaveTextContent('Demo Bike Station')
+    expect(bikes).toHaveTextContent('12 bikes · 8 empty docks')
+
+    rerender(<ResponseDemoPreview api={api('nominatim-search')} data={[{ lat: '1.3571', lon: '103.8195', name: 'Singapore', display_name: 'Singapore', type: 'administrative' }]}/>)
+    const nominatim = screen.getByRole('region', { name: 'OpenStreetMap Nominatim' })
+    expect(nominatim).toHaveTextContent('Singapore')
+    expect(within(nominatim).getByRole('img', { name: /Map with 1 response locations/ })).toBeInTheDocument()
+
+    rerender(<ResponseDemoPreview api={api('gbif-occurrence-search')} data={{ results: [{ scientificName: 'Panthera leo', decimalLatitude: -1.3, decimalLongitude: 36.8, locality: 'Nairobi', eventDate: '2026-08-01' }] }}/>)
+    const gbif = screen.getByRole('region', { name: 'GBIF Occurrence Search' })
+    expect(gbif).toHaveTextContent('Panthera leo')
+    expect(gbif).toHaveTextContent('Nairobi · 2026-08-01')
+
+    rerender(<ResponseDemoPreview api={api('wikimedia-commons-search')} data={{ query: { pages: { 1: {
+      title: 'File:Singapore skyline.jpg', imageinfo: [{ thumburl: 'https://images.test/sg.jpg', extmetadata: { LicenseShortName: { value: 'CC BY-SA 4.0' } } }],
+    } } } }}/>)
+    const commons = screen.getByRole('region', { name: 'Wikimedia Commons Search' })
+    expect(within(commons).getByRole('img')).toHaveAttribute('src', 'https://images.test/sg.jpg')
+    expect(commons).toHaveTextContent('Singapore skyline.jpg')
+    expect(commons).toHaveTextContent('CC BY-SA 4.0')
+  })
+
+  it('renders developer, government, and current FX records', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('jsdelivr-package')} data={{ tags: { latest: '19.2.8', rc: '19.0.0-rc.1', next: '19.3.0-canary' }, versions: ['19.2.8', '19.2.7', '19.1.0'] }}/>)
+    const jsdelivr = screen.getByRole('region', { name: 'jsDelivr Package Metadata' })
+    expect(jsdelivr).toHaveTextContent('19.2.8')
+    expect(jsdelivr).toHaveTextContent('3 versions')
+
+    rerender(<ResponseDemoPreview api={api('canada-open-data-search')} data={{ result: { results: [{ title: 'Artificial Intelligence - ITSAP.00.040', type: 'info', organization: { title: 'Government of Canada' }, date_published: '2025-12-10', notes: 'AI awareness guidance.' }] } }}/>)
+    const canada = screen.getByRole('region', { name: 'Canada Open Data Search' })
+    expect(canada).toHaveTextContent('Artificial Intelligence - ITSAP.00.040')
+    expect(canada).toHaveTextContent('Government of Canada')
+
+    rerender(<ResponseDemoPreview api={api('exchange-rate-current')} data={{ base_code: 'SGD', time_last_update_utc: 'Fri, 04 Sep 2026 00:02:31 +0000', rates: { SGD: 1, MYR: 3.11, USD: 0.789, EUR: 0.68, GBP: 0.59, JPY: 116.5, AUD: 1.09, CNY: 5.31 } }}/>)
+    const fx = screen.getByRole('region', { name: 'Current FX Rates' })
+    expect(fx).toHaveTextContent('1 SGD → MYR')
+    expect(fx).toHaveTextContent('3.11')
+  })
+
+  it('renders ensemble uncertainty and selectable World Bank indicators', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('open-meteo-ensemble')} data={{
+      timezone: 'Asia/Singapore', hourly_units: { temperature_2m: '°C' },
+      hourly: { time: ['2026-09-04T09:00', '2026-09-04T10:00'], temperature_2m: [30, 31], temperature_2m_member01: [29, 30], temperature_2m_member02: [31, 32] },
+    }}/>)
+    const ensemble = screen.getByRole('region', { name: 'Open-Meteo Ensemble Forecast' })
+    expect(ensemble).toHaveTextContent('Ensemble members')
+    expect(ensemble).toHaveTextContent('30 – 32 °C')
+
+    rerender(<ResponseDemoPreview api={api('world-bank-indicator-explorer')} data={[
+      { page: 1, total: 3 },
+      [
+        { indicator: { id: 'SP.DYN.LE00.IN', value: 'Life expectancy at birth, total (years)' }, country: { value: 'Singapore' }, countryiso3code: 'SGP', date: '2025', value: 84.1 },
+        { indicator: { id: 'SP.DYN.LE00.IN', value: 'Life expectancy at birth, total (years)' }, country: { value: 'Singapore' }, countryiso3code: 'SGP', date: '2024', value: 83.9 },
+        { indicator: { id: 'SP.DYN.LE00.IN', value: 'Life expectancy at birth, total (years)' }, country: { value: 'Singapore' }, countryiso3code: 'SGP', date: '2023', value: 83.7 },
+      ],
+    ]}/>)
+    const worldBank = screen.getByRole('region', { name: 'World Bank Indicator Explorer' })
+    expect(worldBank).toHaveTextContent('Life expectancy at birth, total (years) · Singapore')
+    expect(worldBank).toHaveTextContent('Latest year')
+    expect(worldBank).toHaveTextContent('2025')
   })
 })

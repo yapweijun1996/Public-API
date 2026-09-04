@@ -584,6 +584,50 @@ function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
     const price = numberValue(usd.price) ?? 0
     return { label: `${textValue(data.name) ?? api.name} · ${textValue(data.symbol) ?? ''}`, value: price, currency: 'USD', points: [price], dates: [textValue(data.last_updated) ?? 'Latest'], metrics: [['24h change', usd.percent_change_24h], ['Market cap', usd.market_cap], ['24h volume', usd.volume_24h]].map(([label, value]) => ({ label: String(label), value: numberValue(value) === undefined ? '—' : label === '24h change' ? `${formatNumber(Number(value), 2)}%` : compactNumber(Number(value)) })) }
   }
+  if (api.id === 'open-meteo-ensemble' && isRecord(data)) {
+    const hourly = isRecord(data.hourly) ? data.hourly : {}
+    const units = isRecord(data.hourly_units) ? data.hourly_units : {}
+    const baseKey = Object.keys(hourly).find((key) => key !== 'time' && !key.includes('_member'))
+    const points = baseKey && Array.isArray(hourly[baseKey]) ? hourly[baseKey].map(numberValue).filter((value): value is number => value !== undefined) : []
+    const dates = Array.isArray(hourly.time) ? hourly.time.map((value) => textValue(value) ?? '') : []
+    const memberKeys = baseKey ? Object.keys(hourly).filter((key) => key.startsWith(`${baseKey}_member`)) : []
+    const latestIndex = Math.max(0, points.length - 1)
+    const latestMembers = memberKeys.map((key) => Array.isArray(hourly[key]) ? numberValue(hourly[key][latestIndex]) : undefined).filter((value): value is number => value !== undefined)
+    const latest = points.at(-1) ?? latestMembers.reduce((sum, value) => sum + value, 0) / (latestMembers.length || 1)
+    const unit = baseKey ? cleanText(units[baseKey]) ?? '' : ''
+    return {
+      label: `${cleanText(data.timezone)?.replace(/_/g, ' ') ?? 'Ensemble forecast'} · ${baseKey ? previewLabel(baseKey) : 'Forecast range'}`,
+      value: latest,
+      currency: unit || undefined,
+      points: points.length ? points : [latest],
+      dates,
+      metrics: [
+        { label: 'Ensemble members', value: String(memberKeys.length) },
+        { label: 'Latest spread', value: latestMembers.length ? `${formatNumber(Math.min(...latestMembers), 2)} – ${formatNumber(Math.max(...latestMembers), 2)} ${unit}`.trim() : '—' },
+        { label: 'Forecast points', value: String(points.length) },
+      ],
+    }
+  }
+  if (api.id === 'world-bank-indicator-explorer' && Array.isArray(data)) {
+    const rows = Array.isArray(data[1]) ? data[1].filter(isRecord) : []
+    const series = rows.map((row) => ({ date: textValue(row.date) ?? '', value: numberValue(row.value), row })).filter((entry): entry is { date: string; value: number; row: Record<string, unknown> } => entry.value !== undefined).sort((a, b) => Number(a.date) - Number(b.date))
+    const firstRow = series[0]?.row ?? rows[0] ?? {}
+    const indicator = isRecord(firstRow.indicator) ? firstRow.indicator : {}
+    const country = isRecord(firstRow.country) ? firstRow.country : {}
+    const points = series.map((entry) => entry.value)
+    const latest = points.at(-1) ?? 0
+    return {
+      label: `${cleanText(indicator.value) ?? cleanText(indicator.id) ?? api.name} · ${cleanText(country.value) ?? cleanText(firstRow.countryiso3code) ?? 'Country'}`,
+      value: latest,
+      points: points.length ? points : [0],
+      dates: series.map((entry) => entry.date),
+      metrics: [
+        { label: 'Latest year', value: series.at(-1)?.date ?? '—' },
+        { label: 'Range', value: points.length ? `${formatNumber(Math.min(...points), 2)} – ${formatNumber(Math.max(...points), 2)}` : '—' },
+        { label: 'Observations', value: String(points.length) },
+      ],
+    }
+  }
   const records = findPreviewRecords(data)
   const rateRecords = records.map((record) => ({ record, value: numberValue(record.rate ?? record.value ?? record.close ?? record.price), date: textValue(record.date ?? record.period ?? record.year) })).filter((item): item is { record: Record<string, unknown>; value: number; date: string | undefined } => item.value !== undefined)
   const points = rateRecords.map((item) => item.value)
@@ -833,6 +877,20 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
       subtitle: `${cleanText(observation.place_guess) ?? 'Location unavailable'} · ${previewValue(observation.observed_on)}`,
     }
   }).filter((item) => item.image)
+  if (api.id === 'wikimedia-commons-search' && isRecord(data)) {
+    const query = isRecord(data.query) ? data.query : {}
+    const pages = isRecord(query.pages) ? Object.values(query.pages).filter(isRecord) : []
+    return pages.slice(0, 8).map((page) => {
+      const imageInfo = recordArray(page.imageinfo)[0] ?? {}
+      const metadata = isRecord(imageInfo.extmetadata) ? imageInfo.extmetadata : {}
+      const license = cleanText(recordValue(metadata.LicenseShortName, 'value')) ?? cleanText(recordValue(metadata.License, 'value'))
+      return {
+        image: textValue(imageInfo.thumburl) ?? textValue(imageInfo.url) ?? '',
+        title: (cleanText(page.title) ?? 'Commons media').replace(/^File:/, ''),
+        subtitle: license ? `Wikimedia Commons · ${license}` : 'Wikimedia Commons',
+      }
+    }).filter((item) => item.image)
+  }
   if (api.id === 'openverse-search' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((item) => {
     const thumbnails = isRecord(item.thumbnail) ? item.thumbnail : {}
     return {
@@ -905,6 +963,31 @@ function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint
       detail: `${cleanText(data.city) ?? 'City'} · ${cleanText(data.state) ?? 'State'} · ${cleanText(data.timezoneName) ?? 'Brazil'}`,
     }]
   }
+  if (api?.id === 'citybikes-network' && isRecord(data)) {
+    const network = isRecord(data.network) ? data.network : {}
+    return recordArray(network.stations).slice(0, 8).map((station, index) => {
+      const extra = isRecord(station.extra) ? station.extra : {}
+      const english = isRecord(extra.en) ? extra.en : {}
+      return {
+        latitude: numberValue(station.latitude) ?? 0,
+        longitude: numberValue(station.longitude) ?? 0,
+        label: cleanText(english.name) ?? cleanText(station.name) ?? `Bike station ${index + 1}`,
+        detail: `${previewValue(station.free_bikes)} bikes · ${previewValue(station.empty_slots)} empty docks`,
+      }
+    }).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  }
+  if (api?.id === 'nominatim-search') return recordArray(data).slice(0, 8).map((place, index) => ({
+    latitude: numberValue(place.lat) ?? 0,
+    longitude: numberValue(place.lon) ?? 0,
+    label: cleanText(place.name) ?? cleanText(place.display_name) ?? `Place ${index + 1}`,
+    detail: `${previewLabel(cleanText(place.type) ?? 'Place')} · ${cleanText(place.display_name) ?? 'OpenStreetMap result'}`,
+  })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
+  if (api?.id === 'gbif-occurrence-search' && isRecord(data)) return recordArray(data.results).slice(0, 8).map((occurrence, index) => ({
+    latitude: numberValue(occurrence.decimalLatitude) ?? 0,
+    longitude: numberValue(occurrence.decimalLongitude) ?? 0,
+    label: cleanText(occurrence.scientificName) ?? cleanText(occurrence.species) ?? `Occurrence ${index + 1}`,
+    detail: `${cleanText(occurrence.locality) ?? cleanText(occurrence.stateProvince) ?? cleanText(occurrence.country) ?? 'Locality unavailable'} · ${previewValue(occurrence.eventDate ?? occurrence.year)}`,
+  })).filter((point) => point.latitude !== 0 || point.longitude !== 0)
   if (api?.id === 'uk-police-street-crime') return recordArray(data).slice(0, 8).map((crime, index) => {
     const location = isRecord(crime.location) ? crime.location : {}
     const street = isRecord(location.street) ? location.street : {}
@@ -1241,6 +1324,21 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
       }
     })
   }
+  else if (api.id === 'jsdelivr-package') {
+    const tags = isRecord(root.tags) ? root.tags : {}
+    const versions = Array.isArray(root.versions) ? root.versions.filter((value): value is string => typeof value === 'string') : []
+    cards = [{
+      title: cleanText(tags.latest) ? `${api.name} · ${cleanText(tags.latest)}` : api.name,
+      eyebrow: 'npm package metadata via jsDelivr',
+      badge: `${versions.length} versions`,
+      metrics: [
+        { label: 'Latest', value: previewValue(tags.latest) },
+        { label: 'Next / canary', value: previewValue(tags.next ?? tags.canary) },
+        { label: 'Release candidate', value: previewValue(tags.rc) },
+      ],
+      tags: versions.slice(0, 4),
+    }]
+  }
   else if (api.id === 'npm-search') cards = recordArray(root.objects).map((record) => {
     const pkg = isRecord(record.package) ? record.package : {}
     const downloads = isRecord(record.downloads) ? record.downloads : {}
@@ -1256,7 +1354,44 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
 function SecurityCenterPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const root = isRecord(data) ? data : {}
   let cards: SemanticCard[] = []
-  if (api.id === 'first-epss') cards = recordArray(root.data).map((entry) => {
+  if (api.id === 'github-global-advisories') cards = recordArray(data).map((advisory) => {
+    const vulnerabilities = recordArray(advisory.vulnerabilities)
+    const packages = vulnerabilities.map((entry) => cleanText(recordValue(entry.package, 'name'))).filter((value): value is string => Boolean(value))
+    const ecosystems = vulnerabilities.map((entry) => cleanText(recordValue(entry.package, 'ecosystem'))).filter((value): value is string => Boolean(value))
+    return {
+      title: cleanText(advisory.ghsa_id) ?? cleanText(advisory.cve_id) ?? 'GitHub advisory',
+      eyebrow: cleanText(advisory.cve_id) ?? 'GitHub Security Advisory',
+      description: cleanText(advisory.summary) ?? cleanText(advisory.description),
+      badge: previewLabel(cleanText(advisory.severity) ?? 'Reviewed'),
+      metrics: [
+        { label: 'Affected packages', value: packages.slice(0, 3).join(', ') || '—' },
+        { label: 'Published', value: dateParts(advisory.published_at).full || previewValue(advisory.published_at) },
+        { label: 'Updated', value: dateParts(advisory.updated_at).full || previewValue(advisory.updated_at) },
+      ],
+      tags: [...new Set(ecosystems)].slice(0, 5),
+    }
+  })
+  else if (api.id === 'circl-vulnerability') {
+    const metadata = isRecord(root.cveMetadata) ? root.cveMetadata : {}
+    const containers = isRecord(root.containers) ? root.containers : {}
+    const cna = isRecord(containers.cna) ? containers.cna : {}
+    const affected = recordArray(cna.affected)
+    const products = affected.map((entry) => cleanText(entry.product) ?? cleanText(entry.vendor)).filter((value): value is string => Boolean(value))
+    const description = recordArray(cna.descriptions).find((entry) => entry.lang === 'en') ?? recordArray(cna.descriptions)[0]
+    cards = Object.keys(root).length ? [{
+      title: cleanText(metadata.cveId) ?? 'CVE record',
+      eyebrow: `${cleanText(metadata.assignerShortName) ?? 'CIRCL'} · CVE 5 record`,
+      description: cleanText(description?.value) ?? cleanText(cna.title),
+      badge: cleanText(metadata.state) ?? 'Published',
+      metrics: [
+        { label: 'Affected products', value: products.slice(0, 4).join(', ') || '—' },
+        { label: 'Published', value: dateParts(metadata.datePublished).full || previewValue(metadata.datePublished) },
+        { label: 'Updated', value: dateParts(metadata.dateUpdated).full || previewValue(metadata.dateUpdated) },
+      ],
+      tags: [cleanText(root.dataType), cleanText(root.dataVersion)].filter((value): value is string => Boolean(value)),
+    }] : []
+  }
+  else if (api.id === 'first-epss') cards = recordArray(root.data).map((entry) => {
     const percentile = numberValue(entry.percentile)
     const score = numberValue(entry.epss)
     return {
@@ -1351,6 +1486,28 @@ function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) 
   else if (api.id === 'europe-pmc-search') {
     const list = isRecord(root.resultList) ? root.resultList : {}
     cards = recordArray(list.result).map((paper) => ({ title: cleanText(paper.title) ?? 'Research paper', eyebrow: cleanText(paper.authorString) ?? 'Europe PMC', description: cleanText(paper.journalTitle), badge: previewValue(paper.pubYear), metrics: [{ label: 'Citations', value: previewValue(paper.citedByCount) }, { label: 'Open access', value: paper.isOpenAccess === 'Y' ? 'Yes' : 'No' }, { label: 'Identifier', value: previewValue(paper.doi ?? paper.pmid ?? paper.id) }] }))
+  }
+  else if (api.id === 'dblp-search') {
+    const result = isRecord(root.result) ? root.result : {}
+    const hits = isRecord(result.hits) ? result.hits : {}
+    cards = recordArray(hits.hit).map((hit) => {
+      const info = isRecord(hit.info) ? hit.info : {}
+      const authorsRoot = isRecord(info.authors) ? info.authors : {}
+      const rawAuthors = authorsRoot.author
+      const authors = Array.isArray(rawAuthors)
+        ? rawAuthors.map((author) => isRecord(author) ? cleanText(author.text) : cleanText(author)).filter((value): value is string => Boolean(value))
+        : [isRecord(rawAuthors) ? cleanText(rawAuthors.text) : cleanText(rawAuthors)].filter((value): value is string => Boolean(value))
+      return {
+        title: cleanText(info.title) ?? 'DBLP publication',
+        eyebrow: authors.slice(0, 4).join(', ') || 'DBLP bibliography',
+        badge: previewValue(info.year),
+        metrics: [
+          { label: 'Venue', value: previewValue(info.venue) },
+          { label: 'Type', value: previewValue(info.type) },
+          { label: 'DOI', value: previewValue(info.doi) },
+        ],
+      }
+    })
   }
   return <SemanticCards cards={cards} emptyTitle="Research records unavailable"/>
 }
@@ -1512,6 +1669,27 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
       latitude: textValue(latitudes[index]) ?? textValue(latitudes[0]) ?? '—',
       longitude: textValue(longitudes[index]) ?? textValue(longitudes[0]) ?? '—',
       elevation: numberValue(value) !== undefined ? `${formatNumber(numberValue(value)!, 2)} m` : textValue(value) ?? '—',
+    }))
+  }
+  else if (api.id === 'canada-open-data-search') {
+    const result = isRecord(root.result) ? root.result : {}
+    records = recordArray(result.results).slice(0, 10).map((entry) => ({
+      title: cleanText(entry.title) ?? cleanText(recordValue(entry.title_translated, 'en')) ?? cleanText(entry.name) ?? 'Canada open-data record',
+      type: previewValue(entry.type ?? entry.collection),
+      organization: previewValue(recordValue(entry.organization, 'title')),
+      published: previewValue(entry.date_published),
+      description: cleanText(entry.notes) ?? cleanText(recordValue(entry.notes_translated, 'en')),
+    }))
+  }
+  else if (api.id === 'exchange-rate-current') {
+    const rates = isRecord(root.rates) ? root.rates : {}
+    const base = cleanText(root.base_code) ?? 'BASE'
+    const preferred = ['MYR', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CNY', 'SGD'].filter((code) => code !== base && rates[code] !== undefined)
+    records = preferred.map((code) => ({
+      title: `1 ${base} → ${code}`,
+      rate: previewValue(rates[code]),
+      updated: previewValue(root.time_last_update_utc),
+      provider: 'ExchangeRate-API open endpoint',
     }))
   }
   else if (api.id === 'color-api') {
@@ -1859,6 +2037,18 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'pub-dev': defineApiPreview('pub-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'go-module-proxy': defineApiPreview('go-module-proxy', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'flathub-appstream': defineApiPreview('flathub-appstream', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'github-global-advisories': defineApiPreview('github-global-advisories', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
+  'dblp-search': defineApiPreview('dblp-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
+  'citybikes-network': defineApiPreview('citybikes-network', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'wikimedia-commons-search': defineApiPreview('wikimedia-commons-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
+  'nominatim-search': defineApiPreview('nominatim-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'jsdelivr-package': defineApiPreview('jsdelivr-package', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
+  'canada-open-data-search': defineApiPreview('canada-open-data-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'gbif-occurrence-search': defineApiPreview('gbif-occurrence-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'open-meteo-ensemble': defineApiPreview('open-meteo-ensemble', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'world-bank-indicator-explorer': defineApiPreview('world-bank-indicator-explorer', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'exchange-rate-current': defineApiPreview('exchange-rate-current', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'circl-vulnerability': defineApiPreview('circl-vulnerability', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)
