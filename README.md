@@ -16,6 +16,15 @@ A reusable Vite + React + TypeScript admin console for demonstrating public APIs
 - Five WebMCP tools registered through `document.modelContext`
 - Typed catalog tests that validate every default endpoint
 
+## Product North Star and AI-agent architecture
+
+Public-API is a quality-first browser-native workbench for humans/developers and AI agents. The product treats accessibility semantics as AI usability infrastructure and targets one SSOT exposed through three complementary surfaces: Human UI, an agent-readable DOM/accessibility contract, and WebMCP when the environment supports it.
+
+See:
+
+- [`docs/product-north-star-and-agent-architecture.md`](docs/product-north-star-and-agent-architecture.md) — North Star, Agent-Readable DOM Contract, WebMCP/fallback strategy, semantic response architecture, capability discovery, and maturity roadmap.
+- [`docs/autonomous-optimization-loop.md`](docs/autonomous-optimization-loop.md) — local-only autonomous research/optimization workflow, quality gates, KB-MCP learning policy, and publication boundary.
+
 ## Run locally
 
 Use Node.js 20.19+, 22.12+, or 24+ (an active LTS release is recommended).

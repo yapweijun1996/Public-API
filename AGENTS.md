@@ -55,3 +55,10 @@
 - 禁止提交 API key、token、`.env` 与敏感凭据。
 - 错误提示应统一处理 `CORS` 拒绝、429、超时和无效 JSON。
 - 公开素材与引用数据需保留授权说明与展示边界。
+
+## Product North Star & Agent Compatibility
+- 产品目标不是最大 API 目录，而是高质量、browser-native、同时服务 human/developer 与 AI agent 的 Public API workbench。
+- 重大 UI/interaction 修改必须遵守 `docs/product-north-star-and-agent-architecture.md` 的 Agent-Readable DOM Contract：优先 semantic HTML/native controls；所有重要 action 有 clear accessible name；custom control 提供等价 ARIA/keyboard semantics；不要让 AI agent 依赖截图、颜色、icon 或全文 highlight 才能理解操作。
+- Accessibility 同时视为 AI usability infrastructure；重要信息不能只存在于 chart/SVG/map/color，必须从同一个 semantic ViewModel 提供 agent-readable text/DOM。
+- WebMCP 是可选的 structured agent surface，不得成为唯一 AI 入口；普通网页在无 WebMCP 环境仍须可通过 accessibility tree 完成 discover → search → select → configure → run → read result。
+- 自主优化规则见 `docs/autonomous-optimization-loop.md`。Scheduled/local autonomous work 可以研究、修改、测试并更新 KB-MCP，但未收到用户明确 publication 指令前不得 commit、push、开 PR 或 merge。
