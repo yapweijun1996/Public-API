@@ -378,6 +378,12 @@ function App() {
     return true
   }, [runForAgent])
 
+  const updateParameter = (fieldId: string, value: string) => {
+    setParameters((current) => ({ ...current, [fieldId]: value }))
+    if (request.status !== 'idle') setRequest({ status: 'idle' })
+    setOutputTab('response')
+  }
+
   const submitRequest = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await executeRequest(activeApi, parameters)
@@ -389,10 +395,19 @@ function App() {
     void executeRequest(activeApi, parameters)
   }
 
-  const copyFetch = async () => {
-    await navigator.clipboard.writeText(codeSample(activeApi, parameters))
+  const copyOutput = async () => {
+    const value = outputTab === 'code'
+      ? codeSample(activeApi, parameters)
+      : request.status === 'success'
+        ? JSON.stringify(request.data, null, 2)
+        : endpoint
+    await navigator.clipboard.writeText(value)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1400)
+  }
+
+  const copyFetch = async () => {
+    await navigator.clipboard.writeText(codeSample(activeApi, parameters))
   }
 
   return (
@@ -511,8 +526,9 @@ function App() {
             <div className="table-footer"><span>Showing {filteredApis.length} of {apiCatalog.length} APIs</span><div><button type="button" disabled aria-label="Previous page">‹</button><button type="button" className="current" aria-label="Page 1, current page">1</button><button type="button" disabled aria-label="Next page">›</button></div></div>
           </section>}
 
-          {currentPage === 'request-lab' && <section className="request-lab page-section" aria-labelledby="lab-heading">
-            <div className="section-title"><span><Icon name="activity" /></span><div><h2 id="lab-heading">Request lab</h2><p>Run the selected public API and inspect the raw response.</p></div></div>
+          {currentPage === 'request-lab' && <section className={`request-lab page-section ${request.status === 'success' ? 'has-ssot-result' : ''}`} aria-labelledby="lab-heading">
+            <div className="section-title"><span><Icon name="activity" /></span><div><h2 id="lab-heading">Request lab</h2><p>Run the selected public API, review its SSOT card, then inspect raw JSON or fetch code when needed.</p></div></div>
+            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} runtime={{ httpStatus: request.httpStatus, elapsed: request.elapsed, size: request.size }} />}
             <div className="lab-grid">
               <form className="parameter-card" onSubmit={submitRequest} noValidate>
                 <div className="active-api"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><small>Selected module</small><b>{activeApi.name}</b></div><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Docs <Icon name="external" size={12} /></a></div>
@@ -521,7 +537,7 @@ function App() {
                 <div className="parameter-fields">
                   {activeApi.fields.map((field) => (
                     <label key={field.id} htmlFor={`parameter-${field.id}`}><span>{field.label}<em>required</em></span>
-                      {field.type === 'select' ? <select id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} onChange={(event) => setParameters((current) => ({ ...current, [field.id]: event.target.value }))}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input id={`parameter-${field.id}`} name={field.id} type={field.type} min={field.min} max={field.max} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.id])} onChange={(event) => setParameters((current) => ({ ...current, [field.id]: event.target.value }))} />}
+                      {field.type === 'select' ? <select id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} onChange={(event) => updateParameter(field.id, event.target.value)}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input id={`parameter-${field.id}`} name={field.id} type={field.type} min={field.min} max={field.max} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.id])} onChange={(event) => updateParameter(field.id, event.target.value)} />}
                       <small className={errors[field.id] ? 'error' : ''}>{errors[field.id] ?? field.help}</small>
                     </label>
                   ))}
@@ -529,13 +545,12 @@ function App() {
                 <button className="primary-action" type="submit" disabled={request.status === 'loading'}>{request.status === 'loading' ? <span className="spinner" /> : <Icon name="play" size={16} />}{request.status === 'loading' ? 'Running request…' : 'Try live API'}</button>
               </form>
               <div className="response-card">
-                <div className="response-head"><div role="tablist" aria-label="Request output"><button role="tab" aria-selected={outputTab === 'response'} type="button" onClick={() => setOutputTab('response')}>Response</button><button role="tab" aria-selected={outputTab === 'code'} type="button" onClick={() => setOutputTab('code')}>Fetch code</button></div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyFetch}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copied' : 'Copy'}</button></div>
+                <div className="response-head"><div role="tablist" aria-label="Request output"><button role="tab" aria-selected={outputTab === 'response'} type="button" onClick={() => setOutputTab('response')}>Raw JSON</button><button role="tab" aria-selected={outputTab === 'code'} type="button" onClick={() => setOutputTab('code')}>Fetch code</button></div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyOutput}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? 'Copied' : outputTab === 'code' ? 'Copy code' : 'Copy JSON'}</button></div>
                 <div className="response-body" aria-live="polite">
                   {outputTab === 'code' ? <pre>{codeSample(activeApi, parameters)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>Ready to test</b><p>Configure the parameters and run this API.</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>Contacting {activeApi.provider}</b><p>Waiting for the public endpoint…</p></div> : request.status === 'error' ? <div className="response-error"><Icon name="alert" /><b>Request failed</b><p>{request.message}</p></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
                 </div>
               </div>
             </div>
-            {request.status === 'success' && <ResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} />}
           </section>}
 
           {currentPage === 'agent-tools' && <section className="agent-section page-section" aria-labelledby="agent-heading">

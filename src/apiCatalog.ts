@@ -2390,24 +2390,21 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       const modulePath = encode(module.trim() || 'github.com/gin-gonic/gin').replace(/%2F/g, '/')
       return `https://proxy.golang.org/${modulePath}/@v/list`
     },
+    parseResponse: (text) => ({ versions: text.split(/\r?\n/).map((version) => version.trim()).filter(Boolean) }),
   },
   {
     id: 'flathub-appstream',
     name: 'Flathub Appstream',
     provider: 'Flathub',
     category: 'Developer',
-    description: 'Discover desktop applications with screenshots, license status, category tags, and installation metadata.',
+    description: 'Inspect one Flathub desktop application with screenshots, release history, license, categories, and project links.',
     documentationUrl: 'https://docs.flathub.org/docs/for-app-authors/appstream/',
     accent: '#0f766e',
     monogram: 'FLA',
     fields: [
-      { id: 'query', label: 'App search', type: 'text', defaultValue: 'org.gnome.Calculator', placeholder: 'e.g. org.gnome.Calculator', help: 'Search Flathub app identifiers or display names.' },
-      { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, help: 'Return between 1 and 20 matches.' },
+      { id: 'appId', label: 'Flathub app ID', type: 'text', defaultValue: 'org.gnome.Calculator', placeholder: 'e.g. org.gnome.Calculator', help: 'Enter an exact Flathub application ID.' },
     ],
-    buildUrl: ({ query = 'org.gnome.Calculator', count = '8' }) => {
-      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 8))
-      return `https://flathub.org/api/v2/appstream?${new URLSearchParams({ q: query.trim() || 'org.gnome.Calculator', limit: String(safeCount) }).toString()}`
-    },
+    buildUrl: ({ appId = 'org.gnome.Calculator' }) => `https://flathub.org/api/v2/appstream/${encode(appId.trim() || 'org.gnome.Calculator')}`,
   },
 ]
 
