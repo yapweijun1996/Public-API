@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiCategories, apiCatalog, getApiById, getDefaultParameters, type ApiDemo } from './apiCatalog'
+import { buildRequestLabUrl } from './routes'
 
 type ToolInput = Record<string, unknown>
 
@@ -55,8 +56,14 @@ type ToolUiType = 'Read' | 'Control' | 'Execute'
 const TOOL_SPECS = [
   {
     name: 'list_public_api_demos',
-    description: 'List the public API demos available on this page and their required parameters.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'List or search the public API demos available on this page, including valid parameter choices and bounds.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional text to match against API name, provider, description, or category.' },
+        category: { type: 'string', enum: ['All', ...apiCategories], description: 'Optional API category filter.' },
+      },
+    },
     annotations: { readOnlyHint: true, untrustedContentHint: false },
     uiLabel: 'Discover APIs and input schemas',
     uiType: 'Read' as ToolUiType,
@@ -163,20 +170,35 @@ export function useWebMcp({
 
     const controller = new AbortController()
     const executors: Record<string, ModelContextTool['execute']> = {
-      list_public_api_demos: () => ({
-        demos: apiCatalog.map((api) => ({
-          id: api.id,
-          name: api.name,
-          provider: api.provider,
-          description: api.description,
-          parameters: api.fields.map(({ id, label, type, defaultValue }) => ({
-            id,
-            label,
-            type,
-            defaultValue,
-          })),
-        })),
-      }),
+      list_public_api_demos: ({ query, category }) => {
+        const safeQuery = typeof query === 'string' ? query.trim() : ''
+        const safeCategory = typeof category === 'string' && ['All', ...apiCategories].includes(category) ? category : 'All'
+        const needle = safeQuery.toLowerCase()
+        const demos = apiCatalog
+          .filter((api) => (safeCategory === 'All' || api.category === safeCategory)
+            && (!needle || `${api.name} ${api.provider} ${api.category} ${api.description}`.toLowerCase().includes(needle)))
+          .map((api) => ({
+            id: api.id,
+            name: api.name,
+            provider: api.provider,
+            category: api.category,
+            description: api.description,
+            documentationUrl: api.documentationUrl,
+            method: api.method ?? 'GET',
+            requestLabUrl: buildRequestLabUrl(api.id),
+            parameters: api.fields.map(({ id, label, type, defaultValue, help, min, max, options }) => ({
+              id,
+              label,
+              type,
+              defaultValue,
+              help,
+              ...(min === undefined ? {} : { min }),
+              ...(max === undefined ? {} : { max }),
+              ...(options?.length ? { options: options.map(({ label: optionLabel, value }) => ({ label: optionLabel, value })) } : {}),
+            })),
+          }))
+        return { total: apiCatalog.length, count: demos.length, query: safeQuery, category: safeCategory, demos }
+      },
       filter_public_api_catalog: ({ query, category }) => {
         const safeQuery = typeof query === 'string' ? query : ''
         const safeCategory = typeof category === 'string' && ['All', ...apiCategories].includes(category) ? category : 'All'
@@ -196,7 +218,7 @@ export function useWebMcp({
           throw new Error('Unknown API demo ID.')
         }
         onSelectApi(id)
-        return { opened: id }
+        return { opened: id, requestLabUrl: buildRequestLabUrl(id) }
       },
       run_public_api_demo: async ({ id, parameters }) => {
         if (typeof id !== 'string') {

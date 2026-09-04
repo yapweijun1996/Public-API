@@ -1269,7 +1269,7 @@ function TriviaGamePreview({ data }: { data: unknown }) {
     incorrect_answers: [],
   }] : Array.isArray(root.results) ? root.results.filter(isRecord).slice(0, 6) : []
   if (!questions.length) return <div className="weather-empty"><strong>No trivia questions found</strong><span>Try a different category or difficulty.</span></div>
-  return <div className="trivia-preview"><div className="trivia-score"><span>Quiz deck</span><strong>{questions.length}</strong><b>questions ready</b><small>Correct answers are highlighted for this developer demo.</small></div><div className="trivia-grid">{questions.map((question, index) => {
+  return <div className="trivia-preview"><div className="trivia-score"><span>Quiz deck</span><strong>{questions.length}</strong><b>questions ready</b><small>Correct answers are highlighted for this developer demo.</small></div><div className="trivia-grid" aria-label={questions.length === 1 ? 'Joke answer card' : 'Trivia question cards'}>{questions.map((question, index) => {
     const correct = cleanText(question.correct_answer) ?? 'Answer unavailable'
     const incorrect = Array.isArray(question.incorrect_answers) ? question.incorrect_answers.map(cleanText).filter((answer): answer is string => Boolean(answer)) : []
     const answers = [correct, ...incorrect]

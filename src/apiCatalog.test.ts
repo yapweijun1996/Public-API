@@ -89,7 +89,7 @@ describe('API catalog', () => {
     expect(urls['open-meteo-marine'].searchParams.get('hourly')).toContain('ocean_current_velocity')
     expect(urls['open-meteo-marine'].searchParams.get('forecast_days')).toBe('3')
     expect(urls['nobel-prizes'].searchParams.get('nobelPrizeCategory')).toBe('phy')
-    expect(urls['chess-player-stats'].pathname).toBe('/pub/player/hikaru/stats')
+    expect(urls['chess-player-stats'].pathname).toBe('/pub/player/magnuscarlsen/stats')
     expect(urls['crossref-works'].searchParams.get('select')).toContain('DOI')
   })
 
@@ -245,7 +245,9 @@ describe('API catalog', () => {
     expect(urls['newton-math-solver'].pathname).toBe('/api/v2/simplify/2x%2B2x')
     expect(urls['gutendex-books'].searchParams.get('search')).toBe('shakespeare')
     expect(urls['datamuse-rhymes'].searchParams.get('rel_rhy')).toBe('orange')
+    expect(urls['open5e-monster-search'].hostname).toBe('api.open5e.com')
     expect(urls['open5e-monster-search'].searchParams.get('search')).toBe('dragon')
+    expect(urls['open5e-monster-search'].searchParams.get('limit')).toBe('8')
     expect(urls['dicebear-avatar'].pathname).toBe('/9.x/identicon/svg')
     expect(urls['catfacts'].pathname).toBe('/fact')
     expect(urls['randomfox-photo'].pathname).toBe('/floof')

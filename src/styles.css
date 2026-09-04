@@ -143,8 +143,8 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
 .source-status i { width: 5px; height: 5px; border-radius: 50%; background: #0aa176; }
 .table-footer { min-height: 50px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; color: #738099; }
 .table-footer > div { display: flex; gap: 4px; }
-.table-footer button { width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; color: #63708a; background: #fff; }
-.table-footer button.current { color: #fff; border-color: var(--blue); background: var(--blue); }
+.table-footer button, .table-footer .current { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; color: #63708a; background: #fff; }
+.table-footer .current { color: #fff; border-color: var(--blue); background: var(--blue); }
 .catalog-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8490a5; }
 .catalog-empty b { margin-top: 10px; color: #3d4a65; }
 .catalog-empty p { margin: 5px 0 0; }
@@ -495,6 +495,7 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
 .trivia-score small { justify-self: end; color: #dfd3f8; }
 .trivia-grid { margin-top: 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .trivia-grid article { min-width: 0; padding: 13px; border: 1px solid #e3dff0; border-radius: 11px; background: #fdfcff; }
+.trivia-grid article:only-child { grid-column: 1 / -1; }
 .trivia-grid header { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; align-items: start; }
 .trivia-grid header > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: #7951c7; font-weight: 750; }
 .trivia-grid header small { color: #8d7caf; text-transform: capitalize; }
@@ -714,6 +715,7 @@ tbody input[type="radio"] { width: 13px; height: 13px; accent-color: var(--blue)
 
 /* Request Lab SSOT response system */
 .request-lab.has-ssot-result .demo-preview { margin: 0 0 16px; }
+.response-preview-loading { margin: 0 0 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; color: #63728a; background: #fff; box-shadow: 0 15px 38px rgba(28,50,88,.07); }
 .request-lab.has-ssot-result .response-body { height: 240px; }
 .demo-preview-head { align-items: start; }
 .ssot-runtime { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; align-self: center; }

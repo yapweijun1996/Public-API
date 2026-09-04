@@ -855,9 +855,9 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://support.chess.com/en/articles/9650547-what-is-the-pubapi-and-how-do-i-use-it', accent: '#63863c', monogram: 'CH',
     usageNote: 'The PubAPI is read-only. Keep requests serial, respect cache headers, and avoid rapid repeated refreshes.',
     fields: [
-      { id: 'username', label: 'Chess.com username', type: 'text', defaultValue: 'hikaru', placeholder: 'e.g. hikaru', help: 'Enter a public Chess.com username.' },
+      { id: 'username', label: 'Chess.com username', type: 'text', defaultValue: 'magnuscarlsen', placeholder: 'e.g. magnuscarlsen', help: 'Enter a public Chess.com username.' },
     ],
-    buildUrl: ({ username = 'hikaru' }) => `https://api.chess.com/pub/player/${encode(username || 'hikaru').toLowerCase()}/stats`,
+    buildUrl: ({ username = 'magnuscarlsen' }) => `https://api.chess.com/pub/player/${encode(username || 'magnuscarlsen').toLowerCase()}/stats`,
   },
   {
     id: 'crossref-works', name: 'Crossref Works Search', provider: 'Crossref', category: 'Research',
@@ -2081,8 +2081,9 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     id: 'open5e-monster-search', name: 'Open5e Monster Search', provider: 'Open5e', category: 'Games',
     description: 'Search open-license tabletop RPG monsters with stat blocks, hit points, and armor class.',
     documentationUrl: 'https://open5e.com/api-docs', accent: '#166534', monogram: 'O5E',
+    usageNote: 'The live demo caps search results at 8 records to reduce browser payload while preserving free-form monster search.',
     fields: [{ id: 'search', label: 'Monster search', type: 'text', defaultValue: 'dragon', placeholder: 'e.g. dragon', help: 'Search open-license monster names.' }],
-    buildUrl: ({ search = 'dragon' }) => `https://api.open5e.com/v1/monsters/?${new URLSearchParams({ search: search.trim() || 'dragon' }).toString()}`,
+    buildUrl: ({ search = 'dragon' }) => `https://api.open5e.com/v1/monsters/?${new URLSearchParams({ search: search.trim() || 'dragon', limit: '8' }).toString()}`,
   },
   {
     id: 'dicebear-avatar', name: 'DiceBear Avatar Generator', provider: 'DiceBear', category: 'Utility',
