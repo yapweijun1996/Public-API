@@ -114,7 +114,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['open-brewery-directory', 'location-map', 'Global brewery location directory'],
   ['rick-morty-characters', 'media-gallery', 'Character and episode gallery'],
   ['wikimedia-pageviews', 'market-chart', 'Wikipedia readership trend chart'],
-  ['openf1-historical', 'data-table', 'Formula 1 driver standings'],
+  ['openf1-historical', 'data-table', 'Formula 1 qualifying classification'],
   ['jolpica-f1', 'data-table', 'Jolpica Formula 1 season data'],
   ['open-meteo-elevation', 'data-table', 'Terrain elevation lookup'],
   ['zippopotam-postcode', 'location-map', 'Postcode geolocation lookup'],

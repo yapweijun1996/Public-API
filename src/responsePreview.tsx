@@ -1624,6 +1624,30 @@ function DictionaryEntryPreview({ data }: { data: unknown }) {
 function OpenF1SessionsPreview({ data }: { data: unknown }) {
   const root = isRecord(data) ? data : {}
   const mrData = isRecord(root.MRData) ? root.MRData : {}
+  const raceTable = isRecord(mrData.RaceTable) ? mrData.RaceTable : {}
+  const qualifyingRace = recordArray(raceTable.Races)[0]
+  if (qualifyingRace) {
+    const circuit = isRecord(qualifyingRace.Circuit) ? qualifyingRace.Circuit : {}
+    const location = isRecord(circuit.Location) ? circuit.Location : {}
+    const cards: SemanticCard[] = recordArray(qualifyingRace.QualifyingResults).slice(0, 10).map((result) => {
+      const driver = isRecord(result.Driver) ? result.Driver : {}
+      const constructor = isRecord(result.Constructor) ? result.Constructor : {}
+      const name = [cleanText(driver.givenName), cleanText(driver.familyName)].filter(Boolean).join(' ') || cleanText(driver.code) || 'Formula 1 driver'
+      return {
+        title: name,
+        eyebrow: `${cleanText(qualifyingRace.raceName) ?? 'Grand Prix'} · P${previewValue(result.position)}`,
+        badge: cleanText(driver.code) ?? `#${previewValue(result.number)}`,
+        description: `${cleanText(constructor.name) ?? 'Constructor unavailable'} · ${cleanText(driver.nationality) ?? 'Driver'} · ${cleanText(location.locality) ?? 'Circuit'}`,
+        metrics: [
+          { label: 'Q1', value: previewValue(result.Q1) },
+          { label: 'Q2', value: previewValue(result.Q2) },
+          { label: 'Q3', value: previewValue(result.Q3) },
+          { label: 'Circuit', value: cleanText(circuit.circuitName) ?? '—' },
+        ],
+      }
+    })
+    return <SemanticCards cards={cards} emptyTitle="Qualifying results unavailable"/>
+  }
   const standingsTable = isRecord(mrData.StandingsTable) ? mrData.StandingsTable : {}
   const standingsList = recordArray(standingsTable.StandingsLists)[0]
   if (standingsList) {
@@ -1996,8 +2020,8 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     iso: previewValue(root.boundaryISO),
     admin_level: previewValue(root.boundaryType),
     represented_year: previewValue(root.boundaryYearRepresented),
-    area_sq_km: previewValue(root.meanAreaSqKM),
     license: previewValue(root.boundaryLicense),
+    area_sq_km: previewValue(root.meanAreaSqKM),
     source: previewValue(root.boundarySource),
   }] : []
   else if (api.id === 'exchange-rate-current') {

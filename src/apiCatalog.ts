@@ -1041,12 +1041,15 @@ const nextKeylessApis: ApiDemo[] = [
 
 const verifiedKeylessApis: ApiDemo[] = [
   {
-    id: 'openf1-historical', name: 'Formula 1 Driver Standings', provider: 'Jolpica', category: 'Sports',
-    description: 'Read current Formula 1 driver standings, points, wins, constructors, and championship positions.',
+    id: 'openf1-historical', name: 'Jolpica F1 Qualifying', provider: 'Jolpica', category: 'Sports',
+    description: 'Inspect Formula 1 qualifying classification, drivers, constructors, and Q1/Q2/Q3 lap times.',
     documentationUrl: 'https://github.com/jolpica/jolpica-f1/blob/main/docs/README.md', accent: '#e10600', monogram: 'F1', risk: 'Review',
-    usageNote: 'Jolpica provides a keyless Ergast-compatible Formula 1 data service. Keep automated request volume modest.',
-    fields: [{ id: 'season', label: 'Season', type: 'select', defaultValue: '2026', help: 'Choose a Formula 1 season.', options: [{ label: '2026', value: '2026' }, { label: '2025', value: '2025' }, { label: '2024', value: '2024' }] }],
-    buildUrl: ({ season = '2026' }) => `https://api.jolpi.ca/ergast/f1/${season || '2026'}/driverstandings/`,
+    usageNote: 'This qualifying-specific Jolpica demo complements the separate drivers, constructors, and races catalogue demo. Keep automated request volume modest.',
+    fields: [
+      { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed Formula 1 season.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
+      { id: 'round', label: 'Race round', type: 'number', defaultValue: '1', min: 1, max: 30, help: 'Choose the Grand Prix round number.' },
+    ],
+    buildUrl: ({ season = '2025', round = '1' }) => `https://api.jolpi.ca/ergast/f1/${season || '2025'}/${String(clampInt(round, 1, 30, 1))}/qualifying/`,
   },
   {
     id: 'packagist-search', name: 'Packagist Package Search', provider: 'Packagist', category: 'Developer',

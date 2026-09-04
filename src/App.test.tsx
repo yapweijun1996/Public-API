@@ -746,9 +746,9 @@ describe('new verified keyless API previews', () => {
   }
 
   it('adapts Formula 1, Belgian rail, space news, and launch schedule responses', () => {
-    const { rerender } = render(<ResponseDemoPreview api={api('openf1-historical')} data={{ events: [{ id: '600057427', name: 'Australian Grand Prix', date: '2026-03-06T01:30:00Z', competitions: [{ type: { abbreviation: 'FP1' }, competitors: [{ athlete: { displayName: 'Charles Leclerc' } }] }] }] }}/>)
-    expect(screen.getByRole('region', { name: 'Formula 1 Driver Standings' })).toHaveTextContent('Australian Grand Prix')
-    expect(screen.getByRole('region', { name: 'Formula 1 Driver Standings' })).toHaveTextContent('Charles Leclerc')
+    const { rerender } = render(<ResponseDemoPreview api={api('openf1-historical')} data={{ MRData: { RaceTable: { Races: [{ raceName: 'Australian Grand Prix', Circuit: { circuitName: 'Albert Park Grand Prix Circuit', Location: { locality: 'Melbourne', country: 'Australia' } }, QualifyingResults: [{ position: '1', number: '4', Driver: { code: 'NOR', givenName: 'Lando', familyName: 'Norris', nationality: 'British' }, Constructor: { name: 'McLaren' }, Q1: '1:15.912', Q2: '1:15.415', Q3: '1:15.096' }] }] } } }}/>)
+    expect(screen.getByRole('region', { name: 'Jolpica F1 Qualifying' })).toHaveTextContent('Australian Grand Prix')
+    expect(screen.getByRole('region', { name: 'Jolpica F1 Qualifying' })).toHaveTextContent('Lando Norris')
 
     rerender(<ResponseDemoPreview api={api('irail-liveboard')} data={{ station: 'Brussels-South/Brussels-Midi', stationinfo: { name: 'Brussels-South/Brussels-Midi' }, departures: { departure: [{ time: '1784102400', delay: '300', canceled: '0', vehicle: 'BE.NMBS.IC123', platform: '4', station: 'Antwerpen-Centraal' }] } }}/> )
     expect(screen.getByRole('region', { name: 'Belgian Rail Liveboard' })).toHaveTextContent('Antwerpen-Centraal')
@@ -930,11 +930,11 @@ describe('browser-ready health remediation previews', () => {
     expect(screen.getByRole('region', { name: 'Free Dictionary' })).toHaveTextContent('Used as a greeting.')
     expect(screen.getByRole('region', { name: 'Free Dictionary' })).toHaveTextContent('/həˈloʊ/')
 
-    rerender(<ResponseDemoPreview api={api('openf1-historical')} data={{ events: [{ id: '600057427', name: 'Qatar Airways Australian Grand Prix', date: '2026-03-06T01:30:00Z', competitions: [{ type: { abbreviation: 'FP1' }, competitors: [{ athlete: { displayName: 'Charles Leclerc' } }] }] }] }}/>)
-    const f1 = screen.getByRole('region', { name: 'Formula 1 Driver Standings' })
-    expect(f1).toHaveTextContent('Qatar Airways Australian Grand Prix')
-    expect(f1).toHaveTextContent('Charles Leclerc')
-    expect(f1).toHaveTextContent('FP1')
+    rerender(<ResponseDemoPreview api={api('openf1-historical')} data={{ MRData: { RaceTable: { Races: [{ raceName: 'Australian Grand Prix', Circuit: { circuitName: 'Albert Park Grand Prix Circuit', Location: { locality: 'Melbourne', country: 'Australia' } }, QualifyingResults: [{ position: '1', number: '4', Driver: { code: 'NOR', givenName: 'Lando', familyName: 'Norris', nationality: 'British' }, Constructor: { name: 'McLaren' }, Q1: '1:15.912', Q2: '1:15.415', Q3: '1:15.096' }] }] } } }}/>)
+    const f1 = screen.getByRole('region', { name: 'Jolpica F1 Qualifying' })
+    expect(f1).toHaveTextContent('Australian Grand Prix')
+    expect(f1).toHaveTextContent('Lando Norris')
+    expect(f1).toHaveTextContent('1:15.096')
 
     rerender(<ResponseDemoPreview api={api('models-dev')} data={[{ id: 'openai-community/gpt2', pipeline_tag: 'text-generation', library_name: 'transformers', downloads: 14607268, likes: 3618, lastModified: '2026-09-01T00:00:00Z' }]}/>)
     const models = screen.getByRole('region', { name: 'Hugging Face Model Search' })

@@ -134,7 +134,7 @@ describe('API catalog', () => {
     }))
 
     expect(urls['openf1-historical'].hostname).toBe('api.jolpi.ca')
-    expect(urls['openf1-historical'].pathname).toBe('/ergast/f1/2026/driverstandings/')
+    expect(urls['openf1-historical'].pathname).toBe('/ergast/f1/2025/1/qualifying/')
     expect(urls['irail-liveboard'].pathname).toBe('/liveboard/')
     expect(urls['irail-liveboard'].searchParams.get('arrdep')).toBe('departure')
     expect(urls['spaceflight-news'].pathname).toBe('/v4/articles/')
