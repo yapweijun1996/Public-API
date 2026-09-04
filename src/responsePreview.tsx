@@ -1528,9 +1528,9 @@ function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) 
     const journal = isRecord(bibjson.journal) ? bibjson.journal : {}
     return { title: cleanText(bibjson.title) ?? 'Open-access article', eyebrow: authors.slice(0, 3).join(', ') || 'DOAJ', badge: previewValue(bibjson.year), metrics: [{ label: 'Journal', value: previewValue(journal.title) }, { label: 'Publisher', value: previewValue(journal.publisher) }] }
   })
-  else if (api.id === 'gutendex-books') cards = recordArray(root.results).map((book) => {
+  else if (api.id === 'gutendex-books') cards = recordArray(root.works).map((book) => {
     const authors = recordArray(book.authors).map((author) => cleanText(author.name)).filter((value): value is string => Boolean(value))
-    return { title: cleanText(book.title) ?? 'Book', eyebrow: authors.join(', ') || 'Project Gutenberg', badge: previewValue(book.download_count), metrics: [{ label: 'Languages', value: textArray(book.languages).join(', ') || '—' }, { label: 'Subjects', value: textArray(book.subjects).slice(0, 2).join(', ') || '—' }] }
+    return { title: cleanText(book.title) ?? 'Book', eyebrow: authors.join(', ') || 'Open Library', badge: `${previewValue(book.edition_count)} editions`, metrics: [{ label: 'First published', value: previewValue(book.first_publish_year) }, { label: 'Subjects', value: textArray(book.subject).slice(0, 2).join(', ') || '—' }] }
   })
   else if (api.id === 'datacite-search') cards = recordArray(root.data).map((entry) => {
     const attributes = isRecord(entry.attributes) ? entry.attributes : {}
@@ -1995,9 +1995,9 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     title: cleanText(root.boundaryName) ?? 'Administrative boundary',
     iso: previewValue(root.boundaryISO),
     admin_level: previewValue(root.boundaryType),
+    license: previewValue(root.boundaryLicense),
     represented_year: previewValue(root.boundaryYearRepresented),
     area_sq_km: previewValue(root.meanAreaSqKM),
-    license: previewValue(root.boundaryLicense),
     source: previewValue(root.boundarySource),
   }] : []
   else if (api.id === 'exchange-rate-current') {
@@ -2098,8 +2098,7 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     const reading = series ? recordArray(recordValue(recordArray(series.values)[0], 'value'))[0] : undefined
     records = series ? [{ title: cleanText(sourceInfo.siteName) ?? 'USGS gauge', measurement: cleanText(variable.variableName), value: reading ? `${previewValue(reading.value)} ${previewValue(recordValue(variable.unit, 'unitCode'))}` : '—', observed: previewValue(reading?.dateTime) }] : []
   } else if (api.id === 'ipwhois-lookup') {
-    const connection = isRecord(root.connection) ? root.connection : {}
-    records = root.success ? [{ title: `${previewValue(root.city)}, ${previewValue(root.country)}`, ip: previewValue(root.ip), isp: previewValue(connection.isp), timezone: previewValue(recordValue(root.timezone, 'id')) }] : []
+    records = Object.keys(root).length ? [{ title: `${previewValue(root.city)}, ${previewValue(root.country)}`, ip: previewValue(root.ip), isp: previewValue(root.isp ?? root.organization), asn: previewValue(root.asn), timezone: previewValue(root.timezone), region: previewValue(root.region) }] : []
   } else if (api.id === 'newton-math-solver') {
     records = Object.keys(root).length ? [{ title: previewValue(root.expression), operation: previewValue(root.operation), result: previewValue(root.result) }] : []
   } else if (api.id === 'aladhan-prayer-times') {
@@ -2123,7 +2122,9 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   } else if (api.id === 'datamuse-rhymes') {
     records = recordArray(data).slice(0, 10).map((entry) => ({ title: cleanText(entry.word) ?? 'Word', score: previewValue(entry.score), syllables: previewValue(entry.numSyllables) }))
   } else if (api.id === 'open5e-monster-search') {
-    records = recordArray(root.results).slice(0, 8).map((monster) => ({ title: cleanText(monster.name) ?? 'Monster', type: `${previewValue(monster.size)} ${previewValue(monster.type)}`, armor_class: previewValue(monster.armor_class), hit_points: previewValue(monster.hit_points) }))
+    const armor = recordArray(root.armor_class)[0]
+    const speed = isRecord(root.speed) ? root.speed : {}
+    records = Object.keys(root).length ? [{ title: cleanText(root.name) ?? 'Monster', type: `${previewValue(root.size)} ${previewValue(root.type)}`, armor_class: previewValue(armor?.value ?? root.armor_class), hit_points: previewValue(root.hit_points), speed: previewValue(speed.walk), challenge_rating: previewValue(root.challenge_rating), alignment: previewValue(root.alignment) }] : []
   } else if (api.id === 'catfacts') {
     records = cleanText(root.fact) ? [{ title: cleanText(root.fact), length: previewValue(root.length) }] : []
   }

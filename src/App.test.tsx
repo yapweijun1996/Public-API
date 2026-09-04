@@ -983,3 +983,33 @@ describe('browser-ready health remediation previews', () => {
     expect(boundary).toHaveTextContent('Open Data Commons Open Database License 1.0')
   })
 })
+
+describe('health drift replacement previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('renders IP.SB, Open Library subject, and D&D monster contracts semantically', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('ipwhois-lookup')} data={{ ip: '8.8.8.8', city: 'Mountain View', region: 'California', country: 'United States', timezone: 'America/Chicago', isp: 'Google', organization: 'Google', asn: 15169 }}/>)
+    const ip = screen.getByRole('region', { name: 'IP.SB Geolocation' })
+    expect(ip).toHaveTextContent('Mountain View, United States')
+    expect(ip).toHaveTextContent('Google')
+    expect(ip).toHaveTextContent('15,169')
+
+    rerender(<ResponseDemoPreview api={api('gutendex-books')} data={{ name: 'classics', works: [{ title: "Alice's Adventures in Wonderland", edition_count: 3547, first_publish_year: 1865, authors: [{ name: 'Lewis Carroll' }], subject: ['classics', 'fantasy'] }] }}/>)
+    const books = screen.getByRole('region', { name: 'Open Library Subject Explorer' })
+    expect(books).toHaveTextContent("Alice's Adventures in Wonderland")
+    expect(books).toHaveTextContent('Lewis Carroll')
+    expect(books).toHaveTextContent('3,547 editions')
+
+    rerender(<ResponseDemoPreview api={api('open5e-monster-search')} data={{ name: 'Young Red Dragon', size: 'Large', type: 'dragon', alignment: 'chaotic evil', armor_class: [{ type: 'natural', value: 18 }], hit_points: 178, challenge_rating: 10, speed: { walk: '40 ft.' } }}/>)
+    const monster = screen.getByRole('region', { name: 'D&D 5e Monster Lookup' })
+    expect(monster).toHaveTextContent('Young Red Dragon')
+    expect(monster).toHaveTextContent('178')
+    expect(monster).toHaveTextContent('40 ft.')
+  })
+})
