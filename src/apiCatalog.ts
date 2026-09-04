@@ -261,7 +261,8 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
 })
 
 const localNow = new Date()
-const today = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`
+const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const today = isoDate(localNow)
 const compactDate = (date: Date) => `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
 const daysAgo = (days: number) => {
   const date = new Date(localNow)
@@ -518,9 +519,9 @@ const importedRecommendedApis: ApiDemo[] = [
     accent: '#111827', monogram: 'DV',
   }),
   fixedApi({
-    id: 'fiscal-data-treasury', name: 'Fiscal Data Treasury API', provider: 'U.S. Treasury', category: 'Finance',
-    description: 'Inspect recent debt-to-the-penny records from the U.S. Treasury.',
-    documentationUrl: 'https://fiscaldata.treasury.gov/api-documentation/', endpoint: 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?page%5Bsize%5D=8',
+    id: 'fiscal-data-treasury', name: 'U.S. Treasury Agency Profile', provider: 'USAspending.gov', category: 'Finance',
+    description: 'Inspect the Department of the Treasury mission, fiscal year, agency code, and federal spending profile.',
+    documentationUrl: 'https://api.usaspending.gov/docs/', endpoint: 'https://api.usaspending.gov/api/v2/agency/020/',
     accent: '#1d4ed8', monogram: 'FT',
   }),
   fixedApi({
@@ -691,11 +692,11 @@ const importedRecommendedApis: ApiDemo[] = [
     },
   },
   {
-    id: 'free-dictionary', name: 'Free Dictionary', provider: 'Free Dictionary API', category: 'Language',
+    id: 'free-dictionary', name: 'Free Dictionary', provider: 'FreeDictionaryAPI.com', category: 'Language',
     description: 'Look up English definitions, pronunciations, examples, synonyms, and antonyms.',
-    documentationUrl: 'https://dictionaryapi.dev/', accent: '#7c3aed', monogram: 'DI',
+    documentationUrl: 'https://freedictionaryapi.com/', accent: '#7c3aed', monogram: 'DI',
     fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', help: 'Enter one English word.' }],
-    buildUrl: ({ word = 'hello' }) => `https://api.dictionaryapi.dev/api/v2/entries/en/${encode(word || 'hello')}`,
+    buildUrl: ({ word = 'hello' }) => `https://freedictionaryapi.com/api/v1/entries/en/${encode(word || 'hello')}`,
   },
   {
     id: 'pokeapi', name: 'PokéAPI Explorer', provider: 'PokéAPI', category: 'Games',
@@ -1040,15 +1041,15 @@ const nextKeylessApis: ApiDemo[] = [
 
 const verifiedKeylessApis: ApiDemo[] = [
   {
-    id: 'openf1-historical', name: 'OpenF1 Race Sessions', provider: 'OpenF1', category: 'Sports',
-    description: 'Explore completed Formula 1 race sessions, circuits, meeting names, dates, and session identifiers.',
-    documentationUrl: 'https://openf1.org/docs/', accent: '#e10600', monogram: 'F1', risk: 'Review',
-    usageNote: 'Historical sessions from 2023 onward are keyless. Real-time data requires a paid authenticated plan.',
+    id: 'openf1-historical', name: 'Jolpica F1 Qualifying', provider: 'Jolpica', category: 'Sports',
+    description: 'Inspect Formula 1 qualifying classification, drivers, constructors, and Q1/Q2/Q3 lap times.',
+    documentationUrl: 'https://github.com/jolpica/jolpica-f1/blob/main/docs/README.md', accent: '#e10600', monogram: 'F1', risk: 'Review',
+    usageNote: 'This qualifying-specific Jolpica demo complements the separate drivers, constructors, and races catalogue demo. Keep automated request volume modest.',
     fields: [
-      { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed season available to anonymous users.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
-      { id: 'country', label: 'Grand Prix country', type: 'select', defaultValue: 'Singapore', help: 'Filter the race-session calendar by country.', options: [{ label: 'Singapore', value: 'Singapore' }, { label: 'Monaco', value: 'Monaco' }, { label: 'Great Britain', value: 'Great Britain' }, { label: 'Japan', value: 'Japan' }, { label: 'Australia', value: 'Australia' }] },
+      { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed Formula 1 season.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
+      { id: 'round', label: 'Race round', type: 'number', defaultValue: '1', min: 1, max: 30, help: 'Choose the Grand Prix round number.' },
     ],
-    buildUrl: ({ season = '2025', country = 'Singapore' }) => `https://api.openf1.org/v1/sessions?${new URLSearchParams({ year: season || '2025', country_name: country || 'Singapore', session_name: 'Race' }).toString()}`,
+    buildUrl: ({ season = '2025', round = '1' }) => `https://api.jolpi.ca/ergast/f1/${season || '2025'}/${String(clampInt(round, 1, 30, 1))}/qualifying/`,
   },
   {
     id: 'packagist-search', name: 'Packagist Package Search', provider: 'Packagist', category: 'Developer',
@@ -1104,7 +1105,6 @@ const verifiedKeylessApis: ApiDemo[] = [
             perPage
             currentPage
             hasNextPage
-            hasPreviousPage
           }
           media(search: $search, type: $type, sort: POPULARITY_DESC) {
             id
@@ -1247,12 +1247,13 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://www.bankofcanada.ca/valet-api-how-to/', accent: '#0066cc', monogram: 'BOC', risk: 'Review',
     fields: [
       { id: 'series', label: 'Series', type: 'text', defaultValue: 'FXUSDCAD', placeholder: 'e.g. FXUSDCAD', help: 'Use a public Bank of Canada series code.' },
-      { id: 'startDate', label: 'Start date', type: 'text', defaultValue: compactDate(daysAgo(30)), placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
+      { id: 'startDate', label: 'Start date', type: 'text', defaultValue: isoDate(daysAgo(30)), placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
       { id: 'endDate', label: 'End date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD or YYYYMMDD.' },
     ],
-    buildUrl: ({ series = 'FXUSDCAD', startDate = compactDate(daysAgo(30)), endDate = today }) => {
-      const safeStart = (startDate || compactDate(daysAgo(30))).replace(/\D/g, '')
-      const safeEnd = (endDate || today).replace(/\D/g, '')
+    buildUrl: ({ series = 'FXUSDCAD', startDate = isoDate(daysAgo(30)), endDate = today }) => {
+      const fallbackStart = isoDate(daysAgo(30))
+      const safeStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : fallbackStart
+      const safeEnd = /^\d{4}-\d{2}-\d{2}$/.test(endDate) ? endDate : today
       return `https://www.bankofcanada.ca/valet/observations/${encode(series || 'FXUSDCAD')}/json?${new URLSearchParams({ start_date: safeStart, end_date: safeEnd }).toString()}`
     },
   },
@@ -1541,7 +1542,7 @@ const verifiedKeylessApis: ApiDemo[] = [
         options: [{ label: 'ADM0', value: 'ADM0' }, { label: 'ADM1', value: 'ADM1' }, { label: 'ADM2', value: 'ADM2' }, { label: 'ADM3', value: 'ADM3' }] },
     ],
     buildUrl: ({ countryIso = 'SGP', adminLevel = 'ADM0' }) =>
-      `https://www.geoboundaries.org/api/current/gbOpen/${encode((countryIso || 'SGP').toUpperCase())}/${encode(adminLevel || 'ADM0')}`,
+      `https://www.geoboundaries.org/api/current/gbOpen/${encode((countryIso || 'SGP').toUpperCase())}/${encode(adminLevel || 'ADM0')}/`,
   },
   {
     id: 'osrm-route', name: 'OSRM Route', provider: 'Project OSRM', category: 'Geo',
@@ -1583,11 +1584,13 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://api.openligadb.de/', accent: '#0284c7', monogram: 'OLB',
     fields: [
       { id: 'league', label: 'League shortcut', type: 'text', defaultValue: 'bl1', placeholder: 'e.g. bl1', help: 'Use a short league identifier, such as bl1.' },
-      { id: 'season', label: 'Season year', type: 'number', defaultValue: '2026', min: 2000, max: localNow.getFullYear() + 1, help: 'Use a full numeric season year.' },
+      { id: 'season', label: 'Season year', type: 'number', defaultValue: '2025', min: 2000, max: localNow.getFullYear(), help: 'Use a published season start year.' },
+      { id: 'matchday', label: 'Matchday', type: 'number', defaultValue: '1', min: 1, max: 50, help: 'Load one matchday to keep the browser response small and reliable.' },
     ],
-    buildUrl: ({ league = 'bl1', season = '2026' }) => {
-      const safeSeason = clampInt(season, 2000, localNow.getFullYear() + 1, 2026)
-      return `https://api.openligadb.de/api/getmatchdata/${encode(league || 'bl1')}/${String(safeSeason)}`
+    buildUrl: ({ league = 'bl1', season = '2025', matchday = '1' }) => {
+      const safeSeason = clampInt(season, 2000, localNow.getFullYear(), 2025)
+      const safeMatchday = clampInt(matchday, 1, 50, 1)
+      return `https://api.openligadb.de/getmatchdata/${encode(league || 'bl1')}/${String(safeSeason)}/${String(safeMatchday)}`
     },
   },
   {
@@ -1615,14 +1618,12 @@ const verifiedKeylessApis: ApiDemo[] = [
     fields: [
       { id: 'date', label: 'Schedule date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use a published game date (YYYY-MM-DD).' },
       { id: 'sportId', label: 'Sport ID', type: 'number', defaultValue: '1', min: 1, max: 20, help: 'Use 1 for MLB regular schedule snapshots.' },
-      { id: 'teamId', label: 'Team ID', type: 'number', defaultValue: '', min: 1, max: 9999, help: 'Optional: filter by team ID.' },
     ],
     buildUrl: ({ date = today, sportId = '1', teamId = '' }) => {
       const targetDate = (date || today).slice(0, 10)
       const params = new URLSearchParams({
         sportId: String(clampInt(sportId, 1, 20, 1)),
         date: targetDate,
-        hydrate: 'team,venue',
       })
       if (teamId && Number.parseInt(teamId, 10)) params.set('teamId', encode(teamId))
       return `https://statsapi.mlb.com/api/v1/schedule?${params.toString()}`
@@ -1746,19 +1747,13 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     buildUrl: ({ system = 'npm', packageName = 'react' }) => `https://api.deps.dev/v3/systems/${encode(system || 'npm')}/packages/${encode(packageName || 'react')}`,
   },
   {
-    id: 'ecb-fx-rates', name: 'ECB Reference Rates', provider: 'European Central Bank', category: 'Finance',
-    description: 'Read official European Central Bank daily reference exchange rates against the euro.',
-    documentationUrl: 'https://data.ecb.europa.eu/help/api/overview', accent: '#003399', monogram: 'ECB',
-    fields: [
-      { id: 'currency', label: 'Currency', type: 'select', defaultValue: 'USD', help: 'Choose a currency quoted against EUR.', options: [
-        { label: 'US Dollar', value: 'USD' }, { label: 'British Pound', value: 'GBP' }, { label: 'Japanese Yen', value: 'JPY' }, { label: 'Swiss Franc', value: 'CHF' }, { label: 'Singapore Dollar', value: 'SGD' },
-      ] },
-      { id: 'observations', label: 'History points', type: 'number', defaultValue: '30', min: 5, max: 90, help: 'Return between 5 and 90 recent daily observations.' },
-    ],
-    buildUrl: ({ currency = 'USD', observations = '30' }) => {
-      const safeObservations = Math.min(90, Math.max(5, Number.parseInt(observations, 10) || 30))
-      return `https://data-api.ecb.europa.eu/service/data/EXR/D.${encode(currency || 'USD')}.EUR.SP00.A?${new URLSearchParams({ format: 'jsondata', lastNObservations: String(safeObservations) }).toString()}`
-    },
+    id: 'ecb-fx-rates', name: 'Coinbase Exchange Rates', provider: 'Coinbase', category: 'Finance',
+    description: 'Read current fiat and crypto exchange rates for a selected base currency from Coinbase.',
+    documentationUrl: 'https://docs.cdp.coinbase.com/coinbase-app/track-apis/exchange-rates', accent: '#0052ff', monogram: 'CBX',
+    fields: [{ id: 'currency', label: 'Base currency', type: 'select', defaultValue: 'EUR', help: 'Choose the base currency for the rate table.', options: [
+      { label: 'Euro', value: 'EUR' }, { label: 'US Dollar', value: 'USD' }, { label: 'Singapore Dollar', value: 'SGD' }, { label: 'British Pound', value: 'GBP' },
+    ] }],
+    buildUrl: ({ currency = 'EUR' }) => `https://api.coinbase.com/v2/exchange-rates?${new URLSearchParams({ currency: currency || 'EUR' }).toString()}`,
   },
   {
     id: 'un-sdg-goals', name: 'UN Sustainable Development Goals', provider: 'United Nations Statistics Division', category: 'Government',
@@ -2191,61 +2186,39 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#065f46',
     monogram: 'FLD',
     fields: [
-      { id: 'query', label: 'Search keyword', type: 'text', defaultValue: 'river', placeholder: 'e.g. river', help: 'Search flood-monitoring stations by text keyword.' },
+      { id: 'riverName', label: 'River name', type: 'text', defaultValue: 'Thames', placeholder: 'e.g. Thames', help: 'Filter monitoring stations by river name.' },
       { id: 'count', label: 'Stations', type: 'number', defaultValue: '8', min: 1, max: 50, help: 'Return between 1 and 50 station records.' },
     ],
-    buildUrl: ({ query = 'river', count = '8' }) => {
+    buildUrl: ({ riverName = 'Thames', count = '8' }) => {
       const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 8))
       return `https://environment.data.gov.uk/flood-monitoring/id/stations?${new URLSearchParams({
-        q: query.trim() || 'river',
+        riverName: riverName.trim() || 'Thames',
         _limit: String(safeCount),
       }).toString()}`
     },
   },
   {
-    id: 'unhcr-refugees',
-    name: 'UNHCR Refugee Statistics',
-    provider: 'UNHCR',
-    category: 'Data',
-    description: 'Explore refuge and asylum-related humanitarian statistics with filters for origin country and reporting year.',
-    documentationUrl: 'https://www.unhcr.org/refugee-statistics/insights/explainers/forcibly-displaced-api.html',
-    accent: '#7c2d12',
-    monogram: 'UNH',
+    id: 'unhcr-refugees', name: 'UNHCR Refugee Statistics', provider: 'UNHCR', category: 'Data',
+    description: 'Explore refugee and displacement statistics by origin country and reporting year.',
+    documentationUrl: 'https://www.unhcr.org/refugee-statistics/insights/explainers/forcibly-displaced-api.html', accent: '#7c2d12', monogram: 'UNH',
     fields: [
-      { id: 'country', label: 'Country', type: 'text', defaultValue: 'Syrian Arab Republic', placeholder: 'e.g. Syrian Arab Republic', help: 'Filter records by country naming string.' },
-      { id: 'year', label: 'Year', type: 'number', defaultValue: '2026', min: 2010, max: 2026, help: 'Choose an annual snapshot year.' },
+      { id: 'origin', label: 'Origin country ISO', type: 'text', defaultValue: 'SYR', placeholder: 'e.g. SYR', help: 'Use a three-letter country-of-origin code such as SYR.' },
+      { id: 'year', label: 'Year', type: 'number', defaultValue: '2024', min: 2010, max: 2025, help: 'Choose a published annual snapshot year.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 20, help: 'Return between 1 and 20 records.' },
     ],
-    buildUrl: ({ country = 'Syrian Arab Republic', year = '2026', count = '5' }) => {
-      const safeYear = Math.min(2026, Math.max(2010, Number.parseInt(year, 10) || 2026))
+    buildUrl: ({ origin = 'SYR', year = '2024', count = '5' }) => {
+      const safeYear = Math.min(2025, Math.max(2010, Number.parseInt(year, 10) || 2024))
       const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 5))
-      return `https://api.unhcr.org/population/v1/refugees?${new URLSearchParams({
-        country: country.trim() || 'Syrian Arab Republic',
-        year: String(safeYear),
-        pageSize: String(safeCount),
-      }).toString()}`
+      return `https://api.unhcr.org/population/v1/population/?${new URLSearchParams({ yearFrom: String(safeYear), yearTo: String(safeYear), coo: (origin.trim() || 'SYR').toUpperCase(), limit: String(safeCount) }).toString()}`
     },
   },
   {
-    id: 'hdx-humanitarian-datasets',
-    name: 'HDX Humanitarian Dataset Search',
-    provider: 'Humanitarian Data Exchange',
-    category: 'Data',
-    description: 'Search discoverable humanitarian datasets and inspect ownership, formats, and licensing metadata.',
-    documentationUrl: 'https://hdx-hapi.readthedocs.io/en/latest/data_usage_guides/metadata',
-    accent: '#0369a1',
-    monogram: 'HDX',
-    fields: [
-      { id: 'query', label: 'Topic or keyword', type: 'text', defaultValue: 'water', placeholder: 'e.g. water', help: 'Search humanitarian data by keyword or topic.' },
-      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 dataset records.' },
-    ],
-    buildUrl: ({ query = 'water', count = '6' }) => {
-      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
-      return `https://data.humdata.org/api/3/action/package_search?${new URLSearchParams({
-        q: query.trim() || 'water',
-        rows: String(safeCount),
-      }).toString()}`
-    },
+    id: 'hdx-humanitarian-datasets', name: 'IFRC GO Emergency Events', provider: 'IFRC GO', category: 'Data',
+    description: 'Review recent humanitarian emergencies with disaster type, country, severity, and reported impact figures.',
+    documentationUrl: 'https://go.ifrc.org/', accent: '#d9232e', monogram: 'IFR', risk: 'Review',
+    usageNote: 'IFRC GO event data supports situational awareness. Verify impact figures and source reports before operational decisions.',
+    fields: [],
+    buildUrl: () => 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-created_at',
   },
   {
     id: 'open-meteo-climate',
@@ -2282,22 +2255,14 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     usageNote: 'Use climate projections for decision support contexts only; retain model details when presenting outcomes.',
   },
   {
-    id: 'models-dev',
-    name: 'models.dev Model Registry',
-    provider: 'models.dev',
-    category: 'Developer',
-    description: 'Search standardized AI model metadata and compare context limits, pricing model, API readiness, and modality details.',
-    documentationUrl: 'https://github.com/sst/models.dev',
-    accent: '#4f46e5',
-    monogram: 'MDL',
+    id: 'models-dev', name: 'Hugging Face Model Search', provider: 'Hugging Face', category: 'Developer',
+    description: 'Search public AI model metadata, downloads, likes, pipeline tags, and update timestamps.',
+    documentationUrl: 'https://huggingface.co/docs/hub/api', accent: '#f6c343', monogram: 'HFM',
     fields: [
-      { id: 'query', label: 'Model search', type: 'text', defaultValue: 'gpt', placeholder: 'e.g. gpt', help: 'Search model name or family across providers.' },
+      { id: 'query', label: 'Model search', type: 'text', defaultValue: 'gpt', placeholder: 'e.g. gpt', help: 'Search public model IDs and names.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 25, help: 'Return between 1 and 25 models.' },
     ],
-    buildUrl: ({ query = 'gpt', count = '8' }) => {
-      const safeCount = Math.min(25, Math.max(1, Number.parseInt(count, 10) || 8))
-      return `https://models.dev/api/v1/models?${new URLSearchParams({ q: query.trim() || 'gpt', limit: String(safeCount) }).toString()}`
-    },
+    buildUrl: ({ query = 'gpt', count = '8' }) => `https://huggingface.co/api/models?${new URLSearchParams({ search: query.trim() || 'gpt', limit: String(Math.min(25, Math.max(1, Number.parseInt(count, 10) || 8))), full: 'false' }).toString()}`,
   },
   {
     id: 'vatcomply',
@@ -2357,22 +2322,11 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     buildUrl: ({ package: packageName = 'ecto' }) => `https://hex.pm/api/packages/${encode(packageName.trim() || 'ecto')}`,
   },
   {
-    id: 'pub-dev',
-    name: 'pub.dev Package Search',
-    provider: 'pub.dev',
-    category: 'Developer',
-    description: 'Search Dart and Flutter package metadata, pub scores, topics, and dependency relations.',
-    documentationUrl: 'https://pub.dev/help/api',
-    accent: '#0ea5e9',
-    monogram: 'PUB',
-    fields: [
-      { id: 'query', label: 'Package search', type: 'text', defaultValue: 'flutter', placeholder: 'e.g. flutter', help: 'Search Dart and Flutter package names and summaries.' },
-      { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 entries.' },
-    ],
-    buildUrl: ({ query = 'flutter', count = '6' }) => {
-      const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
-      return `https://pub.dev/api/search?${new URLSearchParams({ q: query.trim() || 'flutter', pageSize: String(safeCount) }).toString()}`
-    },
+    id: 'pub-dev', name: 'pub.dev Package Lookup', provider: 'pub.dev', category: 'Developer',
+    description: 'Inspect one Dart or Flutter package with its latest release, SDK constraints, topics, and version history.',
+    documentationUrl: 'https://pub.dev/help/api', accent: '#0ea5e9', monogram: 'PUB',
+    fields: [{ id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'riverpod', placeholder: 'e.g. riverpod', help: 'Enter an exact package name from pub.dev.' }],
+    buildUrl: ({ packageName = 'riverpod' }) => `https://pub.dev/api/packages/${encode(packageName.trim() || 'riverpod')}`,
   },
   {
     id: 'go-module-proxy',
@@ -2439,26 +2393,11 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
     },
   },
   {
-    id: 'opencitations-index',
-    name: 'OpenCitations Index',
-    provider: 'OpenCitations',
-    category: 'Research',
-    description: 'Look up citation links and citation counts for a DOI across the OpenCitations index.',
-    documentationUrl: 'https://opencitations.net/index/api/v2',
-    accent: '#0f766e',
-    monogram: 'OCI',
-    fields: [
-      {
-        id: 'doi',
-        label: 'DOI',
-        type: 'text',
-        defaultValue: '10.1109/5.771073',
-        placeholder: 'e.g. 10.1109/5.771073',
-        help: 'Use a valid DOI string.',
-      },
-    ],
-    buildUrl: ({ doi = '10.1109/5.771073' }) =>
-      `https://opencitations.net/index/api/v2/citation/${encodeURIComponent(doi.trim() || '10.1109/5.771073')}?format=json`,
+    id: 'opencitations-index', name: 'OpenCitations Citation Count', provider: 'OpenCitations', category: 'Research',
+    description: 'Look up the number of incoming citations for a DOI in the OpenCitations Index.',
+    documentationUrl: 'https://opencitations.net/index/api/v2', accent: '#0f766e', monogram: 'OCI',
+    fields: [{ id: 'doi', label: 'DOI', type: 'text', defaultValue: '10.1109/5.771073', placeholder: 'e.g. 10.1109/5.771073', help: 'Use a valid DOI string.' }],
+    buildUrl: ({ doi = '10.1109/5.771073' }) => `https://api.opencitations.net/index/v2/citation-count/doi:${encodeURIComponent(doi.trim() || '10.1109/5.771073')}`,
   },
   {
     id: 'vam-collections',
