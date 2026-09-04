@@ -56,7 +56,7 @@ describe('catalog live API flow', () => {
     expect(screen.getByRole('button', { name: 'Copy JSON' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Singapore' })).toBeInTheDocument()
     expect(screen.getByText('East Asia & Pacific')).toBeInTheDocument()
-  })
+  }, 8000)
 })
 
 describe('demo preview mapping', () => {
@@ -83,7 +83,7 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'nhtsa-vehicle-recalls', category: 'Vehicle' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('developer-feed')
     expect(selectPreviewLayout({ id: 'nvd-cves', category: 'Developer' })).toBe('security-center')
-    expect(selectPreviewLayout({ id: 'geoboundaries-admin-boundaries', category: 'Geo' })).toBe('location-map')
+    expect(selectPreviewLayout({ id: 'geoboundaries-admin-boundaries', category: 'Geo' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'mlb-stats-api', category: 'Sports' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'europe-pmc-search', category: 'Research' })).toBe('research-library')
     expect(selectPreviewLayout({ id: 'free-dictionary', category: 'Language' })).toBe('dictionary-entry')
@@ -96,7 +96,7 @@ describe('demo preview mapping', () => {
       'opencitations-index': 'data-table',
       'vam-collections': 'media-gallery',
       'usaspending': 'data-table',
-      'fiscal-data-treasury': 'market-chart',
+      'fiscal-data-treasury': 'data-table',
       'wikidata-sparql': 'data-table',
       'met-museum-object-detail': 'media-gallery',
       'met-museum-search': 'data-table',
@@ -746,9 +746,9 @@ describe('new verified keyless API previews', () => {
   }
 
   it('adapts Formula 1, Belgian rail, space news, and launch schedule responses', () => {
-    const { rerender } = render(<ResponseDemoPreview api={api('openf1-historical')} data={[{ session_key: 999, meeting_key: 888, meeting_name: 'Singapore Grand Prix', country_name: 'Singapore', location: 'Marina Bay', circuit_short_name: 'Marina Bay', session_name: 'Race', session_type: 'Race', date_start: '2025-10-05T12:00:00Z' }]}/> )
-    expect(screen.getByRole('region', { name: 'OpenF1 Race Sessions' })).toHaveTextContent('Singapore Grand Prix')
-    expect(screen.getByRole('region', { name: 'OpenF1 Race Sessions' })).toHaveTextContent('Marina Bay')
+    const { rerender } = render(<ResponseDemoPreview api={api('openf1-historical')} data={{ events: [{ id: '600057427', name: 'Australian Grand Prix', date: '2026-03-06T01:30:00Z', competitions: [{ type: { abbreviation: 'FP1' }, competitors: [{ athlete: { displayName: 'Charles Leclerc' } }] }] }] }}/>)
+    expect(screen.getByRole('region', { name: 'Formula 1 Driver Standings' })).toHaveTextContent('Australian Grand Prix')
+    expect(screen.getByRole('region', { name: 'Formula 1 Driver Standings' })).toHaveTextContent('Charles Leclerc')
 
     rerender(<ResponseDemoPreview api={api('irail-liveboard')} data={{ station: 'Brussels-South/Brussels-Midi', stationinfo: { name: 'Brussels-South/Brussels-Midi' }, departures: { departure: [{ time: '1784102400', delay: '300', canceled: '0', vehicle: 'BE.NMBS.IC123', platform: '4', station: 'Antwerpen-Centraal' }] } }}/> )
     expect(screen.getByRole('region', { name: 'Belgian Rail Liveboard' })).toHaveTextContent('Antwerpen-Centraal')
@@ -913,5 +913,73 @@ describe('Public-API 200 milestone previews', () => {
     expect(worldBank).toHaveTextContent('Life expectancy at birth, total (years) · Singapore')
     expect(worldBank).toHaveTextContent('Latest year')
     expect(worldBank).toHaveTextContent('2025')
+  })
+})
+
+describe('browser-ready health remediation previews', () => {
+  afterEach(cleanup)
+
+  const api = (id: string) => {
+    const match = apiCatalog.find((candidate) => candidate.id === id)
+    if (!match) throw new Error(`Missing API fixture: ${id}`)
+    return match
+  }
+
+  it('renders remediated dictionary, F1, model, and Dart package contracts', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('free-dictionary')} data={{ word: 'hello', entries: [{ partOfSpeech: 'interjection', pronunciations: [{ type: 'ipa', text: '/həˈloʊ/' }], senses: [{ definition: 'Used as a greeting.', examples: ['Hello there.'], synonyms: ['hi'] }] }] }}/>)
+    expect(screen.getByRole('region', { name: 'Free Dictionary' })).toHaveTextContent('Used as a greeting.')
+    expect(screen.getByRole('region', { name: 'Free Dictionary' })).toHaveTextContent('/həˈloʊ/')
+
+    rerender(<ResponseDemoPreview api={api('openf1-historical')} data={{ events: [{ id: '600057427', name: 'Qatar Airways Australian Grand Prix', date: '2026-03-06T01:30:00Z', competitions: [{ type: { abbreviation: 'FP1' }, competitors: [{ athlete: { displayName: 'Charles Leclerc' } }] }] }] }}/>)
+    const f1 = screen.getByRole('region', { name: 'Formula 1 Driver Standings' })
+    expect(f1).toHaveTextContent('Qatar Airways Australian Grand Prix')
+    expect(f1).toHaveTextContent('Charles Leclerc')
+    expect(f1).toHaveTextContent('FP1')
+
+    rerender(<ResponseDemoPreview api={api('models-dev')} data={[{ id: 'openai-community/gpt2', pipeline_tag: 'text-generation', library_name: 'transformers', downloads: 14607268, likes: 3618, lastModified: '2026-09-01T00:00:00Z' }]}/>)
+    const models = screen.getByRole('region', { name: 'Hugging Face Model Search' })
+    expect(models).toHaveTextContent('openai-community/gpt2')
+    expect(models).toHaveTextContent('text-generation')
+
+    rerender(<ResponseDemoPreview api={api('pub-dev')} data={{ name: 'riverpod', latest: { version: '3.4.3', published: '2026-09-03T22:14:57Z', pubspec: { name: 'riverpod', version: '3.4.3', description: 'A reactive caching and data-binding framework.', repository: 'https://github.com/rrousselGit/riverpod', topics: ['state-management'], environment: { sdk: '^3.12.0' } } }, versions: [{ version: '3.4.2' }, { version: '3.4.3' }] }}/>)
+    const pubdev = screen.getByRole('region', { name: 'pub.dev Package Lookup' })
+    expect(pubdev).toHaveTextContent('riverpod')
+    expect(pubdev).toHaveTextContent('3.4.3')
+    expect(pubdev).toHaveTextContent('^3.12.0')
+  })
+
+  it('renders remediated Treasury, FX, UNHCR, IFRC, and citation contracts', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api('fiscal-data-treasury')} data={{ fiscal_year: 2026, toptier_code: '020', name: 'Department of the Treasury', abbreviation: 'TREAS', subtier_agency_count: 8, mission: 'Maintain a strong economy and manage the U.S. Government finances effectively.', website: 'https://www.treasury.gov/' }}/>)
+    const treasury = screen.getByRole('region', { name: 'U.S. Treasury Agency Profile' })
+    expect(treasury).toHaveTextContent('Department of the Treasury')
+    expect(treasury).toHaveTextContent('Maintain a strong economy')
+
+    rerender(<ResponseDemoPreview api={api('ecb-fx-rates')} data={{ data: { currency: 'EUR', rates: { USD: '1.1599', GBP: '0.8593', SGD: '1.4708', BTC: '0.000010' } } }}/>)
+    const fx = screen.getByRole('region', { name: 'Coinbase Exchange Rates' })
+    expect(fx).toHaveTextContent('1 EUR → USD')
+    expect(fx).toHaveTextContent('1.1599')
+
+    rerender(<ResponseDemoPreview api={api('unhcr-refugees')} data={{ items: [{ year: 2024, coo: 'SYR', coo_name: 'Syrian Arab Republic', refugees: 6211475, asylum_seekers: 150000, idps: 7200000, stateless: 0 }] }}/>)
+    const unhcr = screen.getByRole('region', { name: 'UNHCR Refugee Statistics' })
+    expect(unhcr).toHaveTextContent('Syrian Arab Republic')
+    expect(unhcr).toHaveTextContent('6,211,475')
+
+    rerender(<ResponseDemoPreview api={api('hdx-humanitarian-datasets')} data={{ results: [{ dtype: { name: 'Flood' }, countries: [{ name: 'Philippines' }], ifrc_severity_level_display: 'Yellow', disaster_start_date: '2026-08-29T00:00:00Z', summary: 'Philippines flood emergency', description: 'Heavy rainfall and flooding.', field_reports: [{ num_affected: 1588424, num_dead: 31, num_displaced: 83580 }] }] }}/>)
+    const ifrc = screen.getByRole('region', { name: 'IFRC GO Emergency Events' })
+    expect(ifrc).toHaveTextContent('Philippines flood emergency')
+    expect(ifrc).toHaveTextContent('1,588,424')
+    expect(ifrc).toHaveTextContent('Yellow')
+
+    rerender(<ResponseDemoPreview api={api('opencitations-index')} data={[{ count: '98' }]}/>)
+    const citations = screen.getByRole('region', { name: 'OpenCitations Citation Count' })
+    expect(citations).toHaveTextContent('Incoming citation count')
+    expect(citations).toHaveTextContent('98')
+
+
+    rerender(<ResponseDemoPreview api={api('geoboundaries-admin-boundaries')} data={{ boundaryName: 'Singapore', boundaryISO: 'SGP', boundaryType: 'ADM0', boundaryYearRepresented: '2016', meanAreaSqKM: '724.2749814174942', boundaryLicense: 'Open Data Commons Open Database License 1.0', boundarySource: 'Urban Redevelopment Authority' }}/>)
+    const boundary = screen.getByRole('region', { name: 'geoBoundaries Admin Boundaries' })
+    expect(boundary).toHaveTextContent('Singapore')
+    expect(boundary).toHaveTextContent('ADM0')
+    expect(boundary).toHaveTextContent('Open Data Commons Open Database License 1.0')
   })
 })

@@ -415,29 +415,6 @@ function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
       ],
     }
   }
-  if (api.id === 'ecb-fx-rates' && isRecord(data)) {
-    const dataSet = Array.isArray(data.dataSets) ? data.dataSets[0] : undefined
-    const series = isRecord(dataSet) && isRecord(dataSet.series) ? Object.values(dataSet.series)[0] : undefined
-    const observations = isRecord(series) && isRecord(series.observations) ? series.observations : {}
-    const structure = isRecord(data.structure) ? data.structure : {}
-    const dimensions = isRecord(structure.dimensions) ? structure.dimensions : {}
-    const timeValues = Array.isArray(dimensions.observation) && isRecord(dimensions.observation[0]) && Array.isArray(dimensions.observation[0].values) ? dimensions.observation[0].values : []
-    const seriesDimensions = recordArray(dimensions.series)
-    const currencyDimension = seriesDimensions.find((dimension) => dimension.id === 'CURRENCY')
-    const currencyValues = currencyDimension && Array.isArray(currencyDimension.values) ? currencyDimension.values : []
-    const currencyId = textValue(recordValue(currencyValues[0], 'id')) ?? 'currency'
-    const points = Object.keys(observations).map((index) => numberValue((observations[index] as unknown[])?.[0])).filter((value): value is number => value !== undefined)
-    const dates = timeValues.map((entry: unknown) => isRecord(entry) ? textValue(entry.id) ?? '' : '')
-    const latest = points.at(-1) ?? 0
-    return {
-      label: `EUR / ${currencyId} · ECB reference rate`, value: latest, points, dates,
-      metrics: [
-        { label: 'Latest date', value: dates.at(-1) || '—' },
-        { label: 'Period high', value: points.length ? formatNumber(Math.max(...points), 4) : '—' },
-        { label: 'Period low', value: points.length ? formatNumber(Math.min(...points), 4) : '—' },
-      ],
-    }
-  }
   if (api.id === 'coingecko-keyless-market' && isRecord(data)) {
     const [coinId, quote] = Object.entries(data).find(([, value]) => isRecord(value)) ?? ['Cryptocurrency', {}]
     const market = isRecord(quote) ? quote : {}
@@ -1429,6 +1406,22 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   else if (api.id === 'pypi-json') {
     const info = isRecord(root.info) ? root.info : {}
     cards = [{ title: cleanText(info.name) ?? 'Python package', eyebrow: `Python · v${previewValue(info.version)}`, description: cleanText(info.summary), badge: previewValue(info.license_expression ?? info.license), metrics: [{ label: 'Requires Python', value: previewValue(info.requires_python) }, { label: 'Maintainer', value: previewValue(info.maintainer ?? info.author) }, { label: 'Releases', value: String(Object.keys(isRecord(root.releases) ? root.releases : {}).length) }], tags: textArray(info.keywords?.toString().split(',')) }]
+  } else if (api.id === 'pub-dev') {
+    const latest = isRecord(root.latest) ? root.latest : {}
+    const pubspec = isRecord(latest.pubspec) ? latest.pubspec : {}
+    const environment = isRecord(pubspec.environment) ? pubspec.environment : {}
+    cards = Object.keys(root).length ? [{
+      title: cleanText(root.name) ?? cleanText(pubspec.name) ?? 'Dart package',
+      eyebrow: `pub.dev · v${previewValue(latest.version ?? pubspec.version)}`,
+      description: cleanText(pubspec.description),
+      badge: root.isDiscontinued ? 'Discontinued' : `${recordArray(root.versions).length} versions`,
+      metrics: [
+        { label: 'Dart SDK', value: previewValue(environment.sdk) },
+        { label: 'Published', value: dateParts(latest.published).full || previewValue(latest.published) },
+        { label: 'Repository', value: previewValue(pubspec.repository ?? pubspec.homepage) },
+      ],
+      tags: textArray(pubspec.topics),
+    }] : []
   } else if (api.id === 'stack-exchange') cards = recordArray(root.items).map((record) => ({ title: cleanText(record.title) ?? 'Stack Overflow question', eyebrow: epochDate(record.creation_date) ?? 'Active question', badge: record.is_answered ? 'Answered' : 'Open', metrics: [{ label: 'Score', value: previewValue(record.score) }, { label: 'Answers', value: previewValue(record.answer_count) }, { label: 'Views', value: compactNumber(numberValue(record.view_count) ?? 0) }], tags: textArray(record.tags) }))
   return <SemanticCards cards={cards} emptyTitle="Developer records unavailable"/>
 }
@@ -1595,23 +1588,92 @@ function ResearchLibraryPreview({ data, api }: { data: unknown; api: ApiDemo }) 
 }
 
 function DictionaryEntryPreview({ data }: { data: unknown }) {
-  const entry = recordArray(data)[0]
-  if (!entry) return <div className="weather-empty"><strong>Dictionary entry unavailable</strong><span>No word entry was returned.</span></div>
-  const phonetics = recordArray(entry.phonetics)
-  const meanings = recordArray(entry.meanings)
-  const phonetic = cleanText(entry.phonetic) ?? cleanText(phonetics.find((item) => item.text)?.text) ?? 'Pronunciation unavailable'
-  return <div className="dictionary-preview"><div className="dictionary-hero"><div><span>English dictionary</span><strong>{cleanText(entry.word) ?? 'Word'}</strong><b>{phonetic}</b></div><span aria-hidden="true">Aa</span></div><div className="dictionary-meanings">{meanings.map((meaning, index) => {
+  const root = isRecord(data) ? data : {}
+  const legacyEntry = recordArray(data)[0]
+  const modernEntries = recordArray(root.entries)
+  const word = cleanText(legacyEntry?.word) ?? cleanText(root.word) ?? 'Word'
+  const legacyPhonetics = legacyEntry ? recordArray(legacyEntry.phonetics) : []
+  const modernPronunciations = modernEntries.flatMap((entry) => recordArray(entry.pronunciations))
+  const phonetic = cleanText(legacyEntry?.phonetic)
+    ?? cleanText(legacyPhonetics.find((item) => item.text)?.text)
+    ?? cleanText(modernPronunciations.find((item) => item.type === 'ipa')?.text)
+    ?? cleanText(modernPronunciations[0]?.text)
+    ?? 'Pronunciation unavailable'
+  const meanings = legacyEntry
+    ? recordArray(legacyEntry.meanings).map((meaning) => ({
+        partOfSpeech: meaning.partOfSpeech,
+        definitions: recordArray(meaning.definitions),
+        synonyms: textArray(meaning.synonyms),
+      }))
+    : modernEntries.map((entry) => ({
+        partOfSpeech: entry.partOfSpeech,
+        definitions: recordArray(entry.senses).map((sense) => ({
+          definition: sense.definition,
+          example: textArray(sense.examples)[0],
+          synonyms: textArray(sense.synonyms),
+        })),
+        synonyms: [...textArray(entry.synonyms), ...recordArray(entry.senses).flatMap((sense) => textArray(sense.synonyms))],
+      }))
+  if (!meanings.length) return <div className="weather-empty"><strong>Dictionary entry unavailable</strong><span>No word entry was returned.</span></div>
+  return <div className="dictionary-preview"><div className="dictionary-hero"><div><span>English dictionary</span><strong>{word}</strong><b>{phonetic}</b></div><span aria-hidden="true">Aa</span></div><div className="dictionary-meanings">{meanings.slice(0, 8).map((meaning, index) => {
     const definitions = recordArray(meaning.definitions)
-    return <section key={`${meaning.partOfSpeech}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(meaning.partOfSpeech) ?? 'Meaning'}</h3></header><ol>{definitions.slice(0, 3).map((definition, definitionIndex) => <li key={definitionIndex}><p>{cleanText(definition.definition) ?? 'Definition unavailable'}</p>{cleanText(definition.example) && <blockquote>“{cleanText(definition.example)}”</blockquote>}</li>)}</ol>{textArray(meaning.synonyms).length ? <footer><b>Synonyms</b>{textArray(meaning.synonyms).slice(0, 6).map((word) => <span key={word}>{word}</span>)}</footer> : null}</section>
+    return <section key={`${meaning.partOfSpeech}-${index}`}><header><span>{index + 1}</span><h3>{cleanText(meaning.partOfSpeech) ?? 'Meaning'}</h3></header><ol>{definitions.slice(0, 3).map((definition, definitionIndex) => <li key={definitionIndex}><p>{cleanText(definition.definition) ?? 'Definition unavailable'}</p>{cleanText(definition.example) && <blockquote>“{cleanText(definition.example)}”</blockquote>}</li>)}</ol>{meaning.synonyms.length ? <footer><b>Synonyms</b>{[...new Set(meaning.synonyms)].slice(0, 6).map((synonym) => <span key={synonym}>{synonym}</span>)}</footer> : null}</section>
   })}</div></div>
 }
 
 function OpenF1SessionsPreview({ data }: { data: unknown }) {
+  const root = isRecord(data) ? data : {}
+  const mrData = isRecord(root.MRData) ? root.MRData : {}
+  const standingsTable = isRecord(mrData.StandingsTable) ? mrData.StandingsTable : {}
+  const standingsList = recordArray(standingsTable.StandingsLists)[0]
+  if (standingsList) {
+    const cards: SemanticCard[] = recordArray(standingsList.DriverStandings).slice(0, 10).map((standing) => {
+      const driver = isRecord(standing.Driver) ? standing.Driver : {}
+      const constructor = recordArray(standing.Constructors)[0] ?? {}
+      const name = [cleanText(driver.givenName), cleanText(driver.familyName)].filter(Boolean).join(' ') || cleanText(driver.code) || 'Formula 1 driver'
+      return {
+        title: name,
+        eyebrow: `Championship position ${previewValue(standing.position)} · ${cleanText(driver.nationality) ?? 'Driver'}`,
+        badge: `${previewValue(standing.points)} pts`,
+        description: `${cleanText(constructor.name) ?? 'Constructor unavailable'} · ${previewValue(standing.wins)} win${String(standing.wins) === '1' ? '' : 's'}`,
+        metrics: [
+          { label: 'Position', value: previewValue(standing.position) },
+          { label: 'Points', value: previewValue(standing.points) },
+          { label: 'Wins', value: previewValue(standing.wins) },
+          { label: 'Constructor', value: previewValue(constructor.name) },
+        ],
+        tags: [cleanText(driver.code), cleanText(constructor.nationality)].filter((value): value is string => Boolean(value)),
+      }
+    })
+    return <SemanticCards cards={cards} emptyTitle="Formula 1 standings unavailable"/>
+  }
+  if (Array.isArray(root.events)) {
+    const cards: SemanticCard[] = recordArray(root.events).slice(0, 8).map((event) => {
+      const competition = recordArray(event.competitions)[0] ?? {}
+      const competitors = recordArray(competition.competitors)
+      const leader = competitors[0] && isRecord(competitors[0].athlete) ? competitors[0].athlete : {}
+      const type = isRecord(competition.type) ? competition.type : {}
+      const season = isRecord(event.season) ? event.season : {}
+      return {
+        title: cleanText(event.name) ?? cleanText(event.shortName) ?? 'Formula 1 event',
+        eyebrow: `Formula 1 · ${previewValue(season.year)}`,
+        badge: cleanText(type.abbreviation) ?? 'F1',
+        description: `${dateParts(event.date).full || previewValue(event.date)} · ${competitors.length} drivers in the current session`,
+        metrics: [
+          { label: 'Session', value: cleanText(type.abbreviation) ?? cleanText(type.name) ?? 'Race weekend' },
+          { label: 'Leader / P1', value: cleanText(leader.displayName ?? leader.fullName) ?? 'Pending' },
+          { label: 'Starts', value: previewValue(event.date) },
+          { label: 'Ends', value: previewValue(event.endDate) },
+        ],
+      }
+    })
+    return <SemanticCards cards={cards} emptyTitle="Formula 1 scoreboard unavailable"/>
+  }
   const cards: SemanticCard[] = recordArray(data).map((session) => ({
     title: cleanText(session.meeting_name) ?? cleanText(session.circuit_short_name) ?? 'Formula 1 session',
     eyebrow: `${cleanText(session.country_name) ?? 'Grand Prix'} · ${cleanText(session.location) ?? 'Circuit'}`,
     badge: cleanText(session.session_name) ?? 'Race',
-    description: `Completed ${cleanText(session.session_type) ?? 'race'} session in the OpenF1 historical archive.`,
+    description: `Completed ${cleanText(session.session_type) ?? 'race'} session.`,
     metrics: [
       { label: 'Session start', value: dateParts(session.date_start).full || previewValue(session.date_start) },
       { label: 'Circuit', value: cleanText(session.circuit_short_name) ?? '—' },
@@ -1866,6 +1928,59 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
       elevation: numberValue(value) !== undefined ? `${formatNumber(numberValue(value)!, 2)} m` : textValue(value) ?? '—',
     }))
   }
+  else if (api.id === 'hdx-humanitarian-datasets') records = recordArray(root.results).slice(0, 8).map((event) => {
+    const disasterType = isRecord(event.dtype) ? event.dtype : {}
+    const country = recordArray(event.countries)[0] ?? {}
+    const report = recordArray(event.field_reports)[0] ?? {}
+    return {
+      title: cleanText(event.summary) ?? `${cleanText(disasterType.name) ?? 'Emergency'} — ${cleanText(country.name) ?? 'Country unavailable'}`,
+      disaster_type: previewValue(disasterType.name),
+      country: previewValue(country.name),
+      severity: previewValue(event.ifrc_severity_level_display),
+      affected: previewValue(report.num_affected ?? event.num_affected),
+      deaths: previewValue(report.num_dead),
+      displaced: previewValue(report.num_displaced),
+      started: dateParts(event.disaster_start_date).full || previewValue(event.disaster_start_date),
+      description: cleanText(event.description),
+    }
+  })
+  else if (api.id === 'fiscal-data-treasury') records = Object.keys(root).length ? [{
+    title: cleanText(root.name) ?? 'Department of the Treasury',
+    fiscal_year: previewValue(root.fiscal_year),
+    agency_code: previewValue(root.toptier_code),
+    abbreviation: previewValue(root.abbreviation),
+    subtier_agencies: previewValue(root.subtier_agency_count),
+    description: cleanText(root.mission),
+    website: previewValue(root.website),
+  }] : []
+  else if (api.id === 'ecb-fx-rates') {
+    const payload = isRecord(root.data) ? root.data : {}
+    const rates = isRecord(payload.rates) ? payload.rates : {}
+    const base = cleanText(payload.currency) ?? 'EUR'
+    const preferred = ['USD', 'GBP', 'JPY', 'CHF', 'SGD', 'AUD', 'CAD', 'MYR', 'BTC', 'ETH'].filter((code) => code !== base && rates[code] !== undefined)
+    records = preferred.map((code) => ({ title: `1 ${base} → ${code}`, rate: previewValue(rates[code]), source: 'Coinbase exchange rates' }))
+  }
+  else if (api.id === 'models-dev') records = recordArray(data).slice(0, 10).map((model) => ({
+    title: cleanText(model.id ?? model.modelId) ?? 'Hugging Face model',
+    task: previewValue(model.pipeline_tag),
+    library: previewValue(model.library_name),
+    downloads: compactNumber(numberValue(model.downloads) ?? 0),
+    likes: compactNumber(numberValue(model.likes) ?? 0),
+    updated: dateParts(model.lastModified).full || previewValue(model.lastModified),
+  }))
+  else if (api.id === 'unhcr-refugees') records = recordArray(root.items).slice(0, 10).map((entry) => ({
+    title: cleanText(entry.coo_name) ?? cleanText(entry.coo) ?? 'Origin country',
+    year: previewValue(entry.year),
+    refugees: previewValue(entry.refugees),
+    asylum_seekers: previewValue(entry.asylum_seekers),
+    internally_displaced: previewValue(entry.idps),
+    stateless: previewValue(entry.stateless),
+  }))
+  else if (api.id === 'opencitations-index') records = recordArray(data).map((entry) => ({
+    title: 'Incoming citation count',
+    citations: previewValue(entry.count),
+    source: 'OpenCitations Index v2',
+  }))
   else if (api.id === 'canada-open-data-search') {
     const result = isRecord(root.result) ? root.result : {}
     records = recordArray(result.results).slice(0, 10).map((entry) => ({
@@ -1876,6 +1991,15 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
       description: cleanText(entry.notes) ?? cleanText(recordValue(entry.notes_translated, 'en')),
     }))
   }
+  else if (api.id === 'geoboundaries-admin-boundaries') records = Object.keys(root).length ? [{
+    title: cleanText(root.boundaryName) ?? 'Administrative boundary',
+    iso: previewValue(root.boundaryISO),
+    admin_level: previewValue(root.boundaryType),
+    represented_year: previewValue(root.boundaryYearRepresented),
+    area_sq_km: previewValue(root.meanAreaSqKM),
+    license: previewValue(root.boundaryLicense),
+    source: previewValue(root.boundarySource),
+  }] : []
   else if (api.id === 'exchange-rate-current') {
     const rates = isRecord(root.rates) ? root.rates : {}
     const base = cleanText(root.base_code) ?? 'BASE'
@@ -2074,7 +2198,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'data-gov-wind-speed': defineApiPreview('data-gov-wind-speed', ({ api, data }) => <StationReadingsPreview api={api} data={data}/>),
   'data-usa': defineApiPreview('data-usa', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   devto: defineApiPreview('devto', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
-  'fiscal-data-treasury': defineApiPreview('fiscal-data-treasury', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'fiscal-data-treasury': defineApiPreview('fiscal-data-treasury', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   github: defineApiPreview('github', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'hacker-news': defineApiPreview('hacker-news', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'ipify-public-ip': defineApiPreview('ipify-public-ip', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
@@ -2154,7 +2278,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'first-epss': defineApiPreview('first-epss', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
   'endoflife-date': defineApiPreview('endoflife-date', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'deps-dev': defineApiPreview('deps-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
-  'ecb-fx-rates': defineApiPreview('ecb-fx-rates', ({ api, data }) => <MarketPreview api={api} data={data}/>),
+  'ecb-fx-rates': defineApiPreview('ecb-fx-rates', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'un-sdg-goals': defineApiPreview('un-sdg-goals', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'datacite-search': defineApiPreview('datacite-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'ror-search': defineApiPreview('ror-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
@@ -2211,7 +2335,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'iconify-search': defineApiPreview('iconify-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'homebrew-formula-json': defineApiPreview('homebrew-formula-json', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'npm-download-counts': defineApiPreview('npm-download-counts', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
-  'geoboundaries-admin-boundaries': defineApiPreview('geoboundaries-admin-boundaries', ({ api, data }) => <LocationPreview api={api} data={data}/>),
+  'geoboundaries-admin-boundaries': defineApiPreview('geoboundaries-admin-boundaries', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'osrm-route': defineApiPreview('osrm-route', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'opendota-pro-matches': defineApiPreview('opendota-pro-matches', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'openligadb-matches': defineApiPreview('openligadb-matches', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
