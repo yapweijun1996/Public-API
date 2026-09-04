@@ -20,6 +20,7 @@ export const apiCategories = [
   'News',
   'People',
   'Research',
+  'Security',
   'Singapore',
   'Sports',
   'Utility',
@@ -1942,7 +1943,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
   {
     id: 'pubchem-compound', name: 'PubChem Compound Lookup', provider: 'PubChem', category: 'Research',
     description: 'Look up a chemical compound\'s molecular formula, weight, and IUPAC name by common name.',
-    documentationUrl: 'https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest-tutorial', accent: '#2e6da4', monogram: 'PUB',
+    documentationUrl: 'https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest-tutorial', accent: '#2e6da4', monogram: 'PCH',
     fields: [{ id: 'name', label: 'Compound name', type: 'text', defaultValue: 'aspirin', placeholder: 'e.g. aspirin', help: 'Enter a common chemical or drug name.' }],
     buildUrl: ({ name = 'aspirin' }) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encode(name || 'aspirin')}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`,
   },
@@ -2353,7 +2354,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#0d9488',
     monogram: 'HXP',
     fields: [{ id: 'package', label: 'Package', type: 'text', defaultValue: 'ecto', placeholder: 'e.g. ecto', help: 'Enter an official Hex package name.' }],
-    buildUrl: ({ package = 'ecto' }) => `https://hex.pm/api/packages/${encode(package.trim() || 'ecto')}`,
+    buildUrl: ({ package: packageName = 'ecto' }) => `https://hex.pm/api/packages/${encode(packageName.trim() || 'ecto')}`,
   },
   {
     id: 'pub-dev',
@@ -2433,7 +2434,7 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
     ],
     buildUrl: ({ repository = 'github.com/ossf/scorecard' }) => {
       const rawRepository = repository.trim() || 'github.com/ossf/scorecard'
-      const normalizedRepository = rawRepository.replace(/^https?:\\/\\//, '').replace(/^www\\./, '')
+      const normalizedRepository = rawRepository.replace(/^https?:\/\//, '').replace(/^www\./, '')
       const repoPath = normalizedRepository.includes('github.com/')
         ? normalizedRepository
         : `github.com/${normalizedRepository}`

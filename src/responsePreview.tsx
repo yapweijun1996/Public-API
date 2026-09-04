@@ -470,17 +470,6 @@ function marketSnapshot(api: ApiDemo, data: unknown): MarketSnapshot {
       ],
     }
   }
-  if (api.id === 'open-meteo-elevation' && isRecord(data)) {
-    const elevationValues = Array.isArray(root.elevation) ? root.elevation : root.elevation === undefined ? [] : [root.elevation]
-    const latitudes = Array.isArray(root.latitude) ? root.latitude : [root.latitude]
-    const longitudes = Array.isArray(root.longitude) ? root.longitude : [root.longitude]
-    records = elevationValues.map((value, index) => ({
-      title: `Point ${index + 1}`,
-      latitude: textValue(latitudes[index]) ?? textValue(latitudes[0]) ?? '—',
-      longitude: textValue(longitudes[index]) ?? textValue(longitudes[0]) ?? '—',
-      elevation: numberValue(value) !== undefined ? `${formatNumber(numberValue(value)!, 2)} m` : textValue(value) ?? '—',
-    }))
-  }
   if (api.id === 'bank-of-canada-valet' && isRecord(data)) {
     const observations = recordArray(recordValue(data, 'observations'))
     const observedValueKeys = new Set<string>()
@@ -892,7 +881,14 @@ function mediaItems(api: ApiDemo, data: unknown): MediaItem[] {
 function MediaGalleryPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   const items = mediaItems(api, data)
   if (!items.length) return <ResultListPreview data={data} api={api}/>
-  return <div className={`media-preview ${items.length === 1 ? 'single' : ''}`}>{items.map((item, index) => <article key={`${item.image}-${index}`}><img src={item.image} alt="" loading="lazy"/><div><small>{api.category}</small><h3>{item.title}</h3>{item.subtitle && <p>{item.subtitle}</p>}</div></article>)}</div>
+  return <div className={`media-preview ${items.length === 1 ? 'single' : ''}`}>{items.map((item, index) => {
+    const subtitleNodes: ReactNode[] = []
+    item.subtitle?.split(' · ').forEach((part, partIndex) => {
+      if (partIndex > 0) subtitleNodes.push(' · ')
+      subtitleNodes.push(<span key={`${part}-${partIndex}`}>{part}</span>)
+    })
+    return <article key={`${item.image}-${index}`}><img src={item.image} alt={item.title} loading="lazy"/><div><small>{api.category}</small><h3>{item.title}</h3>{subtitleNodes.length ? <p>{subtitleNodes}</p> : null}</div></article>
+  })}</div>
 }
 
 function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint[] {
@@ -930,7 +926,7 @@ function locationPoints(data: unknown, api?: Pick<ApiDemo, 'id'>): LocationPoint
       latitude: numberValue(place.latitude) ?? 0,
       longitude: numberValue(place.longitude) ?? 0,
       label: cleanText(place['place name']) ?? `Postcode place ${index + 1}`,
-      detail: `${cleanText(place.state) ?? cleanText(place['state abbreviation']) ?? 'Location'} · ${cleanText(data.country) ?? 'Postcode lookup'}`,
+      detail: `${cleanText(place.state) ?? cleanText(place['state abbreviation']) ?? 'Location'} · ${cleanText(recordValue(data, 'country')) ?? 'Postcode lookup'}`,
     }
   }).filter((point) => point.latitude !== 0 || point.longitude !== 0)
   const points: LocationPoint[] = []
@@ -1092,7 +1088,7 @@ function TransitBoardPreview({ data }: { data: unknown }) {
       return <article key={`${vehicle}-${departure.time}-${index}`} style={{ '--route-color': departure.canceled === '1' ? '#b42318' : delay > 0 ? '#d97706' : '#16805b' } as CSSProperties}><span>{previewValue(departure.platform)}</span><div><small>{delay > 0 ? `Delayed ${Math.round(delay / 60)} min` : 'On schedule'}</small><h3>{cleanText(departure.station) ?? 'Destination unavailable'}</h3><p>{vehicle.replace('BE.NMBS.', '')} · {time ?? previewValue(departure.time)}</p></div><em>{departure.canceled === '1' ? 'Cancelled' : 'Train'}</em></article>
     })}</div></div>
   }
-  if (isRecord(root.connections)) {
+  if (Array.isArray(root.connections)) {
     const connections = recordArray(root.connections).slice(0, 10)
     if (!connections.length) return <div className="weather-empty"><strong>No transit connections found</strong><span>The Swiss open-data response did not return connection records.</span></div>
     return <div className="transit-preview"><div className="transit-summary"><span>Swiss public transport</span><strong>{connections.length}</strong><b>live connections</b><small>Origin, destination and delay details</small></div><div className="transit-routes">{connections.map((connection, index) => {
@@ -1222,7 +1218,7 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
   else if (api.id === 'hn-search-algolia') {
     cards = recordArray(root.hits).map((hit) => ({
       title: cleanText(hit.title ?? hit.story_title) ?? 'Hacker News result',
-      eyebrow: `${cleanText(hit._tags?.[0] ?? hit.tags?.[0]) ?? 'Hacker News'} · ${cleanText(hit.author) ?? 'Anonymous'}`,
+      eyebrow: 'Hacker News',
       description: cleanText(hit.story_text ?? hit.comment_text) ?? `Open on ${cleanText(hit.url) ?? 'Hacker News'}`,
       badge: cleanText(hit.story_type) ?? 'Story',
       metrics: [
@@ -1230,16 +1226,18 @@ function DeveloperFeedPreview({ data, api }: { data: unknown; api: ApiDemo }) {
         { label: 'Comments', value: previewValue(hit.num_comments) },
         { label: 'Published', value: epochDate(hit.created_at_i) ?? previewValue(hit.created_at) ?? '—' },
       ],
+      tags: [...textArray(hit._tags ?? hit.tags), cleanText(hit.author) ?? 'Anonymous'],
     }))
   } else if (api.id === 'packagist-search') {
     cards = recordArray(root.results).map((record) => {
       const downloads = isRecord(record.downloads) ? record.downloads : {}
       return {
         title: cleanText(record.name) ?? 'Packagist package',
-        eyebrow: `Packagist · ${cleanText(record.type) || 'Composer package'}`,
+        eyebrow: 'Packagist',
         description: cleanText(record.description),
         badge: `${compactNumber(numberValue(downloads.total) ?? 0)} downloads`,
         metrics: [{ label: 'Favourites', value: previewValue(record.favers) }, { label: 'Repository', value: cleanText(record.repository) || '—' }, { label: 'Maintainer', value: cleanText(record.maintainer) || cleanText(record.author) || '—' }],
+        tags: [cleanText(record.type) || 'Composer package'],
       }
     })
   }
@@ -1505,6 +1503,17 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   else if (api.id === 'wikidata-sparql') records = recordArray(recordValue(recordValue(root.results, 'bindings'), 'items') ?? recordValue(root.results, 'bindings')).map((binding) => Object.fromEntries(Object.entries(binding).map(([key, value]) => [key, recordValue(value, 'value') ?? value])))
   else if (api.id === 'openfda-drug-labels') records = recordArray(root.results).map((record) => ({ title: textArray(record.openfda && recordValue(record.openfda, 'brand_name'))[0] ?? textArray(record.spl_product_data_elements)[0] ?? 'Drug label', purpose: textArray(record.purpose)[0], warnings: textArray(record.warnings)[0], active_ingredient: textArray(record.active_ingredient)[0] }))
   else if (api.id === 'google-dns-doh') records = recordArray(root.Answer).map((record) => ({ title: textValue(record.name) ?? 'DNS answer', type: previewValue(record.type), data: previewValue(record.data), ttl: previewValue(record.TTL) }))
+  else if (api.id === 'open-meteo-elevation') {
+    const elevationValues = Array.isArray(root.elevation) ? root.elevation : root.elevation === undefined ? [] : [root.elevation]
+    const latitudes = Array.isArray(root.latitude) ? root.latitude : [root.latitude]
+    const longitudes = Array.isArray(root.longitude) ? root.longitude : [root.longitude]
+    records = elevationValues.map((value, index) => ({
+      title: `Point ${index + 1}`,
+      latitude: textValue(latitudes[index]) ?? textValue(latitudes[0]) ?? '—',
+      longitude: textValue(longitudes[index]) ?? textValue(longitudes[0]) ?? '—',
+      elevation: numberValue(value) !== undefined ? `${formatNumber(numberValue(value)!, 2)} m` : textValue(value) ?? '—',
+    }))
+  }
   else if (api.id === 'color-api') {
     const rgb = isRecord(root.rgb) ? root.rgb : {}
     const hsl = isRecord(root.hsl) ? root.hsl : {}
@@ -1606,11 +1615,10 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     const method = isRecord(metadata.method) ? metadata.method : {}
     const methodLabel = cleanText(method.name) || `Method ${previewValue(method.id) || '11'}`
     const dateLabel = cleanText(hijri.date) || cleanText(gregorian.date) || 'Today'
-    records = Object.entries(timings).slice(0, 10).map(([name, value]) => ({
+    records = Object.entries(timings).slice(0, 10).map(([name, value], index) => ({
       title: `${cleanText(name)} time`,
       time: cleanText(value) ?? previewValue(value),
-      method: methodLabel,
-      date: dateLabel,
+      ...(index === 0 ? { method: methodLabel, date: dateLabel } : {}),
     }))
     if (!records.length) {
       records = [{ title: 'Prayer times', method: methodLabel, date: dateLabel }]
@@ -1820,7 +1828,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'jolpica-f1': defineApiPreview('jolpica-f1', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'hn-search-algolia': defineApiPreview('hn-search-algolia', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'bank-of-canada-valet': defineApiPreview('bank-of-canada-valet', ({ api, data }) => <MarketPreview api={api} data={data}/>),
-  'swiss-transit-connections': defineApiPreview('swiss-transit-connections', ({ api, data }) => <TransitBoardPreview api={api} data={data}/>),
+  'swiss-transit-connections': defineApiPreview('swiss-transit-connections', ({ api, data }) => <TransitBoardPreview data={data}/>),
   'nasa-power-climate': defineApiPreview('nasa-power-climate', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'zippopotam-postcode': defineApiPreview('zippopotam-postcode', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'malaysia-core-cpi': defineApiPreview('malaysia-core-cpi', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
