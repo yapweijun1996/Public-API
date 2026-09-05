@@ -174,14 +174,14 @@ const DEFAULT_RISK: NonNullable<ApiDemo['risk']> = 'Low'
 const KEYLESS_TAG_LABEL = 'no-key'
 
 const pageMeta: Record<AdminPage, { title: string; subtitle: string; path: string }> = {
-  overview: { title: 'Overview', subtitle: 'Monitor the public API demo workspace', path: '/overview' },
-  catalog: { title: 'API Catalog', subtitle: 'Discover and evaluate trusted public APIs', path: '/catalog' },
+  overview: { title: 'Overview', subtitle: 'Explore the public API demo workspace', path: '/overview' },
+  catalog: { title: 'API Catalog', subtitle: 'Discover and evaluate curated public APIs', path: '/catalog' },
   collections: { title: 'Collections', subtitle: 'Curated API groups for common demo scenarios', path: '/collections' },
   providers: { title: 'Providers', subtitle: 'Review source ownership and documentation', path: '/providers' },
   tags: { title: 'Tags', subtitle: 'Explore the catalog by capability and category', path: '/tags' },
   'request-lab': { title: 'Request Lab', subtitle: 'Configure and run a live public API request', path: '/request-lab' },
   'agent-tools': { title: 'Agent Tools', subtitle: 'Inspect the WebMCP control surface', path: '/agent-tools' },
-  health: { title: 'Health', subtitle: 'Review endpoint readiness and source quality', path: '/health' },
+  health: { title: 'Health', subtitle: 'Review catalog contracts and source links', path: '/health' },
   documentation: { title: 'Documentation', subtitle: 'Learn how to extend this API demo template', path: '/documentation' },
 }
 
@@ -217,8 +217,8 @@ const supportingPages: Record<SupportingPage, { icon: IconName; eyebrow: string;
     ],
   },
   health: {
-    icon: 'shield', eyebrow: 'Readiness overview', description: 'Static governance checks for every public endpoint in this demo catalog.',
-    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Source linked`, meta: `${api.risk ?? DEFAULT_RISK} risk` })),
+    icon: 'shield', eyebrow: 'Catalog readiness', description: 'Static catalog metadata only. Run an API in Request Lab to verify current provider and browser health.',
+    cards: apiCatalog.map((api) => ({ title: api.name, description: `${api.provider} · Documentation linked`, meta: `Catalog risk: ${api.risk ?? DEFAULT_RISK}` })),
   },
   documentation: {
     icon: 'book', eyebrow: 'Developer guide', description: 'Use this project as a repeatable starting point for new public API demos.',
@@ -595,18 +595,23 @@ function App() {
 
             <div className="table-wrap">
               <table>
-                <thead><tr><th aria-label="Selection" /><th>API</th><th>Provider / Source</th><th>Quality</th><th>Risk</th><th>Tags</th><th>Last reviewed</th><th>Status</th></tr></thead>
+                <thead><tr><th aria-label="Selection" /><th>API</th><th>Provider / Source</th><th>Risk</th><th>Tags</th></tr></thead>
                 <tbody>
-                  {filteredApis.map((api, index) => (
-                    <tr className={api.id === selectedId ? 'selected' : ''} key={api.id}>
+                  {filteredApis.map((api) => (
+                    <tr
+                      className={api.id === selectedId ? 'selected' : ''}
+                      key={api.id}
+                      data-api-id={api.id}
+                      data-category={api.category}
+                      data-provider={api.provider}
+                      data-http-method={api.method ?? DEFAULT_HTTP_METHOD}
+                      data-selected={api.id === selectedId ? 'true' : 'false'}
+                    >
                       <td><input type="radio" name="selected-api" checked={api.id === selectedId} onChange={() => selectApi(api.id)} aria-label={`Select ${api.name}`} /></td>
                       <td data-label="API"><button className="api-identity" type="button" onClick={() => selectApi(api.id)}><span style={{ '--api-color': api.accent } as React.CSSProperties}>{api.monogram}</span><div><b>{api.name}</b><small>{api.description}</small></div></button></td>
                       <td data-label="Provider"><div className="provider-cell"><b>{api.provider}</b><a href={api.documentationUrl} target="_blank" rel="noreferrer">Documentation <Icon name="external" size={11} /></a></div></td>
-                      <td data-label="Quality"><span className="tag green">verified</span></td>
                       <td data-label="Risk"><span className="risk"><Icon name="shield" size={14} /> {api.risk ?? DEFAULT_RISK}</span></td>
                       <td data-label="Tags"><div className="tags"><span className="tag blue">{KEYLESS_TAG_LABEL}</span><span className="tag green">{api.method ?? DEFAULT_HTTP_METHOD}</span><span className="tag plain">{api.category}</span></div></td>
-                      <td data-label="Reviewed">2026-07-{String(14 - Math.min(index, 5)).padStart(2, '0')}</td>
-                      <td data-label="Status"><span className="source-status"><i /> source-linked</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -653,15 +658,15 @@ function App() {
           {supportingPage && <section className="workspace-page" aria-labelledby="workspace-heading">
             <div className="workspace-hero">
               <span><Icon name={supportingPage.icon} size={24} /></span>
-              <p>{supportingPage.eyebrow}</p>
-              <h2 id="workspace-heading">{activePage.title}</h2>
+              <p>Workspace</p>
+              <h2 id="workspace-heading">{supportingPage.eyebrow}</h2>
               <small>{supportingPage.description}</small>
             </div>
             <div className="workspace-grid">
               {supportingPage.cards.map((card) => <article key={`${card.title}-${card.meta}`}><span>{card.meta}</span><h3>{card.title}</h3><p>{card.description}</p></article>)}
             </div>
             <div className="workspace-actions">
-              <button className="primary-action" type="button" onClick={() => navigatePage('catalog')}><Icon name="api" size={15} /> Open API Catalog</button>
+              <button className="primary-action" type="button" onClick={() => navigatePage(currentPage === 'health' ? 'request-lab' : 'catalog')}><Icon name={currentPage === 'health' ? 'activity' : 'api'} size={15} /> {currentPage === 'health' ? 'Open Request Lab' : 'Open API Catalog'}</button>
               {currentPage !== 'documentation' && <button type="button" onClick={() => navigatePage('documentation')}><Icon name="book" size={15} /> Read developer guide</button>}
             </div>
           </section>}
@@ -672,8 +677,8 @@ function App() {
         <div className="detail-head"><span>Selected module</span><button type="button" onClick={() => setDetailOpen(false)} aria-label="Close details"><Icon name="x" /></button></div>
         <div className="detail-title"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><h2>{activeApi.name}</h2><small>DEMO PICK</small></div></div>
         <p className="detail-description">{activeApi.description}</p>
-        <div className="detail-tags"><span className="tag green">Recommended demo</span><span className="tag blue">{KEYLESS_TAG_LABEL}</span><span className={`tag ${activeApi.risk === 'Review' ? 'plain' : 'green'}`}>{activeApi.risk ?? DEFAULT_RISK} risk</span><span className="tag plain">{activeApi.category}</span></div>
-        <section className="detail-box"><div className="box-title"><span>Quality & source</span><b>low</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Review status</dt><dd>source-linked</dd></div><div><dt>Production readiness</dt><dd>demo-ready</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
+        <div className="detail-tags"><span className="tag green">Curated demo</span><span className="tag blue">{KEYLESS_TAG_LABEL}</span><span className={`tag ${activeApi.risk === 'Review' ? 'plain' : 'green'}`}>{activeApi.risk ?? DEFAULT_RISK} risk</span><span className="tag plain">{activeApi.category}</span></div>
+        <section className="detail-box"><div className="box-title"><span>Catalog contract & source</span><b>{activeApi.risk ?? DEFAULT_RISK} risk</b></div><dl><div><dt>Source host</dt><dd>{new URL(activeApi.documentationUrl).hostname}</dd></div><div><dt>Documentation</dt><dd>linked</dd></div><div><dt>Live health</dt><dd>Check in Request Lab</dd></div><div><dt>Attribution</dt><dd>Review provider documentation</dd></div></dl></section>
         <section className="detail-box"><div className="box-title"><span>Usage / licence</span><b>Review terms</b></div><p><small>Important notes</small>{activeApi.usageNote ?? 'Suitable for demonstration and internal prototyping. Review the provider terms before production use.'}</p><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">Open official documentation <Icon name="external" size={12} /></a></section>
         <section className="detail-box endpoint-detail"><div className="box-title"><span>Endpoint</span><b>{activeApi.method ?? DEFAULT_HTTP_METHOD}</b></div><code>{endpoint}</code></section>
         <div className="detail-actions"><button className="primary-action" type="button" onClick={trySelectedApi}><Icon name="play" size={15} /> Try live API</button><button type="button" onClick={copyFetch}><Icon name="code" size={15} /> Copy fetch</button></div>

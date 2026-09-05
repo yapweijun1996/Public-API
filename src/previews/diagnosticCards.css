@@ -1,0 +1,35 @@
+/* Diagnostic cards must not clip findings, warnings, context or remedies. */
+.diagnostic-workbench { --diagnostic-ink: #234d80; }
+.diagnostic-workbench .diagnostic-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0; margin: 0; list-style: none; }
+.diagnostic-list > li { min-width: 0; padding: 20px; border: 1px solid #ccd9ea; border-radius: 12px; background: #fff; }
+.diagnostic-list > li > header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.diagnostic-list > li > header > div { min-width: 0; }
+.diagnostic-list h4 { margin-top: 5px; }
+.diagnostic-workbench .diagnostic-description { margin-top: 10px; color: #425970; overflow-wrap: anywhere; }
+.diagnostic-workbench .diagnostic-reason { padding-top: 12px; margin-top: 12px; border-top: 1px solid #e1e7ef; overflow-wrap: anywhere; white-space: pre-wrap; }
+.diagnostic-reason > strong { display: block; font-size: 12px; color: #53657d; margin-bottom: 5px; }
+.diagnostic-score { min-width: 0; padding: 16px; border: 1px solid #bdcce0; border-radius: 12px; background: #eff5ff; }
+.diagnostic-score span { display: block; font-size: 12px; color: #425970; }
+.diagnostic-score strong { display: block; margin-top: 4px; font-size: 28px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.diagnostic-workbench meter { display: block; width: 100%; height: 18px; margin: 14px 0 0; accent-color: #3475c5; }
+.diagnostic-workbench .diagnostic-warning { padding: 14px 16px; margin: 16px 0; border: 1px solid #daa16b; border-left: 4px solid #ad4a16; border-radius: 8px; color: #7b3717; background: #fff6ed; overflow-wrap: anywhere; }
+.diagnostic-workbench .domain-disclosure ul { padding-left: 22px; margin: 8px 0; }
+.diagnostic-workbench .domain-disclosure li { overflow-wrap: anywhere; white-space: pre-wrap; }
+.diagnostic-workbench .diagnostic-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 12px; overflow-wrap: anywhere; }
+.diagnostic-workbench .grammar-context { padding: 16px; margin: 16px 0 0; background: #f2f6fc; border-left: 3px solid #6b84ad; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.grammar-context mark { color: #743616; background: #ffe3c6; text-decoration: underline; text-underline-offset: 3px; }
+.diagnostic-workbench .grammar-replacements { display: grid; gap: 10px; padding-left: 0; list-style: none; }
+.grammar-replacements > li { padding: 12px; border: 1px solid #d4e2d9; border-radius: 8px; background: #f4faf6; }
+.grammar-replacements .domain-copy { margin-top: 7px; }
+.diagnostic-workbench .recall-campaigns { grid-template-columns: 1fr; }
+.recall-narrative { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.recall-narrative > section { min-width: 0; padding: 16px; border: 1px solid #d5e0ec; border-radius: 10px; }
+.recall-narrative > section:first-child { grid-column: 1 / -1; background: #f6f9fd; }
+.recall-narrative > section:nth-child(2) { background: #fff8ef; border-color: #ead1b7; }
+.recall-narrative > section:nth-child(3) { background: #f1f7fc; }
+.recall-narrative h5 { margin: 0 0 8px; font-size: 14px; }
+.recall-narrative p { overflow-wrap: anywhere; white-space: pre-wrap; }
+@container domain-card (max-width: 680px) {
+  .diagnostic-workbench .diagnostic-list, .recall-narrative { grid-template-columns: 1fr; }
+  .diagnostic-list > li { padding: 16px; }
+}

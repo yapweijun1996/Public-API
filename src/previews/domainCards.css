@@ -1,0 +1,93 @@
+/* Domain result experiences: scoped, container-responsive, no catalog styling. */
+.domain-card { container: domain-card / inline-size; min-width: 0; color: #203149; font-size: 14px; line-height: 1.55; }
+.domain-card h3, .domain-card h4, .domain-card p { margin: 0; }
+.domain-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.domain-heading > div { min-width: 0; }
+.domain-eyebrow { display: block; color: #53657d; font-size: 11px; font-weight: 750; letter-spacing: .075em; text-transform: uppercase; }
+.domain-card h3 { margin-top: 5px; font-size: clamp(22px, 3cqi, 28px); line-height: 1.22; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.domain-card h4 { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.domain-heading p { max-width: 72ch; margin-top: 8px; color: #53657d; }
+.domain-card .domain-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 16px; margin: 18px 0; }
+.domain-facts > div { min-width: 0; padding-top: 12px; border-top: 1px solid #dce4ef; }
+.domain-facts dt { color: #53657d; font-size: 12px; }
+.domain-facts dd { margin: 5px 0 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.domain-card .domain-note { margin-top: 18px; color: #53657d; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.domain-card a { color: #1555bf; text-decoration: underline; text-underline-offset: 3px; }
+.domain-card code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .94em; }
+.domain-card button, .domain-card input, .domain-card select, .domain-card summary { min-height: 44px; }
+.domain-card button { padding: 9px 13px; border: 1px solid #bdcce0; border-radius: 8px; color: #17416e; background: #fff; font-weight: 650; cursor: pointer; }
+.domain-card button:hover { background: #edf4ff; border-color: #799ad0; }
+.domain-card :is(button, input, select, summary):focus-visible { outline: 3px solid #1769d3; outline-offset: 3px; }
+.domain-card :is(input, select) { min-width: 0; width: 100%; padding: 9px 11px; border: 1px solid #9bafc7; border-radius: 8px; background: #fff; color: #203149; font-size: 16px; }
+.domain-card input[aria-invalid="true"] { border-color: #b14031; }
+.domain-card .domain-notice { padding: 16px; border: 1px dashed #aabed8; border-radius: 10px; background: #f6f9fe; }
+.domain-empty { padding: 28px 20px; text-align: center; border: 1px dashed #aabed8; border-radius: 10px; background: #f6f9fe; }
+.domain-empty p { margin-top: 12px; }
+.domain-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 22px 0 14px; }
+.domain-toolbar > label { font-weight: 650; }
+.domain-toolbar > :is(input, select) { flex: 1 1 180px; max-width: 320px; }
+.domain-toolbar > span { margin-left: auto; color: #53657d; font-size: 12px; }
+.domain-state { display: inline-flex; padding: 5px 10px; border: 1px solid #bdcce0; border-radius: 30px; background: #f1f5fa; color: #365069; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.domain-state.warning { border-color: #e7bf95; background: #fff4e8; color: #8b3f16; }
+.domain-disclosure { margin-top: 14px; border-top: 1px solid #dce4ef; }
+.domain-disclosure summary { padding: 11px 0; color: #234d80; cursor: pointer; font-weight: 650; overflow-wrap: anywhere; }
+.domain-disclosure p { overflow-wrap: anywhere; }
+.domain-copy { margin-top: 12px; }
+.domain-copy > span { display: block; margin-top: 5px; font-size: 12px; overflow-wrap: anywhere; }
+.domain-more { margin-top: 14px; }
+/* A real color swatch, with readable specifications outside the arbitrary color. */
+.color-workbench { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.color-swatch-panel { min-width: 0; border: 1px solid #d5dfeb; border-radius: 14px; overflow: hidden; background: #fff; }
+.color-swatch { width: 100%; min-height: 170px; aspect-ratio: 1.9; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.color-swatch-caption { padding: 20px; }
+.color-swatch-caption > span { display: block; color: #53657d; font-size: 12px; }
+.color-swatch-caption strong { display: block; margin-top: 5px; font: 700 clamp(25px, 3cqi, 36px)/1.2 ui-monospace, monospace; }
+.color-info { min-width: 0; }
+/* DNS records are complete, selectable text, including long TXT values. */
+.dns-records { margin: 20px 0 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+.dns-records li { min-width: 0; padding: 17px; border: 1px solid #cedced; border-left: 3px solid #3475c5; border-radius: 10px; background: #fff; }
+.dns-records header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.dns-records header span { margin-left: auto; color: #53657d; font-size: 12px; }
+.dns-records code { display: block; color: #154d89; font-size: 17px; line-height: 1.6; }
+.dns-records small { display: block; margin-top: 8px; color: #53657d; overflow-wrap: anywhere; }
+/* Currency inputs only calculate against the already-fetched response. */
+.fx-converter { display: grid; grid-template-columns: minmax(0, .65fr) minmax(0, 1fr); border: 1px solid #bcd6d1; border-radius: 13px; overflow: hidden; background: #fff; }
+.fx-inputs { min-width: 0; display: grid; gap: 8px; padding: 22px; }
+.fx-inputs label { font-size: 12px; color: #425970; font-weight: 650; }
+.fx-inputs label:not(:first-child) { margin-top: 6px; }
+.fx-output { min-width: 0; padding: 24px; display: flex; flex-direction: column; justify-content: center; background: #eaf5f3; border-left: 1px solid #c6ded8; }
+.fx-output > span { font-size: 12px; color: #346359; }
+.fx-output output { margin: 8px 0; font-size: clamp(30px, 4.5cqi, 48px); line-height: 1.15; letter-spacing: -.04em; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fx-output output small { font-size: 18px; letter-spacing: 0; }
+.fx-output p { color: #365e57; font-size: 13px; overflow-wrap: anywhere; }
+.fx-rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px; padding: 0; margin: 0; list-style: none; }
+.fx-rates li { min-width: 0; padding: 14px; border: 1px solid #d5e0ec; border-radius: 10px; background: #fff; }
+.fx-rates span { display: block; color: #53657d; font-size: 12px; }
+.fx-rates strong { display: block; margin-top: 5px; font: 650 16px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+/* Period totals are not sparklines: no invented history. */
+.downloads-hero { padding: 24px; border: 1px solid #ecd0d0; border-left: 4px solid #b12a36; border-radius: 12px; background: #fff7f7; }
+.downloads-hero > span { color: #793942; font-size: 13px; }
+.downloads-hero > strong { display: block; margin: 8px 0; font-size: clamp(34px, 6cqi, 60px); line-height: 1.1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.downloads-hero > p { color: #793942; font-size: 13px; }
+/* Release cycles preserve separate EOL and maintenance evidence. */
+.lifecycle-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0; margin: 0; list-style: none; }
+.lifecycle-list > li { min-width: 0; padding: 18px; border: 1px solid #d5e0ec; border-radius: 12px; background: #fff; }
+.lifecycle-list > li > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.lifecycle-list header p { margin-top: 5px; font-size: 12px; color: #53657d; }
+.lifecycle-list .domain-facts { grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); }
+.lifecycle-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 13px; border-radius: 9px; background: #f2f6fb; font-size: 13px; }
+.lifecycle-dates > div { min-width: 0; overflow-wrap: anywhere; }
+.lifecycle-dates div span { display: block; margin-bottom: 5px; color: #53657d; font-size: 11px; }
+.lifecycle-dates time { font-weight: 650; font-variant-numeric: tabular-nums; }
+@container domain-card (max-width: 620px) {
+  .color-swatch-panel, .color-info { grid-column: 1 / -1; }
+  .color-swatch { min-height: 130px; aspect-ratio: 2.5; }
+  .fx-converter { grid-template-columns: 1fr; }
+  .fx-output { border-left: 0; border-top: 1px solid #c6ded8; padding: 20px; }
+  .lifecycle-list { grid-template-columns: 1fr; }
+  .domain-toolbar > span { width: 100%; margin-left: 0; }
+  .domain-heading { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .domain-card * { scroll-behavior: auto; }
+}

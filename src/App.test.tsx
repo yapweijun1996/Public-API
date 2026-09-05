@@ -83,6 +83,45 @@ describe('catalog live API flow', () => {
     expect(document.querySelector('.table-footer [aria-current="page"]')).toHaveTextContent('1')
   })
 
+  it('does not fabricate live verification metadata and exposes stable catalog row metadata', () => {
+    render(<App />)
+    const table = screen.getByRole('table')
+    expect(within(table).queryByRole('columnheader', { name: 'Quality' })).not.toBeInTheDocument()
+    expect(within(table).queryByRole('columnheader', { name: 'Last reviewed' })).not.toBeInTheDocument()
+    expect(within(table).queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument()
+    expect(within(table).queryByText('verified')).not.toBeInTheDocument()
+    expect(within(table).queryByText('source-linked')).not.toBeInTheDocument()
+    expect(within(table).queryByText(/^2026-07-/)).not.toBeInTheDocument()
+    expect(screen.queryByText('demo-ready')).not.toBeInTheDocument()
+    expect(screen.getByText('Discover and evaluate curated public APIs')).toBeInTheDocument()
+
+    const countryRow = document.querySelector('tr[data-api-id="countries"]')
+    expect(countryRow).toHaveAttribute('data-category', 'Data')
+    expect(countryRow).toHaveAttribute('data-provider', 'World Bank')
+    expect(countryRow).toHaveAttribute('data-http-method', 'GET')
+    expect(countryRow).toHaveAttribute('data-selected', 'true')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Live Weather' }))
+    expect(countryRow).toHaveAttribute('data-selected', 'false')
+    expect(document.querySelector('tr[data-api-id="weather"]')).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByText('Live health')).toBeInTheDocument()
+    expect(screen.getByText('Check in Request Lab')).toBeInTheDocument()
+  })
+
+  it('labels the Health workspace as static catalog metadata rather than current provider health', () => {
+    window.location.hash = '#/health'
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Health', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Catalog readiness', level: 2 })).toBeInTheDocument()
+    expect(screen.getByText('Static catalog metadata only. Run an API in Request Lab to verify current provider and browser health.')).toBeInTheDocument()
+    expect(screen.getAllByText('Catalog risk: Low').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Request Lab' }))
+    expect(window.location.hash).toBe('#/request-lab?api=countries')
+    expect(screen.getByRole('heading', { name: 'Request lab' })).toBeInTheDocument()
+  })
+
   it('exposes deterministic request state and error semantics for browser agents', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Too many requests' }), {
       status: 429,
@@ -260,7 +299,7 @@ describe('demo preview mapping', () => {
     expect(selectPreviewLayout({ id: 'geocoding-search', category: 'Geo' })).toBe('location-map')
     expect(selectPreviewLayout({ id: 'carbon-intensity-gb', category: 'Environment' })).toBe('data-table')
     expect(selectPreviewLayout({ id: 'nws-weather', category: 'Weather' })).toBe('data-table')
-    expect(selectPreviewLayout({ id: 'nhtsa-vehicle-recalls', category: 'Vehicle' })).toBe('data-table')
+    expect(selectPreviewLayout({ id: 'nhtsa-vehicle-recalls', category: 'Vehicle' })).toBe('vehicle-recalls')
     expect(selectPreviewLayout({ id: 'github', category: 'Developer' })).toBe('developer-feed')
     expect(selectPreviewLayout({ id: 'nvd-cves', category: 'Developer' })).toBe('security-center')
     expect(selectPreviewLayout({ id: 'geoboundaries-admin-boundaries', category: 'Geo' })).toBe('data-table')
@@ -272,7 +311,7 @@ describe('demo preview mapping', () => {
   it('maps fourth-round catalog additions to explicit preview layouts', () => {
     const catalogById = Object.fromEntries(apiCatalog.map((api) => [api.id, api]))
     const expected: Record<string, string> = {
-      'openssf-scorecard': 'data-table',
+      'openssf-scorecard': 'security-scorecard',
       'opencitations-index': 'data-table',
       'vam-collections': 'media-gallery',
       'usaspending': 'data-table',
@@ -319,15 +358,55 @@ describe('demo preview mapping', () => {
     const visualSignatures: string[] = []
     for (const candidate of apiCatalog) {
       const { container, unmount } = render(<ResponseDemoPreview api={candidate} data={{}}/>)
-      expect(container.querySelector('[data-webmcp-surface="api-demo-preview"]')).toHaveAttribute('data-preview-component', candidate.id)
+      const shell = container.querySelector('[data-webmcp-surface="api-demo-preview"]')
+      expect(shell).toHaveAttribute('data-preview-component', candidate.id)
+      expect(shell).toHaveAttribute('data-ssot-design', 'result-card-v2')
+      expect(shell).toHaveAttribute('data-ssot-source', 'live-response')
+      expect(shell).toHaveAttribute('data-provider', candidate.provider)
+      expect(shell).toHaveAttribute('data-category', candidate.category)
       const component = container.querySelector(`[data-api-preview-component="${candidate.id}"]`)
       expect(component).toBeInTheDocument()
+      expect(component).toHaveAttribute('data-card-design', 'api-owned-v2')
+      expect(component).not.toHaveAttribute('style')
       visualSignatures.push(component?.getAttribute('data-visual-signature') ?? '')
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
     expect(new Set(visualSignatures).size).toBe(200)
     expect(visualSignatures.every(Boolean)).toBe(true)
+  })
+
+  it('uses a user-facing result shell while keeping SSOT internals machine-readable', () => {
+    const candidate = apiCatalog.find((api) => api.id === 'countries')
+    if (!candidate) throw new Error('Missing countries fixture')
+    const { container } = render(<ResponseDemoPreview api={candidate} data={{}} runtime={{ httpStatus: 200, elapsed: 128, size: 1536 }}/>)
+    const preview = screen.getByRole('region', { name: 'Country Explorer' })
+
+    expect(within(preview).getByText('Live response')).toBeInTheDocument()
+    expect(within(preview).getByText('Country intelligence profile')).toBeInTheDocument()
+    expect(within(preview).getByText('Provider · World Bank')).toBeInTheDocument()
+    expect(within(preview).getByText('Category · Data')).toBeInTheDocument()
+    expect(within(preview).getByLabelText('HTTP status 200')).toHaveTextContent('200 OK')
+    expect(within(preview).getByLabelText('Response time 128 milliseconds')).toHaveTextContent('128 ms')
+    expect(within(preview).getByLabelText('Response size 1.5 KB')).toHaveTextContent('1.5 KB')
+    expect(container.querySelector('.demo-preview-note')).not.toBeInTheDocument()
+    expect(within(preview).queryByText(/SSOT adapter:/)).not.toBeInTheDocument()
+    expect(within(preview).getByRole('status')).toHaveTextContent('Live result ready for Country Explorer.')
+    expect(preview).not.toHaveAttribute('aria-live')
+    expect(preview).toHaveAttribute('data-ssot-adapter', 'CountriesPreview')
+  })
+
+  it('gives single semantic records a full-width readable card contract', () => {
+    const candidate = apiCatalog.find((api) => api.id === 'catfacts')
+    if (!candidate) throw new Error('Missing catfacts fixture')
+    const { container } = render(<ResponseDemoPreview api={candidate} data={{ fact: 'Cats use their whiskers to estimate whether a space is wide enough to enter.', length: 78 }}/>)
+    const grid = container.querySelector('.semantic-card-grid')
+
+    expect(grid).toHaveClass('single')
+    expect(grid).toHaveAttribute('data-record-count', '1')
+    expect(grid).toHaveAttribute('aria-label', 'Semantic response records')
+    expect(grid?.querySelector('[data-record-index="1"]')).toBeInTheDocument()
+    expect(within(grid as HTMLElement).getByText(/Cats use their whiskers/)).toBeInTheDocument()
   })
 })
 
@@ -452,7 +531,7 @@ describe('new specialist API previews', () => {
     expect(within(preview).getByText('57')).toBeInTheDocument()
   })
 
-  it('renders NHTSA recall results as structured table data', () => {
+  it('renders NHTSA campaign identity through the dedicated recall composition', () => {
     render(<ResponseDemoPreview api={api('nhtsa-vehicle-recalls')} data={{
       Count: 1,
       results: [{
@@ -465,7 +544,7 @@ describe('new specialist API previews', () => {
       }],
     }}/>)
     const preview = screen.getByRole('region', { name: 'NHTSA Vehicle Recalls' })
-    expect(preview).toHaveAttribute('data-preview-layout', 'data-table')
+    expect(preview).toHaveAttribute('data-preview-layout', 'vehicle-recalls')
     expect(within(preview).getByText('20V771000')).toBeInTheDocument()
     expect(within(preview).getByText('Honda')).toBeInTheDocument()
   })
