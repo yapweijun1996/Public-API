@@ -1,4 +1,12 @@
 export type PreviewLayout =
+  | 'security-scorecard'
+  | 'grammar-review'
+  | 'vehicle-recalls'
+  | 'color-swatch'
+  | 'dns-records'
+  | 'download-summary'
+  | 'release-lifecycle'
+  | 'exchange-rates'
   | 'weather-dashboard'
   | 'country-profile'
   | 'market-chart'
@@ -65,7 +73,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['met-museum-object-detail', 'media-gallery', 'Museum object spotlight'],
   ['met-museum-search', 'data-table', 'Met collection search index'],
   ['nhtsa-vpic', 'data-table', 'Vehicle manufacturer registry'],
-  ['nhtsa-vehicle-recalls', 'data-table', 'NHTSA recall investigation table'],
+  ['nhtsa-vehicle-recalls', 'vehicle-recalls', 'Vehicle defect, consequence and remedy'],
   ['npm-search', 'developer-feed', 'npm package comparison grid'],
   ['nvd-cpe-search', 'security-center', 'CPE product dictionary'],
   ['nvd-cve-detail', 'security-center', 'Single CVE investigation dossier'],
@@ -79,7 +87,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['usaspending', 'data-table', 'Federal award spending ledger'],
   ['usgs', 'location-map', 'Earthquake activity map'],
   ['wikidata-sparql', 'data-table', 'Wikidata query result table'],
-  ['openssf-scorecard', 'data-table', 'OpenSSF scorecard security checks'],
+  ['openssf-scorecard', 'security-scorecard', 'Repository security check evidence'],
   ['opencitations-index', 'data-table', 'Incoming citation count'],
   ['vam-collections', 'media-gallery', 'V&A objects collection search'],
   ['world-bank-gdp', 'market-chart', 'Singapore GDP history'],
@@ -137,17 +145,17 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['poetrydb-poems', 'research-library', 'Public-domain poetry reading room'],
   ['coingecko-keyless-market', 'market-chart', 'Keyless cryptocurrency market snapshot'],
   ['swapi-people', 'data-table', 'Star Wars character dossier'],
-  ['google-dns-doh', 'data-table', 'DNS resolution record table'],
-  ['color-api', 'data-table', 'Color conversion swatch card'],
+  ['google-dns-doh', 'dns-records', 'DNS resolution and answer records'],
+  ['color-api', 'color-swatch', 'Color swatch and specifications'],
   ['nasa-image-search', 'media-gallery', 'NASA media discovery wall'],
   ['lichess-top-players', 'chess-ratings', 'Lichess leaderboard board'],
   ['pubmed-search', 'research-library', 'PubMed identifier search results'],
   ['rxnorm-drug-search', 'data-table', 'Standardized drug name registry'],
   ['inaturalist-observations', 'media-gallery', 'Species observation photo wall'],
   ['first-epss', 'security-center', 'CVE exploitation probability score'],
-  ['endoflife-date', 'data-table', 'Product lifecycle support timeline'],
+  ['endoflife-date', 'release-lifecycle', 'Software release support explorer'],
   ['deps-dev', 'developer-feed', 'Package ecosystem dependency profile'],
-  ['ecb-fx-rates', 'data-table', 'Coinbase exchange-rate board'],
+  ['ecb-fx-rates', 'exchange-rates', 'Fiat and crypto rate conversion'],
   ['un-sdg-goals', 'data-table', 'United Nations SDG list'],
   ['datacite-search', 'research-library', 'DataCite DOI search results'],
   ['ror-search', 'research-library', 'Research organization registry profile'],
@@ -163,7 +171,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['fema-disasters', 'data-table', 'FEMA disaster declaration board'],
   ['noaa-tides', 'data-table', 'NOAA tide station reading'],
   ['rdap-domain-lookup', 'data-table', 'RDAP domain registration record'],
-  ['languagetool-grammar-check', 'data-table', 'Grammar and style issue board'],
+  ['languagetool-grammar-check', 'grammar-review', 'Writing issues and suggested replacements'],
   ['zenodo-search', 'research-library', 'Zenodo research record search'],
   ['doaj-search', 'research-library', 'Open-access article search'],
   ['pubchem-compound', 'data-table', 'PubChem compound property card'],
@@ -193,7 +201,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['openfda-food-recalls', 'data-table', 'FDA food recall alerts'],
   ['iconify-search', 'data-table', 'Icon search results'],
   ['homebrew-formula-json', 'data-table', 'Homebrew package metadata'],
-  ['npm-download-counts', 'data-table', 'npm package download counts'],
+  ['npm-download-counts', 'download-summary', 'Package download reporting window'],
   ['geoboundaries-admin-boundaries', 'data-table', 'Administrative boundary metadata'],
   ['osrm-route', 'data-table', 'OSRM route calculation'],
   ['opendota-pro-matches', 'data-table', 'OpenDota pro matches'],
@@ -225,7 +233,7 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['gbif-occurrence-search', 'location-map', 'GBIF biodiversity occurrence map'],
   ['open-meteo-ensemble', 'market-chart', 'Ensemble forecast uncertainty chart'],
   ['world-bank-indicator-explorer', 'market-chart', 'World Bank selectable indicator trend'],
-  ['exchange-rate-current', 'data-table', 'Current keyless FX cross-rate board'],
+  ['exchange-rate-current', 'exchange-rates', 'Daily FX rates and conversion'],
   ['circl-vulnerability', 'security-center', 'CIRCL CVE investigation record'],
 ]
 

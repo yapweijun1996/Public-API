@@ -1,0 +1,20 @@
+{
+  "provenance": "Synthetic contract fixtures for unit/browser tests; not live health evidence or actual advisories.",
+  "scorecard": {
+    "date": "2026-01-02T03:04:05Z", "score": 8.7,
+    "repo": {"name": "github.com/example/demo", "commit": "abcdef0123456789"}, "scorecard": {"version": "test-version"},
+    "checks": [
+      {"name": "Security-Policy", "score": 0, "reason": "No policy file found in this synthetic example.", "documentation": {"short": "Looks for a documented disclosure policy.", "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#security-policy"}, "details": ["Synthetic evidence: SECURITY.md not found."]},
+      {"name": "Signed-Releases", "score": -1, "reason": "No releases available for inspection."},
+      {"name": "Code-Review", "score": 10, "reason": "All sample changes reviewed."}
+    ]
+  },
+  "grammar": {
+    "software": {"name": "LanguageTool", "version": "fixture", "apiVersion": 1}, "language": {"name": "English (US)", "code": "en-US"},
+    "matches": [{"message": "Use a verb that agrees with the singular subject.", "shortMessage": "Subject–verb agreement", "offset": 5, "length": 3, "context": {"text": "This are a test.", "offset": 5, "length": 3}, "sentence": "This are a test.", "replacements": [{"value": "is"}], "rule": {"id": "SYNTHETIC_AGREEMENT", "description": "Verb agreement", "category": {"name": "Grammar"}}}]
+  },
+  "recalls": {
+    "Count": 1, "Message": "Results returned successfully",
+    "results": [{"NHTSACampaignNumber": "TEST-CAMPAIGN-1", "Make": "Example", "Model": "Demo", "ModelYear": "2020", "Manufacturer": "Synthetic manufacturer", "ReportReceivedDate": "25/03/2021", "Component": "Example component", "Summary": "Synthetic defect summary: the demonstration part may fail.", "Consequence": "Synthetic consequence: loss of function requires inspection.", "Remedy": "Synthetic remedy: consult the manufacturer instructions for this example. No actual vehicle is identified.", "Notes": "Synthetic additional provider note.", "parkIt": true, "parkOutSide": true, "overTheAirUpdate": false}]
+  }
+}

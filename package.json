@@ -11,7 +11,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:browser:domain-cards": "node scripts/verify-ssot-domain-cards.mjs",
+    "test:browser:diagnostic-cards": "node scripts/verify-ssot-diagnostic-cards.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.3",

@@ -1903,7 +1903,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     id: 'languagetool-grammar-check', name: 'LanguageTool Grammar Check', provider: 'LanguageTool', category: 'Language',
     description: 'Check English text for grammar, spelling, and style issues with rule-based suggestions.',
     documentationUrl: 'https://languagetool.org/http-api/', accent: '#39a845', monogram: 'LT',
-    usageNote: 'Intended for interactive, human-driven checks. The free public service allows roughly 20 requests per minute.',
+    usageNote: 'For interactive, human-driven checks only. The free public endpoint prohibits automated requests; use a self-hosted or Enterprise instance for automation. Submitted text is sent to LanguageTool: do not send confidential text.',
     fields: [{ id: 'text', label: 'Text to check', type: 'text', defaultValue: 'This are a test.', placeholder: 'e.g. This are a test.', help: 'Enter a short English sentence to check.' }],
     method: 'POST', bodyEncoding: 'form',
     buildUrl: () => 'https://api.languagetool.org/v2/check',

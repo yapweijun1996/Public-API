@@ -131,6 +131,10 @@ The Request Lab contract remains:
 
 Shared primitives are encouraged; generic meaning is not. APIs may reuse `MetricGrid`, `DataTable`, `Map`, `Gallery`, or chart primitives, but each provider response must be adapted into domain meaning.
 
+The shared result-card shell is a UX contract, not a substitute for API-specific design. Every successful SSOT card should use a consistent user-facing hierarchy: live-response state, API identity, domain/profile label, provider/category context, bounded runtime facts, then the API-owned semantic composition. Internal implementation terms such as adapter names stay machine-readable through stable metadata instead of competing with the user result. Visual individuality should come from domain meaning and response structure, not arbitrary per-API radius, pattern, or decoration. Values that matter to a person must remain readable on mobile rather than being irreversibly truncated for visual neatness.
+
+The incremental domain-card redesign and its verification ledger are tracked in [SSOT Card UX Phase 2](ssot-card-ux-phase-2.md).
+
 Generic output such as `Result 1`, arbitrary property dumps, or `Structured records unavailable` after a successful default request is a product defect.
 
 ## Capability-oriented discovery
@@ -173,7 +177,7 @@ A future `llms.txt` may advertise the machine catalog, Request Lab, WebMCP suppo
 
 Error states should distinguish provider unavailable, 429/rate limit, browser CORS rejection, timeout, invalid response/parser drift, and validation failure.
 
-Future health metadata may expose `healthy`, `degraded`, and `down`, plus bounded facts such as last check and consecutive failures. A single transient error must not immediately redefine a provider as permanently broken.
+Future health metadata may expose `healthy`, `degraded`, and `down`, plus bounded facts such as last check and consecutive failures. A single transient error must not immediately redefine a provider as permanently broken. Until that evidence exists in the SSOT, the product must not synthesize per-API review timestamps or present static catalog metadata as current live verification.
 
 ## Quality objective
 

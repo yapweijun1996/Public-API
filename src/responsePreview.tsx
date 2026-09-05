@@ -1,3 +1,13 @@
+import { ScorecardPreview } from './previews/ScorecardPreview'
+import { GrammarPreview } from './previews/GrammarPreview'
+import { RecallsPreview } from './previews/RecallsPreview'
+import './previews/diagnosticCards.css'
+import { ColorPreview } from './previews/ColorPreview'
+import { DnsPreview } from './previews/DnsPreview'
+import { DownloadsPreview } from './previews/DownloadsPreview'
+import { LifecyclePreview } from './previews/LifecyclePreview'
+import { ExchangeRateApiPreview, CoinbaseRatesPreview } from './previews/ExchangeRatesPreview'
+import './previews/domainCards.css'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import { apiCatalog, type ApiDemo } from './apiCatalog'
 import { getPreviewProfile, type PreviewLayout } from './previewProfiles'
@@ -1295,7 +1305,8 @@ const epochDate = (value: unknown) => {
 
 function SemanticCards({ cards, emptyTitle }: { cards: SemanticCard[]; emptyTitle: string }) {
   if (!cards.length) return <div className="weather-empty"><strong>{emptyTitle}</strong><span>The response did not include records for this demo layout.</span></div>
-  return <div className="semantic-card-grid">{cards.slice(0, 8).map((card, index) => <article key={`${card.title}-${index}`}><header><span>{index + 1}</span><div><small>{card.eyebrow}</small><h3>{card.title}</h3></div>{card.badge && <em>{card.badge}</em>}</header>{card.description && <p>{card.description}</p>}<dl>{card.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl>{card.tags?.length ? <footer>{card.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer> : null}</article>)}</div>
+  const visibleCards = cards.slice(0, 8)
+  return <div className={`semantic-card-grid ${visibleCards.length === 1 ? 'single' : ''}`} aria-label="Semantic response records" data-record-count={visibleCards.length}>{visibleCards.map((card, index) => <article data-record-index={index + 1} key={`${card.title}-${index}`}><header><span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><div><small>{card.eyebrow}</small><h3>{card.title}</h3></div>{card.badge && <em>{card.badge}</em>}</header>{card.description && <p>{card.description}</p>}<dl>{card.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl>{card.tags?.length ? <footer aria-label="Record tags">{card.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer> : null}</article>)}</div>
 }
 
 type DateListItem = {
@@ -1940,7 +1951,6 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
   else if (api.id === 'usaspending') records = recordArray(root.results)
   else if (api.id === 'wikidata-sparql') records = recordArray(recordValue(recordValue(root.results, 'bindings'), 'items') ?? recordValue(root.results, 'bindings')).map((binding) => Object.fromEntries(Object.entries(binding).map(([key, value]) => [key, recordValue(value, 'value') ?? value])))
   else if (api.id === 'openfda-drug-labels') records = recordArray(root.results).map((record) => ({ title: textArray(record.openfda && recordValue(record.openfda, 'brand_name'))[0] ?? textArray(record.spl_product_data_elements)[0] ?? 'Drug label', purpose: textArray(record.purpose)[0], warnings: textArray(record.warnings)[0], active_ingredient: textArray(record.active_ingredient)[0] }))
-  else if (api.id === 'google-dns-doh') records = recordArray(root.Answer).map((record) => ({ title: textValue(record.name) ?? 'DNS answer', type: previewValue(record.type), data: previewValue(record.data), ttl: previewValue(record.TTL) }))
   else if (api.id === 'open-meteo-elevation') {
     const elevationValues = Array.isArray(root.elevation) ? root.elevation : root.elevation === undefined ? [] : [root.elevation]
     const latitudes = Array.isArray(root.latitude) ? root.latitude : [root.latitude]
@@ -1977,13 +1987,6 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     description: cleanText(root.mission),
     website: previewValue(root.website),
   }] : []
-  else if (api.id === 'ecb-fx-rates') {
-    const payload = isRecord(root.data) ? root.data : {}
-    const rates = isRecord(payload.rates) ? payload.rates : {}
-    const base = cleanText(payload.currency) ?? 'EUR'
-    const preferred = ['USD', 'GBP', 'JPY', 'CHF', 'SGD', 'AUD', 'CAD', 'MYR', 'BTC', 'ETH'].filter((code) => code !== base && rates[code] !== undefined)
-    records = preferred.map((code) => ({ title: `1 ${base} → ${code}`, rate: previewValue(rates[code]), source: 'Coinbase exchange rates' }))
-  }
   else if (api.id === 'models-dev') records = recordArray(data).slice(0, 10).map((model) => ({
     title: cleanText(model.id ?? model.modelId) ?? 'Hugging Face model',
     task: previewValue(model.pipeline_tag),
@@ -2024,35 +2027,9 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     area_sq_km: previewValue(root.meanAreaSqKM),
     source: previewValue(root.boundarySource),
   }] : []
-  else if (api.id === 'exchange-rate-current') {
-    const rates = isRecord(root.rates) ? root.rates : {}
-    const base = cleanText(root.base_code) ?? 'BASE'
-    const preferred = ['MYR', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CNY', 'SGD'].filter((code) => code !== base && rates[code] !== undefined)
-    records = preferred.map((code) => ({
-      title: `1 ${base} → ${code}`,
-      rate: previewValue(rates[code]),
-      updated: previewValue(root.time_last_update_utc),
-      provider: 'ExchangeRate-API open endpoint',
-    }))
-  }
-  else if (api.id === 'color-api') {
-    const rgb = isRecord(root.rgb) ? root.rgb : {}
-    const hsl = isRecord(root.hsl) ? root.hsl : {}
-    const cmyk = isRecord(root.cmyk) ? root.cmyk : {}
-    const name = isRecord(root.name) ? root.name : {}
-    records = Object.keys(root).length ? [{ title: cleanText(name.value) ?? textValue(recordValue(root.hex, 'value')) ?? 'Color', hex: previewValue(recordValue(root.hex, 'value')), rgb: previewValue(rgb.value), hsl: previewValue(hsl.value), cmyk: previewValue(cmyk.value) }] : []
-  } else if (api.id === 'rxnorm-drug-search') {
+  else if (api.id === 'rxnorm-drug-search') {
     const groups = recordArray(recordValue(root.drugGroup, 'conceptGroup'))
     records = groups.flatMap((group) => recordArray(group.conceptProperties).map((property) => ({ title: cleanText(property.name) ?? 'Drug product', tty: previewValue(group.tty), rxcui: previewValue(property.rxcui), synonym: previewValue(property.synonym) })))
-  } else if (api.id === 'endoflife-date') {
-    const result = isRecord(root.result) ? root.result : {}
-    records = recordArray(result.releases).slice(0, 10).map((release) => ({
-      title: `${cleanText(result.label) ?? 'Release'} ${previewValue(release.name)}`,
-      status: release.isEol ? 'End of life' : release.isMaintained ? 'Maintained' : 'Unmaintained',
-      released: previewValue(release.releaseDate),
-      isLts: release.isLts ? 'Yes' : 'No',
-      eolFrom: previewValue(release.eolFrom),
-    }))
   } else if (api.id === 'un-sdg-goals') {
     records = recordArray(data).slice(0, 10).map((goal) => ({ title: `Goal ${previewValue(goal.code)}`, description: previewValue(goal.title) }))
   } else if (api.id === 'celestrak-satellites') {
@@ -2088,13 +2065,6 @@ function DataTablePreview({ data, api }: { data: unknown; api: ApiDemo }) {
     records = reading ? [{ title: cleanText(metadata.name) ?? 'Tide station', water_level: `${previewValue(reading.v)} m`, observed: previewValue(reading.t), quality: previewValue(reading.q) }] : []
   } else if (api.id === 'rdap-domain-lookup') {
     records = Object.keys(root).length ? [{ title: cleanText(root.ldhName) ?? 'Domain', status: textArray(root.status).join(', ') || '—', handle: previewValue(root.handle) }] : []
-  } else if (api.id === 'languagetool-grammar-check') {
-    records = recordArray(root.matches).slice(0, 8).map((match) => ({
-      title: cleanText(match.shortMessage) || cleanText(match.message) || 'Grammar issue',
-      description: cleanText(match.message),
-      category: previewValue(recordValue(recordValue(match.rule, 'category'), 'name')),
-      suggestion: previewValue(recordValue(recordArray(match.replacements)[0], 'value')),
-    }))
   } else if (api.id === 'pubchem-compound') {
     const property = recordArray(recordValue(root.PropertyTable, 'Properties'))[0]
     records = property ? [{ title: cleanText(property.IUPACName) ?? 'Compound', formula: previewValue(property.MolecularFormula), weight: `${previewValue(property.MolecularWeight)} g/mol`, cid: previewValue(property.CID) }] : []
@@ -2169,20 +2139,14 @@ type ApiPreviewProps = { api: ApiDemo; data: unknown; requestUrl?: string }
 export type ApiPreviewComponent = (props: ApiPreviewProps) => ReactElement
 
 const componentName = (id: string) => `${id.split('-').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join('')}Preview`
-const componentSeed = (id: string) => [...id].reduce((seed, character) => ((seed * 31) + character.charCodeAt(0)) >>> 0, 17)
 
 const defineApiPreview = (id: string, render: (props: ApiPreviewProps) => ReactElement): ApiPreviewComponent => {
-  const seed = componentSeed(id)
   const Component = ({ api, data, requestUrl }: ApiPreviewProps) => <div
     className={`api-specific-preview api-specific-${id}`}
     data-api-preview-component={id}
-    data-visual-signature={`${componentName(id)}-${seed.toString(36)}`}
+    data-visual-signature={componentName(id)}
+    data-card-design="api-owned-v2"
     aria-label={`${api.name} visual component`}
-    style={{
-      '--component-angle': `${105 + (seed % 150)}deg`,
-      '--component-radius': `${10 + (seed % 13)}px`,
-      '--component-pattern-size': `${22 + (seed % 31)}px`,
-    } as CSSProperties}
   >{render({ api, data, requestUrl })}</div>
   Object.defineProperty(Component, 'name', { value: componentName(id) })
   return Component
@@ -2229,7 +2193,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'met-museum-object-detail': defineApiPreview('met-museum-object-detail', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'met-museum-search': defineApiPreview('met-museum-search', ({ data }) => <MetMuseumSearchPreview data={data}/>),
   'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ data }) => <NhtsaMakesPreview data={data}/>),
-  'nhtsa-vehicle-recalls': defineApiPreview('nhtsa-vehicle-recalls', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'nhtsa-vehicle-recalls': defineApiPreview('nhtsa-vehicle-recalls', ({ data, requestUrl }) => <RecallsPreview data={data} requestUrl={requestUrl}/>),
   'npm-search': defineApiPreview('npm-search', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
   'nvd-cpe-search': defineApiPreview('nvd-cpe-search', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
   'nvd-cve-detail': defineApiPreview('nvd-cve-detail', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
@@ -2244,7 +2208,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   usaspending: defineApiPreview('usaspending', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   usgs: defineApiPreview('usgs', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'wikidata-sparql': defineApiPreview('wikidata-sparql', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
-  'openssf-scorecard': defineApiPreview('openssf-scorecard', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'openssf-scorecard': defineApiPreview('openssf-scorecard', ({ data }) => <ScorecardPreview data={data}/>),
   'opencitations-index': defineApiPreview('opencitations-index', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'world-bank-gdp': defineApiPreview('world-bank-gdp', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'world-bank-population': defineApiPreview('world-bank-population', ({ api, data }) => <MarketPreview api={api} data={data}/>),
@@ -2292,17 +2256,17 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'poetrydb-poems': defineApiPreview('poetrydb-poems', ({ data }) => <PoetryReaderPreview data={data}/>),
   'coingecko-keyless-market': defineApiPreview('coingecko-keyless-market', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'swapi-people': defineApiPreview('swapi-people', ({ data }) => <StarWarsPeoplePreview data={data}/>),
-  'google-dns-doh': defineApiPreview('google-dns-doh', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
-  'color-api': defineApiPreview('color-api', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'google-dns-doh': defineApiPreview('google-dns-doh', ({ data }) => <DnsPreview data={data}/>),
+  'color-api': defineApiPreview('color-api', ({ data }) => <ColorPreview data={data}/>),
   'nasa-image-search': defineApiPreview('nasa-image-search', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'lichess-top-players': defineApiPreview('lichess-top-players', ({ data }) => <LichessLeaderboardPreview data={data}/>),
   'pubmed-search': defineApiPreview('pubmed-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'rxnorm-drug-search': defineApiPreview('rxnorm-drug-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'inaturalist-observations': defineApiPreview('inaturalist-observations', ({ api, data }) => <MediaGalleryPreview api={api} data={data}/>),
   'first-epss': defineApiPreview('first-epss', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
-  'endoflife-date': defineApiPreview('endoflife-date', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'endoflife-date': defineApiPreview('endoflife-date', ({ data }) => <LifecyclePreview data={data}/>),
   'deps-dev': defineApiPreview('deps-dev', ({ api, data }) => <DeveloperFeedPreview api={api} data={data}/>),
-  'ecb-fx-rates': defineApiPreview('ecb-fx-rates', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'ecb-fx-rates': defineApiPreview('ecb-fx-rates', ({ data }) => <CoinbaseRatesPreview data={data}/>),
   'un-sdg-goals': defineApiPreview('un-sdg-goals', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'datacite-search': defineApiPreview('datacite-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'ror-search': defineApiPreview('ror-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
@@ -2318,7 +2282,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'fema-disasters': defineApiPreview('fema-disasters', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'noaa-tides': defineApiPreview('noaa-tides', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'rdap-domain-lookup': defineApiPreview('rdap-domain-lookup', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
-  'languagetool-grammar-check': defineApiPreview('languagetool-grammar-check', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'languagetool-grammar-check': defineApiPreview('languagetool-grammar-check', ({ data }) => <GrammarPreview data={data}/>),
   'zenodo-search': defineApiPreview('zenodo-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'doaj-search': defineApiPreview('doaj-search', ({ api, data }) => <ResearchLibraryPreview api={api} data={data}/>),
   'pubchem-compound': defineApiPreview('pubchem-compound', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
@@ -2358,7 +2322,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'openfda-food-recalls': defineApiPreview('openfda-food-recalls', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'iconify-search': defineApiPreview('iconify-search', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'homebrew-formula-json': defineApiPreview('homebrew-formula-json', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
-  'npm-download-counts': defineApiPreview('npm-download-counts', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'npm-download-counts': defineApiPreview('npm-download-counts', ({ data }) => <DownloadsPreview data={data}/>),
   'geoboundaries-admin-boundaries': defineApiPreview('geoboundaries-admin-boundaries', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'osrm-route': defineApiPreview('osrm-route', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
   'opendota-pro-matches': defineApiPreview('opendota-pro-matches', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
@@ -2390,7 +2354,7 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'gbif-occurrence-search': defineApiPreview('gbif-occurrence-search', ({ api, data }) => <LocationPreview api={api} data={data}/>),
   'open-meteo-ensemble': defineApiPreview('open-meteo-ensemble', ({ api, data }) => <MarketPreview api={api} data={data}/>),
   'world-bank-indicator-explorer': defineApiPreview('world-bank-indicator-explorer', ({ api, data }) => <MarketPreview api={api} data={data}/>),
-  'exchange-rate-current': defineApiPreview('exchange-rate-current', ({ api, data }) => <DataTablePreview api={api} data={data}/>),
+  'exchange-rate-current': defineApiPreview('exchange-rate-current', ({ data }) => <ExchangeRateApiPreview data={data}/>),
   'circl-vulnerability': defineApiPreview('circl-vulnerability', ({ api, data }) => <SecurityCenterPreview api={api} data={data}/>),
 }
 
@@ -2423,6 +2387,15 @@ export const apiSsotCardRegistry: Partial<Record<string, ApiSsotCardDefinition>>
 export const apiSsotCardIds = Object.keys(apiSsotCardRegistry)
 
 const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title: string; description: string }> = {
+  'security-scorecard': { icon: '◇', eyebrow: 'Security practices', title: 'Repository check evidence', description: 'Individual scored and inconclusive security checks.' },
+  'grammar-review': { icon: 'Aa', eyebrow: 'Writing review', title: 'Grammar findings', description: 'Context, explanations and suggested replacements.' },
+  'vehicle-recalls': { icon: '!', eyebrow: 'Vehicle recalls', title: 'Recall campaigns', description: 'Complete defect, consequence and remedy information.' },
+  'color-swatch': { icon: '◐', eyebrow: 'Color specification', title: 'Color workbench', description: 'A color swatch with full color-space specifications.' },
+  'dns-records': { icon: '⌘', eyebrow: 'DNS diagnosis', title: 'DNS records', description: 'Resolver status, cache lifetime, and complete answer records.' },
+  'download-summary': { icon: '↓', eyebrow: 'Package adoption', title: 'Download summary', description: 'Period downloads with the provider reporting window.' },
+  'release-lifecycle': { icon: '◷', eyebrow: 'Software lifecycle', title: 'Release support', description: 'Release cycles, maintenance flags and dated support milestones.' },
+  'exchange-rates': { icon: '⇄', eyebrow: 'Currency conversion', title: 'Exchange rates', description: 'Convert using this response and inspect available rates.' },
+
   'weather-dashboard': { icon: '☀', eyebrow: 'Live response · Weather layout', title: 'Current conditions', description: 'A ready-to-use weather dashboard built from observations, units, and location data.' },
   'country-profile': { icon: '◎', eyebrow: 'Live response · Profile layout', title: 'Country profile', description: 'A structured destination profile using regional and economic metadata.' },
   'market-chart': { icon: '↗', eyebrow: 'Live response · Market layout', title: 'Market snapshot', description: 'A financial panel that turns price history and rates into an at-a-glance trend.' },
@@ -2462,28 +2435,42 @@ export function ResponseDemoPreview({ api, data, requestUrl, runtime }: { api: A
   const layout = ssotDefinition?.layout ?? selectPreviewLayout(api)
   const weatherVariant = layout === 'weather-dashboard' ? selectWeatherPreviewVariant(api) : undefined
   const profileLabel = ssotDefinition?.label ?? getPreviewProfile(api.id)?.label ?? previewMeta[layout].eyebrow
+  const layoutMeta = weatherVariant ? weatherPreviewMeta[weatherVariant] : previewMeta[layout]
   const PreviewComponent = ssotDefinition?.Component ?? apiPreviewComponents[api.id]
   const content: ReactNode = PreviewComponent
     ? <PreviewComponent api={api} data={data} requestUrl={requestUrl}/>
     : <ResultListPreview data={data} api={api}/>
 
   const headingId = `demo-preview-${api.id}`
+  const formattedSize = runtime ? formatResponseBytes(runtime.size) : undefined
   return <section
     className={`demo-preview preview-${layout}`}
     aria-labelledby={headingId}
-    aria-live="polite"
     data-webmcp-surface="api-demo-preview"
     data-ssot-card={api.id}
+    data-ssot-design="result-card-v2"
+    data-ssot-source="live-response"
     data-ssot-adapter={PreviewComponent ? componentName(api.id) : 'generic-fallback'}
     data-ssot-fallback={PreviewComponent ? 'false' : 'true'}
     data-preview-layout={layout}
     data-preview-variant={weatherVariant}
     data-preview-component={PreviewComponent ? api.id : 'generic-fallback'}
     data-api-id={api.id}
+    data-provider={api.provider}
+    data-category={api.category}
     style={{ '--preview-accent': api.accent } as CSSProperties}
   >
-    <div className="demo-preview-head"><span aria-hidden="true">{api.monogram}</span><div><small>Live SSOT card · {profileLabel}</small><h2 id={headingId}>{api.name}</h2><p>{api.description}</p></div><div className="ssot-runtime" aria-label="Live request metadata">{runtime ? <><b>{runtime.httpStatus} OK</b><span>{runtime.elapsed} ms</span><span>{formatResponseBytes(runtime.size)}</span></> : <span>Semantic response</span>}</div></div>
+    <span className="sr-only" role="status">Live result ready for {api.name}.</span>
+    <div className="demo-preview-head">
+      <span className="demo-preview-monogram" aria-hidden="true">{api.monogram}</span>
+      <div className="demo-preview-copy">
+        <div className="demo-preview-kicker"><span className="live-response-badge"><i aria-hidden="true"/>Live response</span><span className="preview-profile-badge"><i aria-hidden="true">{layoutMeta.icon}</i>{profileLabel}</span></div>
+        <h2 id={headingId}>{api.name}</h2>
+        <p>{api.description}</p>
+        <div className="demo-preview-context" aria-label="API context"><span>Provider · {api.provider}</span><span>Category · {api.category}</span></div>
+      </div>
+      <div className="ssot-runtime" aria-label="Live request metadata">{runtime ? <><b aria-label={`HTTP status ${runtime.httpStatus}`}>{runtime.httpStatus} OK</b><span aria-label={`Response time ${runtime.elapsed} milliseconds`}>{runtime.elapsed} ms</span><span aria-label={`Response size ${formattedSize}`}>{formattedSize}</span></> : <span>Preview ready</span>}</div>
+    </div>
     {content}
-    <p className="demo-preview-note">SSOT adapter: {componentName(api.id)} · Source: live API response only</p>
   </section>
 }
