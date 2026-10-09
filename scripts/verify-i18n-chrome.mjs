@@ -10,6 +10,13 @@ const report = {
   errors: [],
 }
 const unnamed = (nodes) => nodes.filter((node) => !node.ignored && ['button', 'combobox', 'textbox', 'spinbutton', 'searchbox', 'tab', 'radio', 'link'].includes(node.role?.value) && !(node.name?.value || '').trim())
+const assertCompactTouchTargets = async (b, selectors, label) => {
+  const metrics = await b.ev(`(()=>{const selectors=${JSON.stringify(selectors)};return selectors.flatMap((selector)=>Array.from(document.querySelectorAll(selector)).map((element)=>{const rect=element.getBoundingClientRect();const style=getComputedStyle(element);return {selector,name:element.getAttribute('aria-label')||element.textContent?.trim()||element.getAttribute('name')||element.id||element.tagName,width:rect.width,height:rect.height,display:style.display,visibility:style.visibility,inert:Boolean(element.closest('[inert]'))}})).filter((entry)=>entry.display!=='none'&&entry.visibility!=='hidden'&&!entry.inert)})()`)
+  assert(metrics.length > 0, `${label}: no compact touch targets were found`)
+  const undersized = metrics.filter((entry) => entry.width < 43.5 || entry.height < 43.5)
+  assert.deepEqual(undersized, [], `${label}: compact touch targets must be at least 44x44 CSS px: ${JSON.stringify(undersized)}`)
+  return metrics.length
+}
 const countryUrl = 'https://api.worldbank.org/v2/country/SGP?format=json'
 const countryFixture = [
   { page: 1, pages: 1, per_page: '50', total: 1 },
@@ -195,9 +202,11 @@ try {
   assert.equal(mobile.navLabel, '主导航')
   assert.deepEqual(mobile.mobileLabels, ['API', '提供方 / 来源', '风险', '标签'])
   assert.equal(mobile.overflow, false)
+  const catalogTouchTargets = await assertCompactTouchTargets(b, ['.menu-button', '.locale-control select', '.icon-button', '.module-search input', '.catalog-toolbar select', '.table-footer button', '.api-radio-target', '.provider-cell a'], 'mobile catalog')
 
   await b.ev(`document.querySelector('.menu-button')?.click()`)
   await b.wait(`document.querySelector('#primary-navigation[role="dialog"]') && document.activeElement?.getAttribute('aria-label') === '关闭导航菜单'`)
+  const navigationTouchTargets = await assertCompactTouchTargets(b, ['.mobile-close', '.nav-group button'], 'mobile navigation')
   await b.ev(`document.querySelector('#primary-navigation nav button.active')?.click()`)
   await b.wait(`!document.querySelector('#primary-navigation[role="dialog"]') && document.activeElement?.classList?.contains('menu-button')`)
   const sameRouteNavFocus = await b.ev(`({ hash: location.hash, focusClass: document.activeElement?.className || '', sidebarInert: document.querySelector('#primary-navigation')?.hasAttribute('inert') ?? false })`)
@@ -219,6 +228,7 @@ try {
     closeLabel: document.querySelector('.detail-panel[role="dialog"] .detail-head button')?.getAttribute('aria-label') || '',
   })`)
   assert.deepEqual(detailDialog, { label: 'Live Weather 详情', closeLabel: '关闭所选 API 详情' })
+  const detailTouchTargets = await assertCompactTouchTargets(b, ['.detail-panel[role="dialog"] .detail-head button', '.detail-panel[role="dialog"] .detail-actions button', '.detail-panel[role="dialog"] .detail-box a'], 'compact API detail')
   await b.ev(`document.querySelector('.detail-panel[role="dialog"] .detail-head button')?.click()`)
   await b.wait(`!document.querySelector('.detail-panel[role="dialog"]')`)
 
@@ -227,6 +237,7 @@ try {
 
   await b.ev(`location.hash='#/request-lab?api=countries'`)
   await b.wait(`document.querySelector('.request-lab')?.dataset.apiId === 'countries'`)
+  const requestLabTouchTargets = await assertCompactTouchTargets(b, ['.menu-button', '.locale-control select', '.icon-button', '.active-api a', '.parameter-fields input, .parameter-fields select', '.parameter-card > .primary-action', '.response-head [role="tab"]', '.copy-output'], 'mobile Request Lab')
   await b.call('Page.reload', { ignoreCache: true })
   await b.wait(`document.querySelector('.request-lab')?.dataset.apiId === 'countries' && document.documentElement.lang === 'zh-CN'`)
   const persisted = await b.ev(`({lang:document.documentElement.lang, locale:document.querySelector('.locale-control select')?.value || '', apiId:document.querySelector('.request-lab')?.dataset.apiId || ''})`)
@@ -236,7 +247,7 @@ try {
   assert.equal(b.fixtureRequests.length, 1, 'i18n result-shell verification should use exactly one synthetic response')
   assert.equal(b.fixtureRequests[0]?.url, countryUrl)
   assert.deepEqual(b.errors, [])
-  report.checks.push({ primaryChrome: 'en + zh-CN', supportingWorkspaces: ['collections', 'providers', 'tags', 'health', 'documentation'], resultShellChromeLocalized: true, resultAnnouncement: 'transport-neutral received wording', sourceEnglishIdentityStable: true, htmlLangUpdates: true, localePersistence: true, routeAndApiIdentityStable: true, localizedMobileCatalogLabels: true, localizedNavigationSemantics: true, desktopToCompactFocusRestore: 'selected API control', compactToDesktopFocusHandoff: 'selected API detail heading', mobileSameRouteFocusRestore: 'menu trigger', mobileToDesktopNavFocusHandoff: 'active persistent navigation item', localizedCompactDetailDialog: true, mobile390Overflow: false, unnamedControls: 0, liveProviderRequests: 0, syntheticProviderFixtures: 1 })
+  report.checks.push({ primaryChrome: 'en + zh-CN', supportingWorkspaces: ['collections', 'providers', 'tags', 'health', 'documentation'], resultShellChromeLocalized: true, resultAnnouncement: 'transport-neutral received wording', sourceEnglishIdentityStable: true, htmlLangUpdates: true, localePersistence: true, routeAndApiIdentityStable: true, localizedMobileCatalogLabels: true, localizedNavigationSemantics: true, desktopToCompactFocusRestore: 'selected API control', compactToDesktopFocusHandoff: 'selected API detail heading', mobileSameRouteFocusRestore: 'menu trigger', mobileToDesktopNavFocusHandoff: 'active persistent navigation item', localizedCompactDetailDialog: true, compactTouchTargets: { minimumCssPx: 44, catalog: catalogTouchTargets, navigation: navigationTouchTargets, detail: detailTouchTargets, requestLab: requestLabTouchTargets }, mobile390Overflow: false, unnamedControls: 0, liveProviderRequests: 0, syntheticProviderFixtures: 1 })
   report.verdict = 'PASS'
 } catch (error) {
   report.verdict = 'FAIL'

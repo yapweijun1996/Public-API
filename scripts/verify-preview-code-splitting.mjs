@@ -7,12 +7,29 @@ const cases = [
     body: { hex: { value: '#24B1E0', clean: '24B1E0' }, name: { value: 'Cerulean' }, rgb: { value: 'rgb(36, 177, 224)', r: 36, g: 177, b: 224 }, hsl: { value: 'hsl(195, 76%, 51%)' }, hsv: { value: 'hsv(195, 84%, 88%)' }, cmyk: { value: 'cmyk(84, 21, 0, 12)' }, XYZ: { value: 'XYZ(30, 38, 76)' }, contrast: { value: '#000000' } },
   },
   {
-    id: 'github', bundle: 'CatalogFamilyPreviews', cssBundles: ['CatalogFamilyPreviews', 'SemanticCards', 'DateList'], cssBudgetBytes: 24000, url: 'https://api.github.com/users/octocat/repos?per_page=8',
-    body: [{ id: 1, name: 'semantic-demo', full_name: 'octocat/semantic-demo', html_url: 'https://github.com/octocat/semantic-demo', description: 'Synthetic code-splitting fixture.', language: 'TypeScript', stargazers_count: 3, forks_count: 1, updated_at: '2026-09-08T12:00:00Z' }],
+    id: 'github', bundle: 'DeveloperSemanticPreviewBundle', cssBundles: ['SemanticCards'], cssBudgetBytes: 9000, url: 'https://api.github.com/users/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=8',
+    allowHeaders: 'Accept, Content-Type, X-GitHub-Api-Version',
+    body: [{ id: 1, name: 'semantic-demo', full_name: 'octocat/semantic-demo', owner: { login: 'octocat' }, private: false, visibility: 'public', html_url: 'https://github.com/octocat/semantic-demo', description: 'Synthetic code-splitting fixture.', fork: false, archived: false, disabled: false, language: 'TypeScript', default_branch: 'main', stargazers_count: 3, forks_count: 1, open_issues_count: 0, topics: ['semantic'], updated_at: '2026-09-08T12:00:00Z', pushed_at: '2026-09-08T11:00:00Z' }],
   },
   {
-    id: 'ipify-public-ip', bundle: 'SpecializedCatalogPreviews', cssBundles: ['SpecializedCatalogPreviews', 'SemanticCards', 'DateList'], cssBudgetBytes: 22000, url: 'https://api64.ipify.org?format=json',
+    id: 'ipify-public-ip', bundle: 'SpecializedCatalogPreviews', cssBundles: ['SpecializedCatalogPreviews', 'SemanticCards', 'DateList'], cssBudgetBytes: 24000, url: 'https://api64.ipify.org?format=json',
     body: { ip: '203.0.113.10' },
+  },
+  {
+    id: 'pypi-json', bundle: 'PackageSemanticPreviewBundle', cssBundles: ['PackageSemanticPreviewBundle', 'SemanticCards'], cssBudgetBytes: 10000, url: 'https://pypi.org/pypi/requests/json',
+    body: { info: { name: 'requests', version: '2.34.2', summary: 'Python HTTP for Humans.', requires_python: '>=3.10', license_expression: 'Apache-2.0', maintainer: 'Kenneth Reitz', yanked: false }, vulnerabilities: [] },
+  },
+  {
+    id: 'openverse-search', bundle: 'CatalogFamilyPreviews', cssBundles: ['CatalogFamilyPreviews', 'DateList', 'SemanticCards'], cssBudgetBytes: 32000, url: 'https://api.openverse.org/v1/images/?q=space&page_size=8&page=1',
+    body: { page: 1, page_count: 1, page_size: 8, result_count: 1, results: [{ id: '11111111-1111-4111-8111-111111111111', title: 'Space work', creator: 'Fixture creator', license: 'by', license_version: '4.0', license_url: 'https://creativecommons.org/licenses/by/4.0/', foreign_landing_url: 'https://example.test/work/11111111-1111-4111-8111-111111111111', url: 'https://example.test/media/11111111-1111-4111-8111-111111111111.jpg', thumbnail: 'https://example.test/thumb/11111111-1111-4111-8111-111111111111.jpg', source: 'fixture', provider: 'fixture' }] },
+  },
+  {
+    id: 'data-gov-taxi', bundle: 'CatalogFamilyPreviews', cssBundles: ['CatalogFamilyPreviews', 'DateList', 'SemanticCards'], cssBudgetBytes: 32000, url: 'https://api.data.gov.sg/v1/transport/taxi-availability',
+    body: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'MultiPoint', coordinates: [[103.8, 1.3], [103.81, 1.31]] }, properties: { timestamp: '2026-09-17T12:34:56+08:00', taxi_count: 2 } }] },
+  },
+  {
+    id: 'data-gov-traffic-images', bundle: 'TrafficCameraPreviewBundle', cssBundles: ['TrafficCameraPreviewBundle'], cssBudgetBytes: 6000, url: 'https://api.data.gov.sg/v1/transport/traffic-images',
+    body: { items: [{ timestamp: '2026-09-17T12:34:56+08:00', cameras: [{ timestamp: '2026-09-17T12:34:56+08:00', camera_id: '1001', image: 'https://example.test/traffic-camera-1001.jpg', location: { latitude: 1.29531332, longitude: 103.871146 }, image_metadata: { height: 1080, width: 1920, md5: '0123456789abcdef0123456789abcdef' } }] }], api_info: { status: 'healthy' } },
   },
   {
     id: 'weather', bundle: 'WeatherPreviews', cssBundles: ['WeatherPreviews', 'stationList'], cssBudgetBytes: 17000, url: 'https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&current=temperature_2m%2Crelative_humidity_2m%2Cwind_speed_10m%2Cweather_code&timezone=auto',
@@ -27,7 +44,7 @@ const cases = [
     body: { id: 'btc-bitcoin', name: 'Bitcoin', symbol: 'BTC', last_updated: '2026-09-08T12:00:00Z', quotes: { USD: { price: 100000, percent_change_24h: 1.5, market_cap: 1980000000000, volume_24h: 50000000000 } } },
   },
   {
-    id: 'carbon-intensity-gb', bundle: 'SemanticPreviewBundle', cssBundles: ['SemanticPreviewBundle', 'stationList'], cssBudgetBytes: 32000, url: 'https://api.carbonintensity.org.uk/intensity',
+    id: 'carbon-intensity-gb', bundle: 'SemanticPreviewBundle', cssBundles: ['SemanticPreviewBundle', 'SemanticCards', 'stationList'], cssBudgetBytes: 32000, url: 'https://api.carbonintensity.org.uk/intensity',
     body: { data: [{ from: '2026-09-08T12:00Z', to: '2026-09-08T12:30Z', intensity: { forecast: 80, actual: 75, index: 'low' } }] },
   },
   {
@@ -35,7 +52,7 @@ const cases = [
     body: { PropertyTable: { Properties: [{ CID: 2244, MolecularFormula: 'C9H8O4', MolecularWeight: '180.16', IUPACName: '2-acetyloxybenzoic acid' }] } },
   },
   {
-    id: 'openfda-drug-labels', bundle: 'ScienceSemanticPreviewBundle', cssBundles: ['ScienceSemanticPreviewBundle'], cssBudgetBytes: 15000, url: 'https://api.fda.gov/drug/label.json?search=openfda.brand_name%3AAdvil&limit=8',
+    id: 'openfda-drug-labels', bundle: 'ScienceSemanticPreviewBundle', cssBundles: ['ScienceSemanticPreviewBundle'], cssBudgetBytes: 15000, url: 'https://api.fda.gov/drug/label.json?search=openfda.brand_name%3A%22Advil%22&limit=8',
     body: { meta: { last_updated: '2026-09-04', results: { skip: 0, limit: 8, total: 39 } }, results: [{ openfda: { brand_name: ['Advil Dual Action with Acetaminophen'], generic_name: ['IBUPROFEN, ACETAMINOPHEN TABLET, FILM COATED'], manufacturer_name: ["Lil' Drug Store Products, Inc."], product_type: ['HUMAN OTC DRUG'], route: ['ORAL'], substance_name: ['IBUPROFEN', 'ACETAMINOPHEN'] }, active_ingredient: ['Acetaminophen 250 mg Ibuprofen 125 mg'], indications_and_usage: ['Temporarily relieves minor aches and pains.'], warnings: ['This product contains acetaminophen and ibuprofen.'], dosage_and_administration: ['Adults take 2 caplets.'] }] },
   },
   {
@@ -60,7 +77,7 @@ const decodedBytes = (entries) => entries.reduce((sum, entry) => sum + Number(en
 const report = { origin: 'https://yapweijun1996.github.io', source: 'synthetic fixtures; no live provider health claims', cases: [], verdict: 'PASS' }
 
 for (const entry of cases) {
-  const fixtures = new Map([[entry.url, { body: entry.body }]])
+  const fixtures = new Map([[entry.url, { body: entry.body, allowHeaders: entry.allowHeaders }]])
   const b = await browser(`${root}/dist`, { fixtures })
   try {
     await b.nav(entry.id)
@@ -84,10 +101,11 @@ for (const entry of cases) {
     const implementationCss = cssAssets.filter((name) => !name.includes('/responsePreview-'))
     assert.equal(cssAssets.filter((name) => name.includes('/responsePreview-')).length, 1, `${entry.id}: expected one shared domain-card CSS chunk`)
     const expectedCssBundles = entry.cssBundles || []
+    const cssBundleMatch = (name, bundle) => name.toLowerCase().includes(`/${bundle.toLowerCase()}-`)
     for (const bundle of expectedCssBundles) {
-      assert.equal(implementationCss.filter((name) => name.includes(`/${bundle}-`)).length, 1, `${entry.id}: expected CSS dependency ${bundle}, got ${implementationCss.join(', ')}`)
+      assert.equal(implementationCss.filter((name) => cssBundleMatch(name, bundle)).length, 1, `${entry.id}: expected CSS dependency ${bundle}, got ${implementationCss.join(', ')}`)
     }
-    const unexpectedCss = implementationCss.filter((name) => !expectedCssBundles.some((bundle) => name.includes(`/${bundle}-`)))
+    const unexpectedCss = implementationCss.filter((name) => !expectedCssBundles.some((bundle) => cssBundleMatch(name, bundle)))
     assert.deepEqual(unexpectedCss, [], `${entry.id}: loaded unrelated implementation CSS: ${unexpectedCss.join(', ')}`)
     const decodedCssBytes = decodedBytes(added.filter((asset) => new URL(asset.name).pathname.endsWith('.css')))
     assert(decodedCssBytes <= entry.cssBudgetBytes, `${entry.id}: result CSS ${decodedCssBytes} B exceeds ${entry.cssBudgetBytes} B budget`)

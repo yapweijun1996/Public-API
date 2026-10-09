@@ -6,10 +6,10 @@ A reusable Vite + React + TypeScript admin console for demonstrating public APIs
 
 ## What is included
 
-- A curated catalog of 195 keyless public API demos
+- A curated catalog of 196 keyless public API demos
 - Generated parameter forms with validation
 - Preview-first Request Lab with one live-response SSOT card for every catalog API
-- Raw JSON remains a secondary developer view; generated fetch code is available where provider policy permits reusable integration code
+- JSON APIs retain Raw JSON as a secondary developer view; non-JSON APIs expose accurately labelled response details, and generated fetch code is available where provider policy permits reusable integration code
 - Copyable JavaScript examples
 - Responsive, keyboard-friendly UI
 - Installable PWA shell with a Pages-base-safe manifest and privacy-safe offline catalog/app-shell reopening; provider responses are never cached by the service worker
@@ -53,7 +53,7 @@ Before publication, use the bounded policy-safe gate:
 npm run test:publish-readiness
 ```
 
-That gate runs the unit suite, a GitHub-Pages-base production build, PWA install/offline-shell verification, preview-bundle isolation/failure-recovery checks, native WebMCP/provider-policy checks, and `git diff --check`. It deliberately does **not** run a full live-provider sweep: manual-only endpoints must never be automated, cadence-limited providers such as CelesTrak must respect their SSOT interval, and broader live browser checks should be selected from the affected scope.
+That gate runs the unit suite, a GitHub-Pages-base production build, PWA install/offline-shell verification, preview-bundle isolation/failure-recovery checks, native WebMCP/provider-policy checks, and a local-candidate hygiene gate that covers both tracked changes and untracked candidate files without staging them. The hygiene gate checks whitespace errors and unresolved conflict markers, closing the blind spot where plain `git diff --check` cannot see untracked local work. It deliberately does **not** run a full live-provider sweep: manual-only endpoints must never be automated, CIRCL browser checks use policy-safe synthetic fixtures because generic browser code cannot supply its required contact-bearing `User-Agent`, cadence-limited providers such as CelesTrak must respect their SSOT interval, NVD endpoints require isolated checks that honor the provider's recommended six-second public cadence, and broader live browser checks should be selected from the affected scope.
 
 ## PWA app shell
 
@@ -87,13 +87,13 @@ The current quality contract is:
 
 ### Preview performance boundary
 
-Result-only CSS follows the same lazy ownership as preview code. The initial Catalog/Overview shell does not download Weather, CatalogFamily, Specialized, Market, or other response-family styles before a result is requested; reusable DateList, SemanticCards, and station-list styles load with those lazy dependencies instead of the application entry CSS. Responsive rules for those lazy families/primitives stay with the same CSS owner so a later-loaded desktop base rule cannot override an earlier app-shell mobile media rule. `npm run test:browser:preview-bundles` runs from the GitHub Pages origin, enforces a 50 KB decoded initial-CSS budget, allowlists the CSS dependencies for each representative result path, and keeps per-result CSS budgets plus chunk-failure recovery deterministic.
+Result-only CSS follows the same lazy ownership as preview code. The initial Catalog/Overview shell does not download Weather, CatalogFamily, Specialized, Developer-semantic, Package-semantic, Market, or other response-family styles before a result is requested; reusable DateList, SemanticCards, and station-list styles load with those lazy dependencies instead of the application entry CSS. Responsive rules for those lazy families/primitives stay with the same CSS owner so a later-loaded desktop base rule cannot override an earlier app-shell mobile media rule. `npm run test:browser:preview-bundles` runs from the GitHub Pages origin, enforces a 50 KB decoded initial-CSS budget, allowlists the CSS dependencies for each representative result path, and keeps per-result CSS budgets plus chunk-failure recovery deterministic.
 
 ## Add another public API
 
 A catalog addition is not complete until its Request Lab SSOT card is defined. Add:
 
-1. Catalog metadata in `src/apiCatalog.ts`, including provider, category, documentation, defaults, an HTTPS request builder, bounded `usageNote` constraints, `agentExecution` when official provider policy restricts automation/platform use, and `automatedVerification` when official policy imposes a stricter cadence/backoff contract on recurring health probes.
+1. Catalog metadata in `src/apiCatalog.ts`, including provider, category, documentation, defaults, an HTTPS request builder, bounded `usageNote` constraints, `agentExecution` when official provider policy restricts automation/platform use, and `automatedVerification` when official policy imposes a stricter cadence/backoff contract on recurring health probes, including enabled providers that must defer same-run provider-documented rate-limit responses such as HTTP 429 or a documented 403/429 pair.
 2. A response parser when the provider does not return ordinary JSON (for example newline-delimited version lists).
 3. One intentional profile in `src/previewProfiles.ts` describing the semantic layout used by the response.
 4. One API-owned card component/adapter under `src/previews/`, registered by `src/responsePreview.tsx`. Reuse visual primitives and shared response-data helpers, but map the provider response to domain fields rather than generic `Result 1` output.
@@ -103,7 +103,7 @@ A catalog addition is not complete until its Request Lab SSOT card is defined. A
 
 ## Machine-readable catalog
 
-`api-catalog.json` is generated during development/build from `src/apiCatalog.ts`; do not maintain a second catalog file by hand. A Pages build with base `/Public-API/` publishes it at `/Public-API/api-catalog.json`. It includes deterministic Request Lab paths, parameter metadata, task-oriented search keywords when defined, provider usage constraints, `agentExecution`, and `automatedVerification` policy, but no executable `buildUrl` functions and no synthetic live-health status. `health: "not-included"` is intentional until health telemetry has a durable SSOT. The document head and Agent Tools page both advertise the artifact for ordinary browser agents.
+`api-catalog.json` is generated during development/build from `src/apiCatalog.ts`; do not maintain a second catalog file by hand. A Pages build with base `/Public-API/` publishes it at `/Public-API/api-catalog.json`. It includes deterministic Request Lab paths, an explicit resolved response transport (`json`, `text`, or `image`) for every API, parameter metadata, task-oriented search keywords when defined, provider usage constraints, `agentExecution`, and `automatedVerification` policy, but no executable `buildUrl` functions and no synthetic live-health status. `health: "not-included"` is intentional until health telemetry has a durable SSOT. The document head and Agent Tools page both advertise the artifact for ordinary browser agents.
 
 ## WebMCP
 
@@ -117,6 +117,6 @@ When `document.modelContext` is available, the app registers:
 
 The API is currently experimental. The visual explorer remains fully usable when WebMCP is unavailable.
 
-Agent actions reuse the same request definitions and validation logic as human interactions. They can filter the visible catalog, navigate the console, select a module, and execute permitted live requests while keeping the UI synchronized. Provider automation restrictions are part of the catalog SSOT: discovery returns `agentExecution` plus provider `usageNote` constraints when present, manual-only APIs are excluded from the run-tool enum, and `run_public_api_demo` independently fails closed if a blocked ID is submitted. Generic fetch-code generation is also withheld for manual-only endpoints. The human Request Lab remains available for provider-permitted interactive use and exposes the same policy in accessible DOM metadata.
+Agent actions reuse the same request definitions and validation logic as human interactions. They can filter the visible catalog, navigate the console, select a module, and execute permitted live requests while keeping the UI synchronized. Provider automation restrictions are part of the catalog SSOT: discovery returns `agentExecution` plus provider `usageNote` constraints when present, manual-only APIs are excluded from the run-tool enum, and `run_public_api_demo` independently fails closed if a blocked ID is submitted. Generic fetch-code generation is also withheld for manual-only endpoints. The human Request Lab remains available for provider-permitted interactive use and exposes the same policy in accessible DOM metadata. CIRCL Vulnerability-Lookup is manual-only for structured agents because its official policy requires automated clients to send a meaningful `User-Agent` with contact information, which browser JavaScript cannot control; automated CIRCL verification therefore uses deterministic fixtures and sends no live provider request.
 
 Request Lab routes are deterministic per API: `#/request-lab?api=<api-id>`. Opening that URL directly selects the requested catalog entry and its default parameters; invalid IDs fail closed to a valid canonical selection. WebMCP discovery returns the same per-API Request Lab URL so structured agents and ordinary browser agents share one navigation contract.

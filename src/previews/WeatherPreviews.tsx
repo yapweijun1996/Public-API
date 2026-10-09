@@ -2,8 +2,9 @@ import './stationList.css'
 import './weatherCards.css'
 import type { CSSProperties } from 'react'
 import type { ApiDemo } from '../apiCatalog'
-import { cleanText, dateParts, findByKey, findPreviewRecords, forecastSymbol, formatNumber, isRecord, numberValue, previewLabel, previewValue, recordValue, textValue, timeLabel } from './previewData'
-import { CardEmpty } from './cardPrimitives'
+import type { ExecutedRequestContext } from '../useApiRequestRuntime'
+import { cleanText, dateParts, forecastSymbol, formatNumber, isRecord, numberValue, previewLabel, previewValue, recordValue, textValue, timeLabel } from './previewData'
+import { finiteNumber, nonNegativeInteger, positiveInteger } from './semanticValidation'
 
 export type WeatherPreviewVariant = 'current' | 'four-day' | 'twenty-four-hour' | 'area-forecast' | 'station-readings' | 'regional-air-quality' | 'air-quality-forecast' | 'uv-index'
 
@@ -52,59 +53,297 @@ const measurementMeta = (api: ApiDemo) => {
   return { label: 'Current conditions', unit: undefined }
 }
 
-export function CurrentConditionsPreview({ data, api }: { data: unknown; api: ApiDemo }) {
-  const root = isRecord(data) ? data : {}
-  const hasCurrentObject = isRecord(root.current)
-  const current = hasCurrentObject ? root.current as Record<string, unknown> : {}
-  const units = isRecord(root.current_units) ? root.current_units : {}
-  const temperature = numberValue(current.temperature_2m)
-  const humidity = numberValue(current.relative_humidity_2m)
-  const wind = numberValue(current.wind_speed_10m)
-  const code = numberValue(current.weather_code)
-  const time = textValue(current.time)
-  const presentMeasurements = [temperature, humidity, wind, code].filter((value) => value !== undefined).length
+type OpenMeteoResultState = 'ready' | 'partial' | 'invalid'
 
-  if (!hasCurrentObject || presentMeasurements === 0) {
-    return <CardEmpty
-      domain="current-weather"
-      title="Current weather response unavailable"
-      detail="Open-Meteo did not return the requested current-condition measurements. No live weather conclusion can be drawn from this response."
-      state="invalid"
-    />
+type OpenMeteoRequest = {
+  latitude: number
+  longitude: number
+}
+
+type CurrentWeatherViewModel = {
+  state: OpenMeteoResultState
+  reason?: string
+  request?: OpenMeteoRequest
+  envelopeContract: boolean
+  providerCoordinateContract: boolean
+  timezoneContract: boolean
+  timeContract: boolean
+  unitsContract: boolean
+  measurementContract: boolean
+  validMeasurementCount: number
+  providerLatitude?: number
+  providerLongitude?: number
+  timezone?: string
+  utcOffsetSeconds?: number
+  time?: string
+  interval?: number
+  temperature?: number
+  humidity?: number
+  wind?: number
+  code?: number
+  temperatureUnit?: string
+  humidityUnit?: string
+  windUnit?: string
+}
+
+type AirQualityViewModel = {
+  state: OpenMeteoResultState
+  reason?: string
+  request?: OpenMeteoRequest
+  envelopeContract: boolean
+  providerCoordinateContract: boolean
+  timezoneContract: boolean
+  timeContract: boolean
+  unitsContract: boolean
+  measurementContract: boolean
+  validMeasurementCount: number
+  providerLatitude?: number
+  providerLongitude?: number
+  timezone?: string
+  utcOffsetSeconds?: number
+  time?: string
+  interval?: number
+  aqi?: number
+  pm25?: number
+  pm10?: number
+  nitrogenDioxide?: number
+  ozone?: number
+  pollutantUnit?: string
+}
+
+const FORECAST_CURRENT_VARIABLES = ['temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'weather_code'] as const
+const AIR_QUALITY_CURRENT_VARIABLES = ['us_aqi', 'pm2_5', 'pm10', 'nitrogen_dioxide', 'ozone'] as const
+const WMO_WEATHER_CODES = new Set([0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99])
+
+const exactSearchKeys = (url: URL, expected: string[]) => {
+  const entries = [...url.searchParams.entries()]
+  return entries.length === expected.length
+    && entries.every(([key]) => expected.includes(key))
+    && expected.every((key) => entries.filter(([candidate]) => candidate === key).length === 1)
+}
+
+const requestCoordinate = (value: string | null, minimum: number, maximum: number) => {
+  if (!value || value !== value.trim() || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : undefined
+}
+
+const sameVariables = (value: string | null, expected: readonly string[]) => {
+  if (!value) return false
+  const variables = value.split(',')
+  return variables.length === expected.length
+    && new Set(variables).size === expected.length
+    && variables.every((variable) => expected.includes(variable))
+}
+
+const parseOpenMeteoRequest = (
+  request: ExecutedRequestContext | undefined,
+  expectedHost: string,
+  expectedPath: string,
+  expectedVariables: readonly string[],
+): OpenMeteoRequest | undefined => {
+  if (!request || request.method !== 'GET' || request.body !== undefined) return undefined
+  try {
+    const url = new URL(request.url)
+    const authority = /^https:\/\/([^/?#]+)/.exec(request.url)?.[1]
+    const latitude = requestCoordinate(url.searchParams.get('latitude'), -90, 90)
+    const longitude = requestCoordinate(url.searchParams.get('longitude'), -180, 180)
+    const valid = url.protocol === 'https:'
+      && url.hostname === expectedHost
+      && authority === expectedHost
+      && url.port === ''
+      && url.pathname === expectedPath
+      && !url.username
+      && !url.password
+      && !url.hash
+      && exactSearchKeys(url, ['latitude', 'longitude', 'current', 'timezone'])
+      && sameVariables(url.searchParams.get('current'), expectedVariables)
+      && url.searchParams.get('timezone') === 'auto'
+      && latitude !== undefined
+      && longitude !== undefined
+    return valid && latitude !== undefined && longitude !== undefined ? { latitude, longitude } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const boundedCoordinate = (value: unknown, minimum: number, maximum: number) => {
+  const parsed = finiteNumber(value)
+  return parsed !== undefined && parsed >= minimum && parsed <= maximum ? parsed : undefined
+}
+
+const timezoneOffset = (value: unknown) => typeof value === 'number'
+  && Number.isInteger(value)
+  && value >= -43_200
+  && value <= 50_400
+  ? value
+  : undefined
+
+const providerTimezone = (value: unknown) => {
+  if (typeof value !== 'string' || value !== value.trim()) return undefined
+  return /^(?:UTC|GMT|[A-Za-z][A-Za-z0-9._+-]*(?:\/[A-Za-z][A-Za-z0-9._+-]*)+)$/.test(value) ? value : undefined
+}
+
+const localIsoDateTime = (value: unknown) => {
+  if (typeof value !== 'string') return undefined
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value)
+  if (!match) return undefined
+  const [, year, month, day, hour, minute, second = '0'] = match
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)))
+  const valid = date.getUTCFullYear() === Number(year)
+    && date.getUTCMonth() === Number(month) - 1
+    && date.getUTCDate() === Number(day)
+    && date.getUTCHours() === Number(hour)
+    && date.getUTCMinutes() === Number(minute)
+    && date.getUTCSeconds() === Number(second)
+  return valid ? value : undefined
+}
+
+const expectedUnits = (value: unknown, units: Record<string, string>) => isRecord(value)
+  && Object.entries(units).every(([key, expected]) => value[key] === expected)
+
+const nonNegativeNumber = (value: unknown) => {
+  const parsed = finiteNumber(value)
+  return parsed !== undefined && parsed >= 0 ? parsed : undefined
+}
+
+const weatherCode = (value: unknown) => typeof value === 'number'
+  && Number.isInteger(value)
+  && WMO_WEATHER_CODES.has(value)
+  ? value
+  : undefined
+
+export const currentWeatherModel = (data: unknown, executedRequest?: ExecutedRequestContext): CurrentWeatherViewModel => {
+  const request = parseOpenMeteoRequest(executedRequest, 'api.open-meteo.com', '/v1/forecast', FORECAST_CURRENT_VARIABLES)
+  const envelopeContract = isRecord(data) && isRecord(data.current)
+  const root = isRecord(data) ? data : {}
+  const current = envelopeContract ? root.current as Record<string, unknown> : {}
+  const units = isRecord(root.current_units) ? root.current_units : undefined
+  const providerLatitude = boundedCoordinate(root.latitude, -90, 90)
+  const providerLongitude = boundedCoordinate(root.longitude, -180, 180)
+  const providerCoordinateContract = providerLatitude !== undefined && providerLongitude !== undefined
+  const timezone = providerTimezone(root.timezone)
+  const utcOffsetSeconds = timezoneOffset(root.utc_offset_seconds)
+  const timezoneContract = timezone !== undefined && utcOffsetSeconds !== undefined
+  const time = localIsoDateTime(current.time)
+  const interval = positiveInteger(current.interval)
+  const timeContract = time !== undefined && interval !== undefined
+  const temperature = finiteNumber(current.temperature_2m)
+  const rawHumidity = finiteNumber(current.relative_humidity_2m)
+  const humidity = rawHumidity !== undefined && rawHumidity >= 0 && rawHumidity <= 100 ? rawHumidity : undefined
+  const wind = nonNegativeNumber(current.wind_speed_10m)
+  const code = weatherCode(current.weather_code)
+  const validMeasurementCount = [temperature, humidity, wind, code].filter((value) => value !== undefined).length
+  const measurementContract = validMeasurementCount === FORECAST_CURRENT_VARIABLES.length
+  const unitsContract = expectedUnits(units, {
+    time: 'iso8601',
+    interval: 'seconds',
+    temperature_2m: '°C',
+    relative_humidity_2m: '%',
+    wind_speed_10m: 'km/h',
+    weather_code: 'wmo code',
+  })
+  const validIdentityAndEnvelope = Boolean(request) && envelopeContract
+  const state = !validIdentityAndEnvelope || validMeasurementCount === 0
+    ? 'invalid'
+    : providerCoordinateContract && timezoneContract && timeContract && unitsContract && measurementContract
+      ? 'ready'
+      : 'partial'
+  const reason = !request
+    ? 'The response is not bound to the exact bodyless Open-Meteo current-conditions request.'
+    : !envelopeContract
+      ? 'Open-Meteo did not return the required current response envelope. No live weather conclusion can be drawn from this response.'
+      : validMeasurementCount === 0
+        ? 'No trusted current-condition measurements were returned. No live weather conclusion can be drawn from this response.'
+        : state === 'partial'
+          ? 'Only strictly validated current-condition evidence is shown; missing or malformed response facts remain unavailable.'
+          : undefined
+
+  return {
+    state,
+    reason,
+    request,
+    envelopeContract,
+    providerCoordinateContract,
+    timezoneContract,
+    timeContract,
+    unitsContract,
+    measurementContract,
+    validMeasurementCount,
+    providerLatitude,
+    providerLongitude,
+    timezone,
+    utcOffsetSeconds,
+    time,
+    interval,
+    temperature,
+    humidity,
+    wind,
+    code,
+    temperatureUnit: units?.temperature_2m === '°C' ? '°C' : undefined,
+    humidityUnit: units?.relative_humidity_2m === '%' ? '%' : undefined,
+    windUnit: units?.wind_speed_10m === 'km/h' ? 'km/h' : undefined,
+  }
+}
+
+const coordinateLabel = (latitude?: number, longitude?: number) => latitude === undefined || longitude === undefined
+  ? 'Unavailable'
+  : `${formatNumber(latitude, 3)}, ${formatNumber(longitude, 3)}`
+
+const measurementLabel = (value: number | undefined, unit: string | undefined, spaced = false) => value === undefined
+  ? '—'
+  : unit
+    ? `${formatNumber(value)}${spaced ? ' ' : ''}${unit}`
+    : `${formatNumber(value)} (unit unavailable)`
+
+export function CurrentConditionsPreview({ data, api, executedRequest }: { data: unknown; api: ApiDemo; executedRequest?: ExecutedRequestContext }) {
+  const model = currentWeatherModel(data, executedRequest)
+  const evidence = {
+    'data-result-state': model.state,
+    'data-request-bound': String(Boolean(model.request)),
+    'data-envelope-contract': String(model.envelopeContract),
+    'data-provider-coordinate-contract': String(model.providerCoordinateContract),
+    'data-timezone-contract': String(model.timezoneContract),
+    'data-time-contract': String(model.timeContract),
+    'data-units-contract': String(model.unitsContract),
+    'data-measurement-contract': String(model.measurementContract),
+    'data-valid-measurement-count': model.validMeasurementCount,
+    'data-request-latitude': model.request?.latitude,
+    'data-request-longitude': model.request?.longitude,
+    'data-provider-latitude': model.providerLatitude,
+    'data-provider-longitude': model.providerLongitude,
+    'data-provider-timezone': model.timezone,
+    'data-utc-offset-seconds': model.utcOffsetSeconds,
+    'data-observation-time': model.time,
+    'data-observation-interval': model.interval,
+    'data-temperature-2m': model.temperature,
+    'data-relative-humidity-2m': model.humidity,
+    'data-wind-speed-10m': model.wind,
+    'data-weather-code': model.code,
   }
 
-  const resultState = presentMeasurements === 4 && time ? 'ready' : 'partial'
-  const missingMeasurements = [
-    temperature === undefined ? 'temperature' : undefined,
-    humidity === undefined ? 'humidity' : undefined,
-    wind === undefined ? 'wind speed' : undefined,
-    code === undefined ? 'weather code' : undefined,
-    !time ? 'observation time' : undefined,
-  ].filter((value): value is string => Boolean(value))
-  const condition = weatherCondition(code)
-  const timezone = textValue(root.timezone) ?? 'Location unavailable'
-  const location = timezone.split('/').at(-1)?.replace(/_/g, ' ') ?? timezone
-  const temperatureUnit = textValue(units.temperature_2m) ?? '°C'
+  if (model.state === 'invalid') return <div className="weather-empty" data-domain-card="current-weather" {...evidence}>
+    <strong>Current weather response unavailable</strong>
+    <span>{model.reason}</span>
+  </div>
+
+  const condition = weatherCondition(model.code)
+  const location = model.timezone?.split('/').at(-1)?.replace(/_/g, ' ') ?? 'Timezone unavailable'
   const measurement = measurementMeta(api)
-  const primaryUnit = measurement.unit ?? temperatureUnit
   const metrics = [
-    { label: 'Humidity', value: humidity === undefined ? '—' : `${formatNumber(humidity)}%`, icon: '◉' },
-    { label: 'Wind speed', value: wind === undefined ? '—' : `${formatNumber(wind)} ${textValue(units.wind_speed_10m) ?? 'km/h'}`, icon: '≈' },
-    { label: 'Coordinates', value: numberValue(root.latitude) !== undefined && numberValue(root.longitude) !== undefined ? `${formatNumber(numberValue(root.latitude) as number, 3)}, ${formatNumber(numberValue(root.longitude) as number, 3)}` : 'Not supplied', icon: '⌖' },
+    { label: 'Humidity', value: measurementLabel(model.humidity, model.humidityUnit), icon: '◉' },
+    { label: 'Wind speed', value: measurementLabel(model.wind, model.windUnit, true), icon: '≈' },
+    { label: 'Requested coordinates', value: coordinateLabel(model.request?.latitude, model.request?.longitude), icon: '⌖' },
+    { label: 'Provider grid', value: coordinateLabel(model.providerLatitude, model.providerLongitude), icon: '⌖' },
   ]
   return <div
     className="weather-preview"
     data-domain-card="current-weather"
-    data-result-state={resultState}
-    data-observation-time={time}
-    data-temperature-2m={temperature}
-    data-relative-humidity-2m={humidity}
-    data-wind-speed-10m={wind}
-    data-weather-code={code}
+    {...evidence}
   >
-    {resultState === 'partial' && <p className="diagnostic-warning" role="status">Provider response is incomplete. Missing: {missingMeasurements.join(', ')}.</p>}
+    {model.state === 'partial' && <p className="diagnostic-warning" role="status">Provider response is incomplete. {model.reason}</p>}
     <div className="weather-hero">
-      <div><span className="weather-location">⌖ {location}</span><strong>{temperature === undefined ? '—' : `${formatNumber(temperature)}${primaryUnit}`}</strong><b>{code === undefined ? measurement.label : condition.label}</b><small>{time ? `Updated ${time.replace('T', ' ')}` : 'Observation time unavailable'}</small></div>
+      <div><span className="weather-location">⌖ {location}</span><strong>{measurementLabel(model.temperature, measurement.unit ?? model.temperatureUnit)}</strong><b>{model.code === undefined ? measurement.label : condition.label}</b><small>{model.time ? `Updated ${model.time.replace('T', ' ')}` : 'Observation time unavailable'}</small></div>
       <span className="weather-symbol" aria-hidden="true">{condition.icon}</span>
     </div>
     <div className="weather-metrics">{metrics.map((metric) => <article key={metric.label}><span aria-hidden="true">{metric.icon}</span><div><small>{metric.label}</small><strong>{metric.value}</strong></div></article>)}</div>
@@ -199,37 +438,264 @@ export function StationReadingsPreview({ data, api }: { data: unknown; api: ApiD
   </div>
 }
 
-export function RegionalAirQualityPreview({ data, api }: { data: unknown; api: ApiDemo }) {
-  const item = firstResponseItem(data)
-  const readings = item && isRecord(item.readings) ? item.readings : {}
-  const preferredKey = api.id === 'data-gov-psi' ? 'psi_twenty_four_hourly' : 'pm25_one_hourly'
-  let regional = isRecord(readings[preferredKey]) ? readings[preferredKey] : undefined
-  if (!regional) regional = Object.values(readings).find((value) => isRecord(value) && Object.values(value).some((reading) => numberValue(reading) !== undefined)) as Record<string, unknown> | undefined
-  const regions = regional ? Object.entries(regional).map(([name, value]) => ({ name, value: numberValue(value) })).filter((entry): entry is { name: string; value: number } => entry.value !== undefined) : []
-  if (!regions.length) return <div className="weather-empty"><strong>Regional readings unavailable</strong><span>No regional air-quality values were returned.</span></div>
-  const max = Math.max(...regions.map((region) => region.value))
-  const average = regions.reduce((sum, region) => sum + region.value, 0) / regions.length
-  const unit = api.id === 'data-gov-psi' ? 'PSI' : 'µg/m³'
-  const status = api.id === 'data-gov-psi' ? max <= 50 ? 'Good' : max <= 100 ? 'Moderate' : 'Elevated' : max <= 12 ? 'Low' : max <= 35 ? 'Moderate' : 'Elevated'
-  return <div className="weather-preview regional-air-preview" data-weather-view="regional-air-quality">
-    <div className="air-quality-summary"><div><span>Singapore air quality</span><strong>{formatNumber(average)}</strong><b>{unit} regional average</b><small>Updated {timeLabel(item?.update_timestamp ?? item?.timestamp)}</small></div><em className={status.toLowerCase()}>{status}</em></div>
-    <div className="regional-reading-grid">{regions.map((region) => <article key={region.name}><span>{previewLabel(region.name)}</span><strong>{formatNumber(region.value)}</strong><small>{unit}</small><i style={{ '--reading-level': `${Math.min(100, (region.value / Math.max(max, 1)) * 100)}%` } as CSSProperties}/></article>)}</div>
+const singaporeAirQualityRegions = ['north', 'south', 'east', 'west', 'central'] as const
+
+const isoDateTimeText = (value: unknown) => {
+  if (typeof value !== 'string') return undefined
+  const candidate = value.trim()
+  if (candidate.length < 17 || candidate.length > 40 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(candidate)) return undefined
+  return Number.isFinite(Date.parse(candidate)) ? candidate : undefined
+}
+
+const regionalAirQualityMeta = (api: ApiDemo) => api.id === 'data-gov-psi'
+  ? {
+      metricKey: 'psi_twenty_four_hourly',
+      label: 'PSI',
+      unit: 'PSI',
+      band: (value: number) => value <= 50 ? 'Good' : value <= 100 ? 'Moderate' : value <= 200 ? 'Unhealthy' : value <= 300 ? 'Very unhealthy' : 'Hazardous',
+    }
+  : {
+      metricKey: 'pm25_one_hourly',
+      label: 'PM2.5',
+      unit: 'µg/m³',
+      band: (value: number) => value <= 55 ? 'Normal' : value <= 150 ? 'Elevated' : value <= 250 ? 'High' : 'Very High',
+    }
+
+function InvalidRegionalAirQuality({ label, metricKey, unit, providerCount = 0, invalidCount = 0, missingCount = singaporeAirQualityRegions.length, detail }: {
+  label: string
+  metricKey: string
+  unit: string
+  providerCount?: number
+  invalidCount?: number
+  missingCount?: number
+  detail: string
+}) {
+  return <div
+    className="weather-empty"
+    data-domain-card="regional-air-quality"
+    data-weather-view="regional-air-quality"
+    data-result-state="invalid"
+    data-metric-key={metricKey}
+    data-provider-region-count={providerCount}
+    data-valid-region-count="0"
+    data-invalid-region-count={invalidCount}
+    data-missing-region-count={missingCount}
+    data-unit={unit}
+  >
+    <strong>Regional {label} response invalid</strong>
+    <span>{detail}</span>
   </div>
 }
 
-export function AirQualityForecastPreview({ data }: { data: unknown }) {
+export function RegionalAirQualityPreview({ data, api }: { data: unknown; api: ApiDemo }) {
+  const meta = regionalAirQualityMeta(api)
+  const item = firstResponseItem(data)
+  const readings = item && isRecord(item.readings) ? item.readings : undefined
+  const regional = readings && isRecord(readings[meta.metricKey]) ? readings[meta.metricKey] : undefined
+
+  if (!regional) {
+    return <InvalidRegionalAirQuality
+      label={meta.label}
+      metricKey={meta.metricKey}
+      unit={meta.unit}
+      detail={`The provider response did not contain the required items[0].readings.${meta.metricKey} regional object. No ${meta.label} values or status are shown.`}
+    />
+  }
+
+  const providerEntries = Object.entries(regional)
+  const trustedRegionNames = new Set<string>(singaporeAirQualityRegions)
+  const valueByRegion = new Map<string, number>()
+  let invalidCount = 0
+
+  providerEntries.forEach(([name, rawValue]) => {
+    const value = finiteNumber(rawValue)
+    if (!trustedRegionNames.has(name) || value === undefined || value < 0) {
+      invalidCount += 1
+      return
+    }
+    valueByRegion.set(name, value)
+  })
+
+  const regions = singaporeAirQualityRegions.map((name) => ({ name, value: valueByRegion.get(name) }))
+  const validValues = regions.flatMap(({ value }) => value === undefined ? [] : [value])
+  const missingCount = singaporeAirQualityRegions.filter((name) => !Object.prototype.hasOwnProperty.call(regional, name)).length
+
+  if (!validValues.length) {
+    return <InvalidRegionalAirQuality
+      label={meta.label}
+      metricKey={meta.metricKey}
+      unit={meta.unit}
+      providerCount={providerEntries.length}
+      invalidCount={invalidCount}
+      missingCount={missingCount}
+      detail={`The required ${meta.metricKey} object contained no trustworthy non-negative JSON-number values for Singapore's five reporting regions. No ${meta.label} values or status are shown.`}
+    />
+  }
+
+  const observationTime = isoDateTimeText(item?.timestamp)
+  const updateTime = isoDateTimeText(item?.update_timestamp)
+  const hasCompleteRegions = validValues.length === singaporeAirQualityRegions.length && invalidCount === 0 && missingCount === 0
+  const resultState = hasCompleteRegions && observationTime && updateTime ? 'ready' : 'partial'
+  const max = Math.max(...validValues)
+  const average = validValues.reduce((sum, value) => sum + value, 0) / validValues.length
+  const status = meta.band(max)
+  const incompleteFacts = [
+    invalidCount > 0 ? `${invalidCount} invalid provider entr${invalidCount === 1 ? 'y' : 'ies'}` : undefined,
+    missingCount > 0 ? `${missingCount} expected region${missingCount === 1 ? '' : 's'} missing` : undefined,
+    !observationTime ? 'observation timestamp invalid or missing' : undefined,
+    !updateTime ? 'update timestamp invalid or missing' : undefined,
+  ].filter((value): value is string => Boolean(value))
+
+  return <div
+    className="weather-preview regional-air-preview"
+    data-domain-card="regional-air-quality"
+    data-weather-view="regional-air-quality"
+    data-result-state={resultState}
+    data-metric-key={meta.metricKey}
+    data-provider-region-count={providerEntries.length}
+    data-valid-region-count={validValues.length}
+    data-invalid-region-count={invalidCount}
+    data-missing-region-count={missingCount}
+    data-unit={meta.unit}
+    data-band={status}
+    data-band-basis="highest-regional-reading"
+    data-highest-regional-reading={max}
+    data-derived-regional-average={average}
+    data-observation-time={observationTime}
+    data-update-time={updateTime}
+  >
+    {resultState === 'partial' && <p className="diagnostic-warning" role="status">Provider response is incomplete: {validValues.length} trusted region{validValues.length === 1 ? '' : 's'}; {incompleteFacts.join('; ')}.</p>}
+    <div className="air-quality-summary"><div><span>Singapore air quality</span><strong>{formatNumber(average)}</strong><b>Derived regional average · {meta.unit}</b><small>{updateTime ? `Updated ${timeLabel(updateTime)}` : 'Update time unavailable'}</small></div><em className={status.toLowerCase().replaceAll(' ', '-')}>{status}</em></div>
+    <div className="regional-reading-grid">{regions.map((region) => <article key={region.name}><span>{previewLabel(region.name)}</span><strong>{region.value === undefined ? '—' : formatNumber(region.value)}</strong><small>{meta.unit}</small><i style={{ '--reading-level': region.value === undefined ? '0%' : `${Math.min(100, (region.value / Math.max(max, 1)) * 100)}%` } as CSSProperties}/></article>)}</div>
+  </div>
+}
+
+export const airQualityForecastModel = (data: unknown, executedRequest?: ExecutedRequestContext): AirQualityViewModel => {
+  const request = parseOpenMeteoRequest(executedRequest, 'air-quality-api.open-meteo.com', '/v1/air-quality', AIR_QUALITY_CURRENT_VARIABLES)
+  const envelopeContract = isRecord(data) && isRecord(data.current)
   const root = isRecord(data) ? data : {}
-  const current = isRecord(root.current) ? root.current : {}
-  const units = isRecord(root.current_units) ? root.current_units : {}
-  const aqi = numberValue(current.us_aqi)
-  if (aqi === undefined) return <div className="weather-empty"><strong>Air-quality reading unavailable</strong><span>The response did not include a current U.S. AQI value.</span></div>
-  const status = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Sensitive groups' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Very unhealthy' : 'Hazardous'
+  const current = envelopeContract ? root.current as Record<string, unknown> : {}
+  const units = isRecord(root.current_units) ? root.current_units : undefined
+  const providerLatitude = boundedCoordinate(root.latitude, -90, 90)
+  const providerLongitude = boundedCoordinate(root.longitude, -180, 180)
+  const providerCoordinateContract = providerLatitude !== undefined && providerLongitude !== undefined
+  const timezone = providerTimezone(root.timezone)
+  const utcOffsetSeconds = timezoneOffset(root.utc_offset_seconds)
+  const timezoneContract = timezone !== undefined && utcOffsetSeconds !== undefined
+  const time = localIsoDateTime(current.time)
+  const interval = positiveInteger(current.interval)
+  const timeContract = time !== undefined && interval !== undefined
+  const aqi = nonNegativeInteger(current.us_aqi)
+  const pm25 = nonNegativeNumber(current.pm2_5)
+  const pm10 = nonNegativeNumber(current.pm10)
+  const nitrogenDioxide = nonNegativeNumber(current.nitrogen_dioxide)
+  const ozone = nonNegativeNumber(current.ozone)
+  const validMeasurementCount = [aqi, pm25, pm10, nitrogenDioxide, ozone].filter((value) => value !== undefined).length
+  const measurementContract = validMeasurementCount === AIR_QUALITY_CURRENT_VARIABLES.length
+  const unitsContract = expectedUnits(units, {
+    time: 'iso8601',
+    interval: 'seconds',
+    us_aqi: 'USAQI',
+    pm2_5: 'μg/m³',
+    pm10: 'μg/m³',
+    nitrogen_dioxide: 'μg/m³',
+    ozone: 'μg/m³',
+  })
+  const state = !request || !envelopeContract || validMeasurementCount === 0
+    ? 'invalid'
+    : providerCoordinateContract && timezoneContract && timeContract && unitsContract && measurementContract
+      ? 'ready'
+      : 'partial'
+  const reason = !request
+    ? 'The response is not bound to the exact bodyless Open-Meteo air-quality request.'
+    : !envelopeContract
+      ? 'Open-Meteo did not return the required current air-quality response envelope.'
+      : validMeasurementCount === 0
+        ? 'No trusted current air-quality measurements were returned.'
+        : state === 'partial'
+          ? 'Only strictly validated current air-quality evidence is shown; missing or malformed response facts remain unavailable.'
+          : undefined
+
+  return {
+    state,
+    reason,
+    request,
+    envelopeContract,
+    providerCoordinateContract,
+    timezoneContract,
+    timeContract,
+    unitsContract,
+    measurementContract,
+    validMeasurementCount,
+    providerLatitude,
+    providerLongitude,
+    timezone,
+    utcOffsetSeconds,
+    time,
+    interval,
+    aqi,
+    pm25,
+    pm10,
+    nitrogenDioxide,
+    ozone,
+    pollutantUnit: units?.pm2_5 === 'μg/m³'
+      && units.pm10 === 'μg/m³'
+      && units.nitrogen_dioxide === 'μg/m³'
+      && units.ozone === 'μg/m³'
+      ? 'μg/m³'
+      : undefined,
+  }
+}
+
+export function AirQualityForecastPreview({ data, executedRequest }: { data: unknown; executedRequest?: ExecutedRequestContext }) {
+  const model = airQualityForecastModel(data, executedRequest)
+  const evidence = {
+    'data-result-state': model.state,
+    'data-request-bound': String(Boolean(model.request)),
+    'data-envelope-contract': String(model.envelopeContract),
+    'data-provider-coordinate-contract': String(model.providerCoordinateContract),
+    'data-timezone-contract': String(model.timezoneContract),
+    'data-time-contract': String(model.timeContract),
+    'data-units-contract': String(model.unitsContract),
+    'data-measurement-contract': String(model.measurementContract),
+    'data-valid-measurement-count': model.validMeasurementCount,
+    'data-request-latitude': model.request?.latitude,
+    'data-request-longitude': model.request?.longitude,
+    'data-provider-latitude': model.providerLatitude,
+    'data-provider-longitude': model.providerLongitude,
+    'data-provider-timezone': model.timezone,
+    'data-utc-offset-seconds': model.utcOffsetSeconds,
+    'data-observation-time': model.time,
+    'data-observation-interval': model.interval,
+    'data-us-aqi': model.aqi,
+    'data-pm2-5': model.pm25,
+    'data-pm10': model.pm10,
+    'data-nitrogen-dioxide': model.nitrogenDioxide,
+    'data-ozone': model.ozone,
+  }
+
+  if (model.state === 'invalid') return <div className="weather-empty" data-domain-card="open-meteo-air-quality" data-weather-view="air-quality-forecast" {...evidence}>
+    <strong>Air-quality response unavailable</strong>
+    <span>{model.reason}</span>
+  </div>
+
+  const status = model.aqi === undefined
+    ? 'Unavailable'
+    : model.aqi <= 50 ? 'Good' : model.aqi <= 100 ? 'Moderate' : model.aqi <= 150 ? 'Sensitive groups' : model.aqi <= 200 ? 'Unhealthy' : model.aqi <= 300 ? 'Very unhealthy' : 'Hazardous'
   const metrics = [
-    { label: 'PM2.5', key: 'pm2_5' }, { label: 'PM10', key: 'pm10' }, { label: 'Nitrogen dioxide', key: 'nitrogen_dioxide' }, { label: 'Ozone', key: 'ozone' },
+    { label: 'PM2.5', value: model.pm25 },
+    { label: 'PM10', value: model.pm10 },
+    { label: 'Nitrogen dioxide', value: model.nitrogenDioxide },
+    { label: 'Ozone', value: model.ozone },
   ]
-  return <div className="weather-preview global-air-preview" data-weather-view="air-quality-forecast">
-    <div className="global-air-hero"><div><span>⌖ {textValue(root.timezone)?.replace('_', ' ') ?? 'Selected coordinates'}</span><strong>{formatNumber(aqi)}</strong><b>U.S. AQI · {status}</b><small>Updated {textValue(current.time)?.replace('T', ' ') ?? 'now'}</small></div><div className="air-orbit" aria-hidden="true"><i/><i/><i/></div></div>
-    <div className="global-air-metrics">{metrics.map((metric) => <article key={metric.key}><small>{metric.label}</small><strong>{numberValue(current[metric.key]) === undefined ? '—' : formatNumber(numberValue(current[metric.key]) as number)}</strong><span>{textValue(units[metric.key]) ?? 'µg/m³'}</span></article>)}</div>
+  return <div className="weather-preview global-air-preview" data-domain-card="open-meteo-air-quality" data-weather-view="air-quality-forecast" {...evidence}>
+    {model.state === 'partial' && <p className="diagnostic-warning" role="status">Provider response is incomplete. {model.reason}</p>}
+    <div className="global-air-hero"><div><span>⌖ {model.timezone?.replaceAll('_', ' ') ?? 'Timezone unavailable'}</span><strong>{model.aqi === undefined ? '—' : formatNumber(model.aqi)}</strong><b>U.S. AQI · {status}</b><small>{model.time ? `Updated ${model.time.replace('T', ' ')}` : 'Observation time unavailable'}</small></div><div className="air-orbit" aria-hidden="true"><i/><i/><i/></div></div>
+    <div className="global-air-metrics">
+      {metrics.map((metric) => <article key={metric.label}><small>{metric.label}</small><strong>{metric.value === undefined ? '—' : formatNumber(metric.value)}</strong><span>{model.pollutantUnit ?? 'Unit unavailable'}</span></article>)}
+      <article><small>Requested coordinates</small><strong>{coordinateLabel(model.request?.latitude, model.request?.longitude)}</strong></article>
+      <article><small>Provider grid</small><strong>{coordinateLabel(model.providerLatitude, model.providerLongitude)}</strong></article>
+    </div>
   </div>
 }
 

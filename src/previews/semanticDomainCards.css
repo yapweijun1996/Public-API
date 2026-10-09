@@ -222,3 +222,17 @@
 .canada-record-description { margin-top: 13px; color: #40556f; line-height: 1.55; overflow-wrap: anywhere; }
 .canada-record-description-fr { padding-top: 10px; border-top: 1px dashed #dce4ef; color: #5a6d82; }
 @container domain-card (max-width: 620px) { .canada-catalog-context, .canada-catalog-list { grid-template-columns: 1fr; } }
+
+.geoboundaries-layer-list { margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; list-style: none; }
+.geoboundaries-layer-list > li { min-width: 0; padding: 14px; border: 1px solid #d7e1ec; border-radius: 10px; background: #fff; display: grid; gap: 7px; }
+.geoboundaries-layer-list > li div, .geoboundaries-layer-list > li span, .geoboundaries-layer-list > li a { overflow-wrap: anywhere; }
+
+/* ROR v2: organization candidates remain identifiable without implying an automatic match. */
+.ror-selection-note { margin-top: 18px; padding: 12px 14px; border-left: 3px solid #1a4cb3; border-radius: 0 8px 8px 0; color: #3f5570; background: #f3f7ff; overflow-wrap: anywhere; }
+.ror-organization-list { margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; list-style: none; }
+.ror-organization-list > li { min-width: 0; padding: 15px; border: 1px solid #d4dfef; border-radius: 11px; background: #fff; }
+.ror-organization-list h4 { color: #203b65; overflow-wrap: anywhere; }
+.ror-organization-list a { display: block; margin-top: 7px; font: 650 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; word-break: break-word; }
+@container domain-card (max-width: 620px) { .ror-organization-list { grid-template-columns: 1fr; } }
+.geoboundaries-layer-list > li span { color: #60758a; font-size: 12px; }
+.geoboundaries-layer-list > li a { min-height: 44px; display: inline-flex; align-items: center; width: fit-content; color: #1555bf; font-weight: 650; }

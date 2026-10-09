@@ -50,3 +50,14 @@
 .gene-description { margin-top: 22px; padding: 18px; border: 1px solid #d7e1ec; border-radius: 12px; background: #fff; }
 .gene-description h4 { color: #263d59; }
 .gene-description p { margin-top: 9px; color: #415975; line-height: 1.65; overflow-wrap: anywhere; }
+
+/* PubChem: preserve every provider-owned CID when a chemical name resolves to multiple compounds. */
+.pubchem-compound-list { margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; list-style: none; }
+.pubchem-compound-list > li { min-width: 0; padding: 15px; border: 1px solid #d7e1ec; border-radius: 11px; background: #fff; }
+.pubchem-compound-list > li > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.pubchem-compound-list > li > header div { min-width: 0; }
+.pubchem-compound-list > li > header small { display: block; color: #60758a; font-size: 11px; overflow-wrap: anywhere; }
+.pubchem-compound-list > li > header h4 { margin-top: 3px; color: #263d59; overflow-wrap: anywhere; }
+.pubchem-compound-list > li > header > span { color: #365069; font-size: 12px; font-weight: 750; }
+.pubchem-compound-list .domain-facts { grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr)); gap: 8px; margin-top: 12px; }
+@container domain-card (max-width: 620px) { .pubchem-compound-list { grid-template-columns: 1fr; } }

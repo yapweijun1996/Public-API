@@ -48,6 +48,8 @@ async function liveCases(){
     assert.equal(values.length,r.data.checks.length);
     for(const [index,check]of r.data.checks.entries()){assert.equal(values[index].name,check.name);assert.equal(values[index].score,check.score>=0&&check.score<=10?String(check.score):undefined);assert.equal(values[index].reason,check.reason);}
     assert.equal(await b.ev(`Number(document.querySelector('[data-aggregate-score]').dataset.aggregateScore)`),r.data.score);
+    const binding=await b.ev(`(()=>{const d=document.querySelector('[data-domain-card=\"security-scorecard\"]').dataset;return {bound:d.requestBound,contract:d.requestContract,requestRepository:d.requestRepository,providerRepository:d.providerRepository}})()`);
+    assert.deepEqual(binding,{bound:'true',contract:'exact-openssf-scorecard-project-v2',requestRepository:'github.com/ossf/scorecard',providerRepository:'github.com/ossf/scorecard'});row.exactRequestAndRepositoryIdentity='PASS';
     await change(b,'.domain-toolbar select','unscored');
     assert.equal(await b.ev(`document.querySelectorAll('.scorecard-checks > li').length`),Math.min(8,r.data.checks.filter(c=>c.score<0||c.score==null).length));
     await change(b,'.domain-toolbar select','all');
@@ -62,7 +64,12 @@ async function liveCases(){
     assert.equal(await b.ev(`document.querySelectorAll('[data-campaign-id]').length`),1);
     await enter(b,'.recall-campaigns summary');assert.equal(await b.ev(`document.querySelector('.recall-campaigns details').open`),true);
     await change(b,'.domain-toolbar input','no-match-synthetic-query');assert.equal(await b.ev(`document.querySelectorAll('[data-campaign-id]').length`),0);
-    row.fullRiskRemedyAndFiltering='PASS';
+    assert.equal(await b.ev(`document.querySelector('[data-domain-card="vehicle-recalls"]').dataset.requestBound`),'true');
+    assert.equal(await b.ev(`document.querySelector('[data-domain-card="vehicle-recalls"]').dataset.requestMake`),'honda');
+    assert.equal(await b.ev(`document.querySelector('[data-domain-card="vehicle-recalls"]').dataset.requestModel`),'accord');
+    assert.equal(await b.ev(`document.querySelector('[data-domain-card="vehicle-recalls"]').dataset.requestModelYear`),'2020');
+    assert.equal(await b.ev(`document.querySelector('[data-domain-card="vehicle-recalls"]').dataset.mismatchedRecordCount`),'0');
+    row.fullRiskRemedyAndFiltering='PASS';row.exactRequestAndVehicleIdentity='PASS';
    }
    await sleep(150);assert.equal(b.requestCount,requests);row.localInteractionRequests=0;
   }
@@ -72,7 +79,7 @@ async function liveCases(){
 async function syntheticCases(){
  const endpoints={
   'openssf-scorecard':'https://api.securityscorecards.dev/projects/github.com/ossf/scorecard',
-  'nhtsa-vehicle-recalls':'https://api.nhtsa.gov/recalls/recallsByVehicle?make=honda&model=accord&modelYear=2020&format=json',
+  'nhtsa-vehicle-recalls':'https://api.nhtsa.gov/recalls/recallsByVehicle?make=honda&model=accord&modelYear=2020',
   'languagetool-grammar-check':'https://api.languagetool.org/v2/check',
   'citybikes-network':'https://api.citybik.es/v2/networks/youbike-taipei',
  };
@@ -87,6 +94,11 @@ async function syntheticCases(){
   const id='languagetool-grammar-check';
   const r=await load(id,fixtures.grammar);assert(r.ok);
   const row=await matrix(b,id,'grammar-review','issues','synthetic-fixture',['Filter writing issues','Writing issues','Copy replacement 1 for issue 1']);
+  assert.equal(await b.ev(`document.querySelector('[data-domain-card="grammar-review"]').dataset.requestBound`),'true');
+  assert.equal(await b.ev(`document.querySelector('[data-domain-card="grammar-review"]').dataset.requestContract`),'exact-languagetool-public-check-v2');
+  assert.equal(await b.ev(`document.querySelector('[data-domain-card="grammar-review"]').dataset.requestLanguage`),'en-US');
+  assert.equal(await b.ev(`document.querySelector('[data-domain-card="grammar-review"]').dataset.submittedTextLength`),'16');
+  row.exactPostBodyIdentity='PASS';
   assert.equal(await b.ev(`document.querySelector('mark').textContent`),'are');
   const requests=b.requestCount;
   await b.call('Browser.grantPermissions',{origin:report.origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});await b.call('Page.bringToFront');
@@ -100,11 +112,13 @@ async function syntheticCases(){
    [id,'invalid',{}],
    [id,'partial',{matches:[],warnings:{incompleteResults:true}}],
    ['openssf-scorecard','ready',fixtures.scorecard],
-   ['openssf-scorecard','empty',{checks:[]}],
+   ['openssf-scorecard','invalid',{...fixtures.scorecard,repo:{...fixtures.scorecard.repo,name:'github.com/example/demo'}}],
+   ['openssf-scorecard','empty',{...fixtures.scorecard,checks:[]}],
    ['openssf-scorecard','invalid',{}],
-   ['nhtsa-vehicle-recalls','ready',fixtures.recalls],
+   ['nhtsa-vehicle-recalls','ready',{...fixtures.recalls,results:fixtures.recalls.results.map(row=>({...row,Make:'HONDA',Model:'ACCORD',ModelYear:'2020'}))}],
    ['nhtsa-vehicle-recalls','empty',{Count:0,results:[]}],
-   ['nhtsa-vehicle-recalls','partial',{Count:2,results:[]}],
+   ['nhtsa-vehicle-recalls','invalid',{Count:2,results:[]}],
+   ['nhtsa-vehicle-recalls','invalid',{Count:1,results:[{...fixtures.recalls.results[0],Make:'TOYOTA',Model:'CAMRY',ModelYear:'2020'}]}],
    ['nhtsa-vehicle-recalls','invalid',{}],
   ];
   for(const [api,expected,body]of cases){

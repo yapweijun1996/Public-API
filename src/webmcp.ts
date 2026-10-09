@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiCategories, apiCatalog, getAgentExecutionPolicy, getApiById, getAutomatedVerificationPolicy, getDefaultParameters, matchesApiSearch, type ApiDemo } from './apiCatalog'
+import { apiCategories, apiCatalog, getAgentExecutionPolicy, getApiById, getApiResponseType, getAutomatedVerificationPolicy, getDefaultParameters, matchesApiSearch, type ApiDemo } from './apiCatalog'
 import { buildRequestLabUrl } from './routes'
 
 type ToolInput = Record<string, unknown>
@@ -127,7 +127,7 @@ const TOOL_SPECS = [
   },
   {
     name: 'run_public_api_demo',
-    description: 'Run a catalog API that permits structured agent execution and return its live JSON response. Provider manual-only policies fail closed.',
+    description: 'Run a catalog API that permits structured agent execution and return its live response data. Binary image APIs return fetched-image metadata instead of pretending the provider body was JSON. Provider manual-only policies fail closed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -145,7 +145,7 @@ const TOOL_SPECS = [
       required: ['id'],
     },
     annotations: { readOnlyHint: true, untrustedContentHint: true },
-    uiLabel: 'Execute permitted live requests and return JSON',
+    uiLabel: 'Execute permitted live requests and return response data',
     uiType: 'Execute' as ToolUiType,
   },
 ] as const
@@ -185,11 +185,13 @@ export function useWebMcp({
             ...(api.keywords?.length ? { keywords: api.keywords } : {}),
             documentationUrl: api.documentationUrl,
             method: api.method ?? 'GET',
+            responseType: getApiResponseType(api),
+            ...(api.responseContentTypes?.length ? { responseContentTypes: [...api.responseContentTypes] } : {}),
             requestLabUrl: buildRequestLabUrl(api.id),
             agentExecution: getAgentExecutionPolicy(api),
             automatedVerification: getAutomatedVerificationPolicy(api),
             ...(api.usageNote ? { usageNote: api.usageNote } : {}),
-            parameters: api.fields.map(({ id, label, type, defaultValue, help, min, max, minimumFromField, minLength, maxLength, pattern, patternDescription, options }) => ({
+            parameters: api.fields.map(({ id, label, type, defaultValue, help, min, max, step, minimumFromField, minLength, maxLength, pattern, patternDescription, options }) => ({
               id,
               label,
               type,
@@ -197,6 +199,7 @@ export function useWebMcp({
               help,
               ...(min === undefined ? {} : { min }),
               ...(max === undefined ? {} : { max }),
+              ...(step === undefined ? {} : { step }),
               ...(minimumFromField === undefined ? {} : { minimumFromField }),
               ...(minLength === undefined ? {} : { minLength }),
               ...(maxLength === undefined ? {} : { maxLength }),

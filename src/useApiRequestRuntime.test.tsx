@@ -29,6 +29,11 @@ function RuntimeHarness({ api: activeApi, values = getDefaultParameters(activeAp
         data-error-type={request.status === 'error' ? request.errorType : undefined}
         data-http-status={request.status === 'success' || request.status === 'error' ? request.httpStatus : undefined}
         data-run-id={request.status === 'success' ? request.runId : undefined}
+        data-request-method={request.status === 'success' ? request.executedRequest.method : undefined}
+        data-request-url={request.status === 'success' ? request.executedRequest.url : undefined}
+        data-request-body={request.status === 'success' && request.executedRequest.body !== undefined ? JSON.stringify(request.executedRequest.body) : undefined}
+        data-response-media-url={request.status === 'success' ? request.responseMedia?.objectUrl : undefined}
+        data-response-media-type={request.status === 'success' ? request.responseMedia?.contentType : undefined}
       >
         {request.status === 'success' ? JSON.stringify(request.data) : request.status === 'error' ? request.message : request.status}
       </output>
@@ -39,6 +44,7 @@ function RuntimeHarness({ api: activeApi, values = getDefaultParameters(activeAp
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('useApiRequestRuntime', () => {
@@ -80,6 +86,13 @@ describe('useApiRequestRuntime', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock.mock.calls[0]?.[0]).toBe(fetchMock.mock.calls[1]?.[0])
+    const state = screen.getByTestId('request-state')
+    expect(state).toHaveAttribute('data-request-method', 'POST')
+    expect(state).toHaveAttribute('data-request-url', aniList.buildUrl({ query: 'Two', mediaType: 'ANIME', page: '1', limit: '6' }))
+    const expectedBody = aniList.buildBody?.({ query: 'Two', mediaType: 'ANIME', page: '1', limit: '6' })
+    expect(JSON.parse(state.getAttribute('data-request-body') ?? '{}')).toEqual(expectedBody)
+    const secondInit = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(secondInit?.body))).toEqual(expectedBody)
   })
 
   it('sends provider-identification headers from the shared API SSOT', async () => {
@@ -113,6 +126,186 @@ describe('useApiRequestRuntime', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('rejects fractional USAspending fiscal years and award limits before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const usaspending = api('usaspending')
+    const defaults = getDefaultParameters(usaspending)
+    const { rerender } = render(<RuntimeHarness api={usaspending} values={{ ...defaults, fiscalYear: '2025.5' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={usaspending} values={{ ...defaults, limit: '8.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blank names and fractional GBIF occurrence limits before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const gbif = api('gbif-occurrence-search')
+    const { rerender } = render(<RuntimeHarness api={gbif} values={{ scientificName: '   ', limit: '6' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={gbif} values={{ scientificName: 'Panthera leo', limit: '6.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blank Stack Exchange tags and fractional page sizes before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const stackExchange = api('stack-exchange')
+    const { rerender } = render(<RuntimeHarness api={stackExchange} values={{ tags: '   ', limit: '8' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={stackExchange} values={{ tags: 'javascript', limit: '8.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blank Swiss transit endpoints and fractional connection counts before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const swissTransit = api('swiss-transit-connections')
+    const { rerender } = render(<RuntimeHarness api={swissTransit} values={{ from: '   ', to: 'Geneva', limit: '6' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={swissTransit} values={{ from: 'Zurich', to: '   ', limit: '6' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={swissTransit} values={{ from: 'Zurich', to: 'Geneva', limit: '6.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blank Crossref research queries and fractional result counts before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const crossref = api('crossref-works')
+    const { rerender } = render(<RuntimeHarness api={crossref} values={{ query: '   ', rows: '8' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={crossref} values={{ query: 'agentic AI', rows: '8.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects fractional Open-Meteo Seasonal forecast days before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RuntimeHarness api={api('open-meteo-seasonal')} values={{ latitude: '1.3521', longitude: '103.8198', forecastDays: '42.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects fractional Open-Meteo Ensemble forecast days before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RuntimeHarness api={api('open-meteo-ensemble')} values={{ latitude: '1.3521', longitude: '103.8198', variable: 'temperature_2m', forecastDays: '3.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects fractional Open Trivia question counts before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RuntimeHarness api={api('open-trivia')} values={{ amount: '6.5', category: '9', difficulty: 'medium' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blank, fractional, and out-of-range Art Institute inputs before provider execution', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const art = api('art-institute-search')
+    const { rerender } = render(<RuntimeHarness api={art} values={{ query: '   ', limit: '8' }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={art} values={{ query: 'monet', limit: '2.5' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+    rerender(<RuntimeHarness api={art} values={{ query: 'monet', limit: '21' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'idle'))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('captures an image response body once and exposes a revocable object URL for semantic rendering', async () => {
+    const qr = api('qr-code-generator')
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:public-api-qr-1').mockReturnValueOnce('blob:public-api-qr-2')
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(new Blob(['png-bytes'], { type: 'image/png' }), {
+      status: 200,
+      headers: { 'Content-Type': 'image/png' },
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { unmount } = render(<RuntimeHarness api={qr} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'success'))
+    const state = screen.getByTestId('request-state')
+    expect(state).toHaveAttribute('data-response-media-url', 'blob:public-api-qr-1')
+    expect(state).toHaveAttribute('data-response-media-type', 'image/png')
+    expect(state).toHaveTextContent('\"kind\":\"image\"')
+    expect(state).toHaveTextContent('\"contentType\":\"image/png\"')
+    expect(createObjectUrl).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ Accept: 'image/png' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+    await waitFor(() => expect(state).toHaveAttribute('data-response-media-url', 'blob:public-api-qr-2'))
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:public-api-qr-1')
+    expect(createObjectUrl).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    unmount()
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:public-api-qr-2')
+  })
+
+  it('fails image-response APIs closed when HTTP 2xx returns a non-image body', async () => {
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('upstream HTML', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })))
+
+    render(<RuntimeHarness api={api('dicebear-avatar')} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'error'))
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-error-type', 'invalid-response')
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-http-status', '200')
+    expect(screen.getByTestId('request-state')).toHaveTextContent('Content-Type text/html, expected image/svg+xml')
+    expect(createObjectUrl).not.toHaveBeenCalled()
+  })
+
   it('classifies browser fetch TypeError as network-or-cors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
@@ -137,6 +330,58 @@ describe('useApiRequestRuntime', () => {
     expect(screen.getByTestId('request-state')).toHaveAttribute('data-error-type', 'invalid-response')
     expect(screen.getByTestId('request-state')).toHaveAttribute('data-http-status', '200')
     expect(screen.getByTestId('request-state')).toHaveTextContent('could not be parsed as expected')
+  })
+
+  it('maps a provider-declared 204 no-content response to API-specific semantic empty data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    render(<RuntimeHarness api={api('worms-species-lookup')} values={{ name: 'DefinitelyNotARealMarineTaxonXYZ' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'success'))
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-http-status', '204')
+    expect(screen.getByTestId('request-state')).toHaveTextContent('[]')
+  })
+
+  it('keeps undeclared empty JSON success responses fail-closed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    render(<RuntimeHarness api={api('countries')} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'error'))
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-error-type', 'invalid-response')
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-http-status', '204')
+  })
+
+  it('accepts a declared text response Content-Type with charset parameters', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('v1.0.0\nv1.1.0\n', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=UTF-8' },
+    })))
+
+    render(<RuntimeHarness api={api('go-module-proxy')} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'success'))
+    expect(screen.getByTestId('request-state')).toHaveTextContent('v1.0.0')
+    expect(screen.getByTestId('request-state')).toHaveTextContent('v1.1.0')
+  })
+
+  it('fails text-response APIs closed when HTTP 2xx returns an undeclared HTML media type', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>temporary provider page</html>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })))
+
+    render(<RuntimeHarness api={api('go-module-proxy')} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run request' }))
+
+    await waitFor(() => expect(screen.getByTestId('request-state')).toHaveAttribute('data-status', 'error'))
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-error-type', 'invalid-response')
+    expect(screen.getByTestId('request-state')).toHaveAttribute('data-http-status', '200')
+    expect(screen.getByTestId('request-state')).toHaveTextContent('Content-Type text/html, expected text/plain')
+    expect(screen.getByTestId('request-state')).not.toHaveTextContent('temporary provider page')
   })
 
   it('classifies HTTP failure before invoking an explicit non-JSON response parser', async () => {

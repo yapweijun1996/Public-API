@@ -26,9 +26,10 @@ try {
   const dom = await b.ev(`(() => {
     const shell=document.querySelector('.demo-preview'), card=shell.querySelector('.datamuse-word-preview'), first=shell.querySelector('.semantic-card-grid article'), url=new URL(document.querySelector('.endpoint-box code').textContent)
     const metrics=Object.fromEntries([...first.querySelectorAll('dl > div')].map(row=>[row.querySelector('dt')?.textContent||'',row.querySelector('dd')?.textContent||'']))
-    return {layout:shell.dataset.previewLayout,fallback:shell.dataset.ssotFallback,domain:card.dataset.domainCard,constraint:card.dataset.queryConstraint,term:card.dataset.queryTerm,visible:Number(card.dataset.visibleCount),word:card.dataset.primaryWord,ipa:card.dataset.primaryIpa,heading:first.querySelector('h3')?.textContent||'',metrics,pathname:url.pathname,sl:url.searchParams.get('sl'),legacy:url.searchParams.get('rel_rhy'),max:url.searchParams.get('max'),md:url.searchParams.get('md'),ipaFlag:url.searchParams.get('ipa'),note:card.querySelector('.domain-note')?.textContent||'',overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1}
+    return {layout:shell.dataset.previewLayout,fallback:shell.dataset.ssotFallback,domain:card.dataset.domainCard,state:card.dataset.resultState,requestBound:card.dataset.requestBound,requestContract:card.dataset.requestContract,constraint:card.dataset.queryConstraint,term:card.dataset.queryTerm,visible:Number(card.dataset.visibleCount),word:card.dataset.primaryWord,ipa:card.dataset.primaryIpa,heading:first.querySelector('h3')?.textContent||'',metrics,pathname:url.pathname,sl:url.searchParams.get('sl'),legacy:url.searchParams.get('rel_rhy'),max:url.searchParams.get('max'),md:url.searchParams.get('md'),ipaFlag:url.searchParams.get('ipa'),note:card.querySelector('.domain-note')?.textContent||'',overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1}
   })()`)
   assert.equal(dom.layout, 'lexical-matches'); assert.equal(dom.fallback, 'false'); assert.equal(dom.domain, 'lexical-matches')
+  assert.equal(dom.state, 'ready'); assert.equal(dom.requestBound, 'true'); assert.equal(dom.requestContract, 'exact-datamuse-sounds-like-v2')
   assert.equal(dom.constraint, 'sl'); assert.equal(dom.term, 'orange'); assert.equal(dom.visible, Math.min(result.data.length, 8))
   assert.equal(dom.word, String(first.word || '')); assert.equal(dom.ipa, ipa(first)); assert.equal(dom.heading, String(first.word || ''))
   assert.equal(dom.metrics.Rank, '#1'); assert.equal(dom.metrics['Pronunciation (IPA)'], ipa(first) || 'Not supplied'); assert.equal(dom.metrics['Part of speech'], parts(first))
@@ -39,7 +40,7 @@ try {
   const mobile = await b.ev(`({documentOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,previewOverflow:document.querySelector('.demo-preview').scrollWidth>document.querySelector('.demo-preview').clientWidth+1})`)
   assert.equal(mobile.documentOverflow || mobile.previewOverflow, false, JSON.stringify(mobile))
   const ax = await b.call('Accessibility.getFullAXTree'); assert.equal(unnamed(ax.nodes).length, 0)
-  report.checks.push({id:'datamuse-rhymes',contract:'documented sl sounds-like',returned:result.data.length,primaryWord:'exact response match',pronunciation:'exact response match',partsOfSpeech:'exact response match',scoreSemantics:'ordering only',futureKeyRequirement:'2027-01-01 surfaced',mobileOverflow:false,unnamedControls:0})
+  report.checks.push({id:'datamuse-rhymes',contract:'exact-datamuse-sounds-like-v2',requestBound:true,returned:result.data.length,primaryWord:'exact response match',pronunciation:'exact response match',partsOfSpeech:'exact response match',scoreSemantics:'ordering only',futureKeyRequirement:'2027-01-01 surfaced',mobileOverflow:false,unnamedControls:0})
   report.errors.push(...b.errors.map(String)); assert.deepEqual(report.errors, [])
   await b.close(); b = undefined
 
@@ -48,8 +49,10 @@ try {
     await malformed.nav('datamuse-rhymes')
     const malformedResult = await malformed.run()
     assert.equal(malformedResult.ok, true, malformedResult.error)
-    const malformedDom = await malformed.ev(`(()=>{const shell=document.querySelector('.demo-preview'), card=shell.querySelector('[data-domain-card=\"lexical-matches\"]');return {state:card?.dataset.resultState||'',text:card?.innerText||'',fake:[...shell.querySelectorAll('*')].some(e=>/^Match \\d+$/.test((e.textContent||'').trim())),http:document.querySelector('.ssot-runtime b')?.textContent||''}})()`)
+    const malformedDom = await malformed.ev(`(()=>{const shell=document.querySelector('.demo-preview'), card=shell.querySelector('[data-domain-card=\"lexical-matches\"]');return {state:card?.dataset.resultState||'',requestBound:card?.dataset.requestBound||'',contract:card?.dataset.requestContract||'',text:card?.innerText||'',fake:[...shell.querySelectorAll('*')].some(e=>/^Match \\d+$/.test((e.textContent||'').trim())),http:document.querySelector('.ssot-runtime b')?.textContent||''}})()`)
     assert.equal(malformedDom.state, 'invalid')
+    assert.equal(malformedDom.requestBound, 'true')
+    assert.equal(malformedDom.contract, 'exact-datamuse-sounds-like-v2')
     assert.match(malformedDom.text, /required word identity/)
     assert.equal(malformedDom.fake, false)
     assert.match(malformedDom.http, /^200/)

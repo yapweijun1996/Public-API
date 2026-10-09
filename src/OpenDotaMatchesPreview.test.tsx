@@ -51,4 +51,28 @@ describe('OpenDota professional match semantic preview', () => {
     expect(screen.getByText('No professional matches returned')).toBeInTheDocument()
     expect(screen.getByText('OpenDota returned no professional match records for this request.')).toBeInTheDocument()
   })
+
+  it('marks mixed identity-less match rows partial and filters them from the trusted list', () => {
+    render(<ResponseDemoPreview api={api} data={[
+      { match_id: 8988152817, radiant_name: 'Radiant Alpha', dire_name: 'Dire Beta', radiant_score: 20, dire_score: 18, radiant_win: true },
+      { radiant_name: 'Missing identity', dire_name: 'Should not render', radiant_score: 99, dire_score: 0, radiant_win: true },
+    ]}/>)
+
+    const preview = screen.getByRole('region', { name: 'OpenDota Matches' })
+    const card = preview.querySelector('.opendota-matches-preview')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-provider-match-count', '2')
+    expect(card).toHaveAttribute('data-valid-match-count', '1')
+    expect(card).toHaveAttribute('data-invalid-match-count', '1')
+    expect(preview.querySelectorAll('[data-match-index]')).toHaveLength(1)
+    expect(preview).not.toHaveTextContent('Missing identity')
+    expect(preview).not.toHaveTextContent('Match ID not supplied')
+  })
+
+  it('marks a non-array HTTP-success body invalid instead of empty', () => {
+    render(<ResponseDemoPreview api={api} data={{ match_id: 8988152817 }}/>)
+    const preview = screen.getByRole('region', { name: 'OpenDota Matches' })
+    expect(preview.querySelector('[data-domain-card="pro-match-results"]')).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('Invalid professional match response')
+  })
 })

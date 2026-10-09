@@ -6,6 +6,7 @@ import {
   getAgentExecutionPolicy,
   getAutomatedVerificationPolicy,
   getApiById,
+  getApiResponseType,
   matchesApiSearch,
   validateParameters,
   type ApiCategory,
@@ -114,9 +115,17 @@ const codeSample = (api: ApiDemo, parameters: Record<string, string>) => {
     `  headers: { ${sampleHeaders} },`,
     ...(body === undefined ? [] : isForm ? [`  body: new URLSearchParams(${JSON.stringify(body)}).toString(),`] : [`  body: JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, '\n  ')}),`]),
   ].join('\n')
-  const parse = api.parseResponse
-    ? `const contentType = response.headers.get('content-type') ?? '';\nconst data = contentType.startsWith('image/')\n  ? await response.blob()\n  : await response.text();`
-    : 'const data = await response.json();'
+  const responseType = getApiResponseType(api)
+  const contentTypeGuard = api.responseContentTypes?.length
+    ? `const contentType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();\nconst acceptedContentTypes = ${JSON.stringify(api.responseContentTypes.map((value) => value.toLowerCase()))};\nif (!acceptedContentTypes.includes(contentType)) throw new Error(\`Expected response Content-Type: ${api.responseContentTypes.join(' or ')}.\`);\n`
+    : ''
+  const parse = responseType === 'image'
+    ? `${contentTypeGuard}const data = await response.blob();`
+    : responseType === 'text'
+      ? `${contentTypeGuard}const data = await response.text();`
+      : api.successNoContent
+        ? `const text = await response.text();\nconst data = ${JSON.stringify(api.successNoContent.statuses)}.includes(response.status) && text.trim() === ''\n  ? ${JSON.stringify(api.successNoContent.data)}\n  : JSON.parse(text);`
+        : 'const data = await response.json();'
   return `const response = await fetch('${url}', {\n${options}\n});\n\n${parse}`
 }
 
@@ -272,6 +281,7 @@ function App() {
   const [category, setCategory] = useState<string>('All')
   const [catalogPage, setCatalogPage] = useState(1)
   const [mobileNav, setMobileNav] = useState(false)
+  const mobileNavOpenRef = useRef(mobileNav)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarPreference)
   const [viewport, setViewport] = useState(() => ({
     compact: window.matchMedia('(max-width: 1180px)').matches,
@@ -292,6 +302,7 @@ function App() {
   const detailTriggerRef = useRef<HTMLElement | null>(null)
   const responsiveDetailFocusRef = useRef<HTMLElement | null>(null)
   selectedIdRef.current = selectedId
+  mobileNavOpenRef.current = mobileNav
 
   const { close: closeMobileNavigation } = useModalFocusTrap({
     active: mobileNav,
@@ -409,7 +420,7 @@ function App() {
       } else if (!compactQuery.matches && document.activeElement === detailCloseRef.current) {
         responsiveDetailFocusRef.current = detailHeadingRef.current
       }
-      if (!mobileQuery.matches && document.activeElement === mobileCloseRef.current) {
+      if (!mobileQuery.matches && mobileNavOpenRef.current) {
         const activeNavigationItem = mobileNavRef.current?.querySelector<HTMLElement>('nav button.active')
         ;(activeNavigationItem ?? pageHeadingRef.current)?.focus({ preventScroll: true })
       }
@@ -491,6 +502,9 @@ function App() {
   const agentExecutionPolicy = getAgentExecutionPolicy(activeApi)
   const automatedVerificationPolicy = getAutomatedVerificationPolicy(activeApi)
   const agentExecutionNoteId = `agent-execution-policy-${activeApi.id}`
+  const activeResponseType = getApiResponseType(activeApi)
+  const responseOutputLabel = activeResponseType === 'json' ? t('request.rawJson') : t('request.responseDetails')
+  const copyResponseLabel = activeResponseType === 'json' ? t('request.copyJson') : t('request.copyDetails')
 
   const executeRequest = useCallback(async (api: ApiDemo, values: Record<string, string>) => {
     const nextErrors = validateParameters(api, values)
@@ -659,10 +673,12 @@ function App() {
                       data-http-method={api.method ?? DEFAULT_HTTP_METHOD}
                       data-agent-execution={getAgentExecutionPolicy(api).mode}
                       data-automated-verification={api.automatedVerification?.mode ?? 'enabled'}
-                      data-verification-minimum-interval-seconds={api.automatedVerification?.minimumIntervalSeconds}
+                      data-verification-minimum-interval-seconds={api.automatedVerification?.mode === 'cadence-limited' ? api.automatedVerification.minimumIntervalSeconds : undefined}
+                      data-verification-retry-on-rate-limit={api.automatedVerification?.mode === 'enabled' && api.automatedVerification.retryOnRateLimit === false ? 'false' : undefined}
+                      data-verification-rate-limit-statuses={api.automatedVerification?.mode === 'enabled' && api.automatedVerification.rateLimitStatuses?.length ? api.automatedVerification.rateLimitStatuses.join(',') : undefined}
                       data-selected={api.id === selectedId ? 'true' : 'false'}
                     >
-                      <td><input type="radio" name="selected-api" checked={api.id === selectedId} onChange={() => { rememberDetailTrigger(); selectApi(api.id) }} aria-label={t('catalog.selectApi', { name: api.name })} /></td>
+                      <td><label className="api-radio-target"><input type="radio" name="selected-api" checked={api.id === selectedId} onChange={() => { rememberDetailTrigger(); selectApi(api.id) }} aria-label={t('catalog.selectApi', { name: api.name })} /></label></td>
                       <td data-label={t('catalog.api')}><button className="api-identity" type="button" onClick={() => { rememberDetailTrigger(); selectApi(api.id) }}><span style={{ '--api-color': api.accent } as React.CSSProperties}>{api.monogram}</span><div lang="en"><b>{api.name}</b><small>{api.description}</small></div></button></td>
                       <td data-label={t('catalog.provider')}><div className="provider-cell"><b lang="en">{api.provider}</b><a href={api.documentationUrl} target="_blank" rel="noreferrer" aria-label={t('catalog.openDocumentation', { name: api.name })} data-api-docs-for={api.id}>{t('catalog.documentation')} <Icon name="external" size={11} /></a></div></td>
                       <td data-label={t('catalog.risk')}><span className="risk"><Icon name="shield" size={14} /> {api.risk ?? DEFAULT_RISK}</span></td>
@@ -676,9 +692,9 @@ function App() {
             <div className="table-footer" data-catalog-page={visibleCatalogPage} data-page-count={catalogPageCount} data-page-size={CATALOG_PAGE_SIZE}><span>{t('catalog.showing', { start: catalogRangeStart, end: catalogRangeEnd, matched: filteredApis.length, total: apiCatalog.length })}</span><div aria-label={t('catalog.pagination')}><button type="button" disabled={visibleCatalogPage <= 1} aria-label={t('catalog.previousPage')} onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}>‹</button><span className="current" aria-current="page" aria-label={t('catalog.page', { page: visibleCatalogPage, pages: catalogPageCount })}>{visibleCatalogPage}</span><button type="button" disabled={visibleCatalogPage >= catalogPageCount} aria-label={t('catalog.nextPage')} onClick={() => setCatalogPage((page) => Math.min(catalogPageCount, page + 1))}>›</button></div></div>
           </section>}
 
-          {currentPage === 'request-lab' && <section className={`request-lab page-section ${request.status === 'success' ? 'has-ssot-result' : ''}`} aria-labelledby="lab-heading" data-api-id={activeApi.id} data-request-state={request.status} data-agent-execution={agentExecutionPolicy.mode} data-automated-verification={automatedVerificationPolicy.mode} data-verification-minimum-interval-seconds={automatedVerificationPolicy.mode === 'cadence-limited' ? automatedVerificationPolicy.minimumIntervalSeconds : undefined}>
+          {currentPage === 'request-lab' && <section className={`request-lab page-section ${request.status === 'success' ? 'has-ssot-result' : ''}`} aria-labelledby="lab-heading" data-api-id={activeApi.id} data-request-state={request.status} data-response-type={activeResponseType} data-response-content-types={activeApi.responseContentTypes?.join(',')} data-agent-execution={agentExecutionPolicy.mode} data-automated-verification={automatedVerificationPolicy.mode} data-verification-minimum-interval-seconds={automatedVerificationPolicy.mode === 'cadence-limited' ? automatedVerificationPolicy.minimumIntervalSeconds : undefined} data-verification-retry-on-rate-limit={automatedVerificationPolicy.mode === 'enabled' && automatedVerificationPolicy.retryOnRateLimit === false ? 'false' : undefined} data-verification-rate-limit-statuses={automatedVerificationPolicy.mode === 'enabled' && automatedVerificationPolicy.rateLimitStatuses?.length ? automatedVerificationPolicy.rateLimitStatuses.join(',') : undefined}>
             <div className="section-title"><span><Icon name="activity" /></span><div><h2 id="lab-heading">{t('request.heading')}</h2><p>{t('request.description')}</p></div></div>
-            {request.status === 'success' && <PreviewLoadBoundary resetKey={`${activeApi.id}:${request.runId}`}><Suspense fallback={<div className="response-preview-loading" role="status" aria-live="polite">{t('request.preparingPreview')}</div>}><LazyResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} runtime={{ httpStatus: request.httpStatus, elapsed: request.elapsed, size: request.size }} locale={locale} /></Suspense></PreviewLoadBoundary>}
+            {request.status === 'success' && <PreviewLoadBoundary resetKey={`${activeApi.id}:${request.runId}`}><Suspense fallback={<div className="response-preview-loading" role="status" aria-live="polite">{t('request.preparingPreview')}</div>}><LazyResponseDemoPreview api={activeApi} data={request.data} requestUrl={request.url} executedRequest={request.executedRequest} responseMedia={request.responseMedia} runtime={{ httpStatus: request.httpStatus, elapsed: request.elapsed, size: request.size }} locale={locale} /></Suspense></PreviewLoadBoundary>}
             <div className="lab-grid">
               <form className="parameter-card" aria-label={t('request.configure', { name: activeApi.name })} data-api-id={activeApi.id} data-agent-execution={agentExecutionPolicy.mode} onSubmit={submitRequest} noValidate>
                 <div className="active-api"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div><small>{t('request.selectedModule')}</small><b lang="en">{activeApi.name}</b></div><a href={activeApi.documentationUrl} target="_blank" rel="noreferrer">{t('request.docs')} <Icon name="external" size={12} /></a></div>
@@ -688,7 +704,7 @@ function App() {
                 <div className="parameter-fields">
                   {activeApi.fields.map((field) => (
                     <label key={field.id} htmlFor={`parameter-${field.id}`}><span><span lang="en">{field.label}</span><em>{t('request.required')}</em></span>
-                      {field.type === 'select' ? <select lang="en" id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input lang="en" id={`parameter-${field.id}`} name={field.id} type={field.type} min={getNativeFieldMinimum(field, parameters)} max={field.type === 'number' ? field.max : undefined} minLength={field.type === 'text' ? field.minLength : undefined} maxLength={field.type === 'text' ? field.maxLength : undefined} pattern={field.type === 'text' ? field.pattern : undefined} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)} />}
+                      {field.type === 'select' ? <select lang="en" id={`parameter-${field.id}`} name={field.id} value={parameters[field.id] ?? ''} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)}>{field.options?.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select> : <input lang="en" id={`parameter-${field.id}`} name={field.id} type={field.type} min={getNativeFieldMinimum(field, parameters)} max={field.type === 'number' ? field.max : undefined} step={field.type === 'number' ? field.step : undefined} minLength={field.type === 'text' ? field.minLength : undefined} maxLength={field.type === 'text' ? field.maxLength : undefined} pattern={field.type === 'text' ? field.pattern : undefined} value={parameters[field.id] ?? ''} placeholder={field.placeholder} aria-label={field.label} aria-required="true" aria-invalid={Boolean(errors[field.id])} aria-describedby={`parameter-${field.id}-help`} onChange={(event) => updateParameter(field.id, event.target.value)} />}
                       <small lang="en" id={`parameter-${field.id}-help`} className={errors[field.id] ? 'error' : ''}>{errors[field.id] ?? field.help}</small>
                     </label>
                   ))}
@@ -696,7 +712,7 @@ function App() {
                 <button className="primary-action" type="submit" disabled={request.status === 'loading'} data-agent-execution={agentExecutionPolicy.mode} aria-describedby={agentExecutionPolicy.mode === 'manual-only' ? agentExecutionNoteId : undefined}>{request.status === 'loading' ? <span className="spinner" /> : <Icon name="play" size={16} />}{request.status === 'loading' ? t('request.running') : t('request.tryLive')}</button>
               </form>
               <div className="response-card" role="region" aria-label={t('request.output', { name: activeApi.name })} data-api-id={activeApi.id} data-request-state={request.status} data-error-type={request.status === 'error' ? request.errorType : undefined}>
-                <div className="response-head"><div role="tablist" aria-label={t('request.outputTabs')}><button id="request-output-response-tab" data-output-tab="response" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'response'} tabIndex={outputTab === 'response' ? 0 : -1} type="button" onClick={() => setOutputTab('response')} onKeyDown={handleOutputTabKeyDown}>{t('request.rawJson')}</button>{agentExecutionPolicy.mode === 'enabled' && <button id="request-output-code-tab" data-output-tab="code" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'code'} tabIndex={outputTab === 'code' ? 0 : -1} type="button" onClick={() => setOutputTab('code')} onKeyDown={handleOutputTabKeyDown}>{t('request.fetchCode')}</button>}</div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyOutput}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? t('request.copied') : outputTab === 'code' ? t('request.copyCode') : t('request.copyJson')}</button></div>
+                <div className="response-head"><div role="tablist" aria-label={t('request.outputTabs')}><button id="request-output-response-tab" data-output-tab="response" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'response'} tabIndex={outputTab === 'response' ? 0 : -1} type="button" onClick={() => setOutputTab('response')} onKeyDown={handleOutputTabKeyDown}>{responseOutputLabel}</button>{agentExecutionPolicy.mode === 'enabled' && <button id="request-output-code-tab" data-output-tab="code" role="tab" aria-controls="request-output-panel" aria-selected={outputTab === 'code'} tabIndex={outputTab === 'code' ? 0 : -1} type="button" onClick={() => setOutputTab('code')} onKeyDown={handleOutputTabKeyDown}>{t('request.fetchCode')}</button>}</div>{request.status === 'success' && <span className="response-meta"><b>{request.httpStatus} OK</b>{request.elapsed} ms · {formatBytes(request.size)}</span>}<button type="button" className="copy-output" onClick={copyOutput}><Icon name={copied ? 'check' : 'copy'} size={14} />{copied ? t('request.copied') : outputTab === 'code' ? t('request.copyCode') : copyResponseLabel}</button></div>
                 <div id="request-output-panel" className="response-body" role="tabpanel" aria-labelledby={outputTab === 'response' ? 'request-output-response-tab' : 'request-output-code-tab'} tabIndex={0} aria-live="polite">
                   {outputTab === 'code' ? <pre>{codeSample(activeApi, parameters)}</pre> : request.status === 'idle' ? <div className="response-empty"><span><Icon name="play" /></span><b>{t('request.ready')}</b><p>{t('request.readyDescription')}</p></div> : request.status === 'loading' ? <div className="response-empty"><span><Icon name="activity" /></span><b>{t('request.contacting', { provider: activeApi.provider })}</b><p>{t('request.waiting')}</p></div> : request.status === 'error' ? <div className="response-error" role="alert" aria-label={t('request.failedLabel', { type: request.errorType })} data-error-type={request.errorType} data-http-status={request.httpStatus}><Icon name="alert" /><b>{t('request.failed')}</b><p>{request.message}</p><small className="sr-only">{t('request.errorTypeLabel', { type: request.errorType })}{request.httpStatus ? `; HTTP ${request.httpStatus}` : ''}</small></div> : <pre>{JSON.stringify(request.data, null, 2)}</pre>}
                 </div>
@@ -730,7 +746,7 @@ function App() {
       </div>
 
       {currentPage === 'catalog' && viewport.compact && detailOpen && <div className="detail-scrim" aria-hidden="true" onClick={() => closeDetailPanel(true)} />}
-      {currentPage === 'catalog' && <aside ref={detailPanelRef} className={`detail-panel ${detailOpen ? 'mobile-open' : ''}`} role={viewport.compact && detailOpen ? 'dialog' : undefined} aria-modal={viewport.compact && detailOpen ? 'true' : undefined} aria-label={viewport.compact && detailOpen ? t('detail.dialogLabel', { name: activeApi.name }) : t('detail.selectedDetails')} aria-hidden={viewport.compact && !detailOpen} inert={mobileNav || (viewport.compact && !detailOpen) ? true : undefined} data-api-id={activeApi.id} data-agent-execution={agentExecutionPolicy.mode} data-automated-verification={automatedVerificationPolicy.mode} data-verification-minimum-interval-seconds={automatedVerificationPolicy.mode === 'cadence-limited' ? automatedVerificationPolicy.minimumIntervalSeconds : undefined}>
+      {currentPage === 'catalog' && <aside ref={detailPanelRef} className={`detail-panel ${detailOpen ? 'mobile-open' : ''}`} role={viewport.compact && detailOpen ? 'dialog' : undefined} aria-modal={viewport.compact && detailOpen ? 'true' : undefined} aria-label={viewport.compact && detailOpen ? t('detail.dialogLabel', { name: activeApi.name }) : t('detail.selectedDetails')} aria-hidden={viewport.compact && !detailOpen} inert={mobileNav || (viewport.compact && !detailOpen) ? true : undefined} data-api-id={activeApi.id} data-agent-execution={agentExecutionPolicy.mode} data-automated-verification={automatedVerificationPolicy.mode} data-verification-minimum-interval-seconds={automatedVerificationPolicy.mode === 'cadence-limited' ? automatedVerificationPolicy.minimumIntervalSeconds : undefined} data-verification-retry-on-rate-limit={automatedVerificationPolicy.mode === 'enabled' && automatedVerificationPolicy.retryOnRateLimit === false ? 'false' : undefined} data-verification-rate-limit-statuses={automatedVerificationPolicy.mode === 'enabled' && automatedVerificationPolicy.rateLimitStatuses?.length ? automatedVerificationPolicy.rateLimitStatuses.join(',') : undefined}>
         <div className="detail-head"><span>{t('detail.selectedModule')}</span>{viewport.compact && <button ref={detailCloseRef} type="button" onClick={() => closeDetailPanel(true)} aria-label={t('detail.close')}><Icon name="x" /></button>}</div>
         <div className="detail-title"><span style={{ '--api-color': activeApi.accent } as React.CSSProperties}>{activeApi.monogram}</span><div lang="en"><h2 ref={detailHeadingRef} tabIndex={-1}>{activeApi.name}</h2><small lang={locale}>{t('detail.demoPick')}</small></div></div>
         <p className="detail-description" lang="en">{activeApi.description}</p>

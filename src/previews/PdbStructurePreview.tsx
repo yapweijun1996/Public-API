@@ -1,3 +1,4 @@
+import type { ExecutedRequestContext } from '../useApiRequestRuntime'
 import { asRecord, CardEmpty, CardHeading, DateValue, Facts, finite, rows, text } from './cardPrimitives'
 
 const dateOnly = (value: unknown) => {
@@ -10,14 +11,59 @@ const primaryCitation = (value: unknown) => {
   return citations.find((citation) => text(citation.rcsb_is_primary) === 'Y') ?? citations[0] ?? {}
 }
 
-export function PdbStructurePreview({ data }: { data: unknown }) {
+type PdbRequest = { entryId: string; transportBound: boolean }
+type PdbRequestUrl = Omit<PdbRequest, 'transportBound'>
+
+const parseRequestUrl = (requestUrl?: string): PdbRequestUrl | undefined => {
+  if (!requestUrl) return undefined
+  try {
+    const url = new URL(requestUrl)
+    const match = /^\/rest\/v1\/core\/entry\/([A-Za-z0-9]{4})$/.exec(url.pathname)
+    if (url.protocol !== 'https:' || url.hostname !== 'data.rcsb.org' || url.port || url.username || url.password || url.hash || url.search || !match) return undefined
+    const entryId = match[1].toUpperCase()
+    const canonical = `https://data.rcsb.org/rest/v1/core/entry/${entryId}`
+    return requestUrl === canonical ? { entryId } : undefined
+  } catch { return undefined }
+}
+
+const requestIdentity = (requestUrl?: string, executedRequest?: ExecutedRequestContext): PdbRequest | null | undefined => {
+  const displayed = parseRequestUrl(requestUrl)
+  if (requestUrl && !displayed) return null
+  if (!executedRequest) return displayed ? { ...displayed, transportBound: false } : undefined
+  if (executedRequest.method.toUpperCase() !== 'GET' || executedRequest.body !== undefined || (requestUrl !== undefined && requestUrl !== executedRequest.url)) return null
+  const executed = parseRequestUrl(executedRequest.url)
+  return executed ? { ...executed, transportBound: true } : null
+}
+
+export function PdbStructurePreview({ data, requestUrl, executedRequest }: { data: unknown; requestUrl?: string; executedRequest?: ExecutedRequestContext }) {
+  const request = requestIdentity(requestUrl, executedRequest)
+  if (request === null) return <CardEmpty domain="molecular-structure" title="Invalid RCSB PDB executed request" detail="The successful response is not bound to the exact supported bodyless GET RCSB core-entry request used by this demo." state="invalid"/>
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return <CardEmpty domain="molecular-structure" title="Invalid RCSB PDB structure response" detail="RCSB PDB returned HTTP-success data without the documented core-entry object." state="invalid"/>
+  }
+
   const root = asRecord(data)
+  const rootId = text(root.rcsb_id)?.toUpperCase()
   const entry = asRecord(root.entry)
-  const entryId = text(entry.id)
-  if (!entryId) return <CardEmpty domain="molecular-structure" title="Structure record unavailable" detail="RCSB PDB did not return an entry identifier for this record." state="empty"/>
+  const entryId = text(entry.id)?.toUpperCase()
+  const identifiers = asRecord(root.rcsb_entry_container_identifiers)
+  const containerEntryId = text(identifiers.entry_id)?.toUpperCase()
+  if (!rootId || !entryId || !containerEntryId) {
+    return <CardEmpty domain="molecular-structure" title="Invalid RCSB PDB structure response" detail="RCSB PDB returned a core-entry object without the provider-owned rcsb_id, entry.id, and container entry_id identity fields." state="invalid"/>
+  }
+
+  if (rootId !== entryId || rootId !== containerEntryId) {
+    return <CardEmpty domain="molecular-structure" title="RCSB PDB structure identity mismatch" detail="The provider-owned core-entry identifiers disagree, so no structure metadata is presented as trustworthy." state="invalid"/>
+  }
+
+  const requested = request?.entryId
+  if (requested && requested !== rootId) {
+    return <CardEmpty domain="molecular-structure" title="RCSB PDB structure identity mismatch" detail="The returned core-entry identifier does not match the requested PDB entry, so no structure metadata is presented as trustworthy." state="invalid"/>
+  }
 
   const structure = asRecord(root.struct)
-  const title = text(structure.title) ?? `PDB ${entryId}`
+  const providerTitle = text(structure.title)
+  const title = providerTitle ?? `PDB ${rootId}`
   const experimentalMethods = rows(root.exptl).map((record) => text(record.method)).filter((value): value is string => Boolean(value))
   const entryInfo = asRecord(root.rcsb_entry_info)
   const resolution = rows(root.refine).map((record) => finite(record.ls_d_res_high)).find((value) => value !== undefined)
@@ -46,12 +92,19 @@ export function PdbStructurePreview({ data }: { data: unknown }) {
   const authors = Array.isArray(citation.rcsb_authors)
     ? citation.rcsb_authors.map(text).filter((value): value is string => Boolean(value))
     : []
+  const state = request?.transportBound && providerTitle && experimentalMethods.length > 0 && statusCode && released ? 'ready' : 'partial'
 
   return <div
     className="domain-card pdb-structure-preview"
     data-domain-card="molecular-structure"
-    data-result-state="ready"
+    data-result-state={state}
+    data-request-bound={request?.transportBound ? 'true' : 'false'}
+    data-request-contract="exact-rcsb-core-entry-get"
+    data-requested-entry-id={requested}
+    data-identity-match="true"
+    data-rcsb-id={rootId}
     data-entry-id={entryId}
+    data-container-entry-id={containerEntryId}
     data-experimental-method={experimentalMethods.join(', ')}
     data-resolution-angstroms={resolution}
     data-polymer-composition={polymerComposition}
@@ -65,13 +118,15 @@ export function PdbStructurePreview({ data }: { data: unknown }) {
     <CardHeading
       eyebrow="RCSB PDB structure record"
       title={title}
-      description={`PDB ${entryId} · Experimental structure metadata and primary publication`}
+      description={`PDB ${rootId} · Experimental structure metadata and primary publication`}
     >
-      {experimentalMethods.length > 0 && <span className="domain-state">{experimentalMethods.join(' + ')}</span>}
+      <span className="domain-state">{state === 'partial' ? 'Partial provider response' : experimentalMethods.join(' + ')}</span>
     </CardHeading>
 
+    {state === 'partial' && <p className="domain-note">{request?.transportBound ? 'RCSB PDB returned matching core-entry identity, but one or more expected title, experimental-method, archive-status, or release-date fields are unavailable. Missing context is not inferred.' : 'The RCSB PDB response is structurally useful, but executed-request identity is unavailable, so it cannot be marked ready.'}</p>}
+
     <Facts items={[
-      { label: 'PDB entry', value: <code>{entryId}</code> },
+      { label: 'PDB entry', value: <code>{rootId}</code> },
       { label: 'Experimental method', value: experimentalMethods.join(', ') || 'Not supplied' },
       { label: 'Resolution', value: resolution === undefined ? 'Not supplied' : `${resolution.toLocaleString('en', { maximumFractionDigits: 3 })} Å` },
       { label: 'Polymer composition', value: polymerComposition ?? 'Not supplied' },
@@ -99,6 +154,6 @@ export function PdbStructurePreview({ data }: { data: unknown }) {
       </dl>
     </section>}
 
-    <p className="domain-note">RCSB PDB Data API core-entry records can contain structure-level experimental, archive, entity, and citation metadata. This card preserves returned provider facts as text for human and browser-agent use; Raw JSON remains available for the complete entry.</p>
+    <p className="domain-note">RCSB PDB Data API core-entry records identify each object with rcsb_id plus container identifiers. This card presents only a matching provider-owned structure identity; Raw JSON remains available for the complete entry.</p>
   </div>
 }

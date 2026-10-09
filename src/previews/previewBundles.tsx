@@ -1,12 +1,15 @@
 import { createElement, lazy, type ComponentType } from 'react'
 
-export type PreviewBundleName = 'family' | 'specialized' | 'weather' | 'operational' | 'market' | 'semantic' | 'science-semantic' | 'sports-semantic' | 'diagnostic'
+export type PreviewBundleName = 'family' | 'traffic-camera' | 'specialized' | 'developer-semantic' | 'package-semantic' | 'weather' | 'operational' | 'market' | 'semantic' | 'science-semantic' | 'sports-semantic' | 'diagnostic'
 
 type PreviewBundleModule = Record<string, unknown>
 
 const bundleLoaders: Record<PreviewBundleName, () => Promise<PreviewBundleModule>> = {
   family: () => import('./CatalogFamilyPreviews'),
+  'traffic-camera': () => import('./TrafficCameraPreviewBundle'),
   specialized: () => import('./SpecializedCatalogPreviews'),
+  'developer-semantic': () => import('./DeveloperSemanticPreviewBundle'),
+  'package-semantic': () => import('./PackageSemanticPreviewBundle'),
   weather: () => import('./WeatherPreviews'),
   operational: () => import('./OperationalPreviews'),
   market: () => import('./MarketPreviews'),

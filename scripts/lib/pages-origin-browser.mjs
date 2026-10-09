@@ -6,20 +6,21 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {spawn} from 'node:child_process';
+import {createOwnedBrowserProfile, hasChildExited, removeOwnedBrowserProfile, terminateChildProcess} from './browser-temp-profile.mjs';
 export const root=path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 export const evidence=process.env.EVIDENCE_DIR||fs.mkdtempSync(path.join(os.tmpdir(),'public-api-domain-evidence-'));
 fs.mkdirSync(evidence,{recursive:true});
 export const ids=['color-api','google-dns-doh','npm-download-counts','endoflife-date','exchange-rate-current','ecb-fx-rates'];
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-export async function browser(dist, { fixtures = new Map(), appAssetFailures = [] } = {}){
+export async function browser(dist, { fixtures = new Map(), appAssetFailures = [], blockedProviderPatterns = [] } = {}){
  const indexPath=path.join(dist,'index.html');
  if(!fs.existsSync(indexPath))throw Error('Build the Pages-base bundle before browser verification with `npm run build:pages`.');
  const indexHtml=fs.readFileSync(indexPath,'utf8');
  if(!indexHtml.includes('src=\"/Public-API/assets/'))throw Error('Browser-origin verification requires a /Public-API/ Pages-base bundle. Run `npm run build:pages`.');
  const port=9820+Math.floor(Math.random()*100);
- const profile=fs.mkdtempSync(path.join(os.tmpdir(),'public-api-test-profile-'));
+ const profile=createOwnedBrowserProfile('public-api-test-profile-');
  let launchError;
- const chrome=spawn(process.env.CHROME_BIN||'/usr/bin/google-chrome',['--headless=new','--no-sandbox','--disable-gpu','--enable-features=WebMCPTesting,DevToolsWebMCPSupport',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
+ const chrome=spawn(process.env.CHROME_BIN||'/usr/bin/google-chrome',['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update','--disable-default-apps','--disable-sync','--enable-features=WebMCPTesting,DevToolsWebMCPSupport',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
  chrome.on('error',error=>{launchError=error;});
  let pages; for(let i=0;i<60;i++){if(launchError)throw new Error('Set CHROME_BIN to a Chromium browser executable: '+launchError.message);try{pages=await fetch(`http://127.0.0.1:${port}/json`).then(r=>r.json()); if(pages.length)break;}catch{} await sleep(100);}
  if(!pages?.length){chrome.kill();throw Error('CDP unavailable');}
@@ -41,7 +42,7 @@ export async function browser(dist, { fixtures = new Map(), appAssetFailures = [
    if(method!==(fixture.method||'GET')&&method!=='OPTIONS'){errors.push('Unexpected fixture method: '+method);call('Fetch.failRequest',{requestId:m.params.requestId,errorReason:'BlockedByClient'}).catch(()=>{});return;}
    fixtureRequests.push({url:url.href,method,source:fixture.stall?'synthetic-stall':'synthetic-fixture',status:fixture.stall?'stalled':method==='OPTIONS'?204:fixture.status||200});
    if(fixture.stall)return;
-   call('Fetch.fulfillRequest',{requestId:m.params.requestId,responseCode:method==='OPTIONS'?204:fixture.status||200,responseHeaders:[{name:'Content-Type',value:'application/json'},{name:'Access-Control-Allow-Origin',value:'*'},{name:'Access-Control-Allow-Methods',value:'GET, POST, OPTIONS'},{name:'Access-Control-Allow-Headers',value:'Content-Type'},{name:'Cache-Control',value:'no-store'}],body:method==='OPTIONS'?'':Buffer.from(JSON.stringify(fixture.body)).toString('base64')}).catch(e=>errors.push(String(e)));return;
+   call('Fetch.fulfillRequest',{requestId:m.params.requestId,responseCode:method==='OPTIONS'?204:fixture.status||200,responseHeaders:[{name:'Content-Type',value:'application/json'},{name:'Access-Control-Allow-Origin',value:'*'},{name:'Access-Control-Allow-Methods',value:'GET, POST, OPTIONS'},{name:'Access-Control-Allow-Headers',value:fixture.allowHeaders||'Content-Type'},{name:'Cache-Control',value:'no-store'}],body:method==='OPTIONS'?'':Buffer.from(JSON.stringify(fixture.body)).toString('base64')}).catch(e=>errors.push(String(e)));return;
   }
   const failureRule=appAssetFailureRules.find((rule)=>rule.remaining>0&&rule.includes&&url.pathname.includes(rule.includes));
   if(failureRule){failureRule.remaining-=1;appAssetFailureRequests.push({path:url.pathname,errorReason:failureRule.errorReason});call('Fetch.failRequest',{requestId:m.params.requestId,errorReason:failureRule.errorReason}).catch(e=>errors.push(String(e)));return;}
@@ -56,10 +57,10 @@ export async function browser(dist, { fixtures = new Map(), appAssetFailures = [
  await call('Page.enable');await call('Runtime.enable');await call('Network.enable');await call('Accessibility.enable');await call('Network.setCacheDisabled',{cacheDisabled:true});await call('Network.setBypassServiceWorker',{bypass:true});
  // The free LanguageTool endpoint prohibits automated checks. Block it unless an
  // explicitly supplied synthetic fixture handles the request; never contact it.
- await call('Fetch.enable',{patterns:[{urlPattern:'https://yapweijun1996.github.io/Public-API/*',requestStage:'Request'},{urlPattern:'https://api.languagetool.org/*',requestStage:'Request'},...[...fixtures.keys()].filter(url=>!url.startsWith('https://api.languagetool.org/')).map(urlPattern=>({urlPattern,requestStage:'Request'}))]});
+ await call('Fetch.enable',{patterns:[{urlPattern:'https://yapweijun1996.github.io/Public-API/*',requestStage:'Request'},{urlPattern:'https://api.languagetool.org/*',requestStage:'Request'},...blockedProviderPatterns.map(urlPattern=>({urlPattern,requestStage:'Request'})),...[...fixtures.keys()].filter(url=>!url.startsWith('https://api.languagetool.org/')).map(urlPattern=>({urlPattern,requestStage:'Request'}))]});
  const viewport=async(width,height)=>{await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await sleep(350);};
  const nav=async id=>{await viewport(1440,1000);await call('Page.navigate',{url:`https://yapweijun1996.github.io/Public-API/#/request-lab?api=${id}`});await wait(`document.querySelector('.request-lab')?.dataset.apiId===${JSON.stringify(id)} && !!document.querySelector('form.parameter-card')`);};
  const run=async()=>{await ev(`document.querySelector('.parameter-card').requestSubmit()`);await wait(`['success','error'].includes(document.querySelector('.request-lab')?.dataset.requestState)`,24000);const state=await ev(`document.querySelector('.request-lab').dataset.requestState`);if(state==='error')return {ok:false,error:await ev(`document.querySelector('.response-error').innerText`)};await wait(`document.querySelector('.demo-preview')`);return {ok:true,data:await ev(`JSON.parse(document.querySelector('.response-body pre').textContent)`)};};
  const screenshot=async(file)=>{await ev(`document.querySelector('.demo-preview')?.scrollIntoView({block:'start',behavior:'instant'})`);await sleep(120);const r=await call('Page.captureScreenshot',{format:'png'});fs.writeFileSync(file,Buffer.from(r.data,'base64'));};
- return {call,ev,wait,nav,run,viewport,screenshot,errors,fixtureRequests,blockedProviders,networkFailures,appAssetFailureRequests,get requestCount(){return requests;},async close(){ws.close();if(chrome.exitCode===null){const exited=new Promise(resolve=>chrome.once('exit',resolve));chrome.kill('SIGTERM');await Promise.race([exited,sleep(3000)]);}if(chrome.exitCode!==null){await sleep(100);fs.rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});}}};
+ return {call,ev,wait,nav,run,viewport,screenshot,errors,fixtureRequests,blockedProviders,networkFailures,appAssetFailureRequests,get requestCount(){return requests;},async close(){ws.close();const chromeExited=await terminateChildProcess(chrome);if(chromeExited&&hasChildExited(chrome)){await sleep(100);removeOwnedBrowserProfile(profile);return;}throw Error('Chromium did not terminate; preserving its browser profile for safe owner-bound cleanup.');}};
 }

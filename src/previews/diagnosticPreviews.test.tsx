@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import fixtures from './fixtures/diagnostic-responses.json'
-import { ScorecardPreview, evidenceUrl, scorecardModel, scoreValue } from './ScorecardPreview'
+import { ScorecardPreview, evidenceUrl, scoreValue } from './ScorecardPreview'
 import { GrammarPreview, grammarContext, grammarModel } from './GrammarPreview'
 import { RecallsPreview, recallQuery, recallsModel } from './RecallsPreview'
 import { ResponseDemoPreview } from '../responsePreview'
@@ -10,6 +10,16 @@ import { apiCatalog } from '../apiCatalog'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 const state = () => document.querySelector('[data-domain-card]')?.getAttribute('data-result-state')
+const recallRequest = (make = 'Example', model = 'Demo', year = '2020', suffix = '') => ({
+  url: `https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${year}${suffix}`,
+  method: 'GET' as const,
+})
+const grammarRequest = (overrides: Partial<{ url: string; method: string; body: unknown }> = {}) => ({
+  url: 'https://api.languagetool.org/v2/check',
+  method: 'POST',
+  body: { text: 'This are a test.', language: 'en-US' },
+  ...overrides,
+})
 
 describe('Scorecard evidence, not certification', () => {
   it('keeps genuine zero separate from inconclusive and uses the provider aggregate', () => {
@@ -41,7 +51,8 @@ describe('Scorecard evidence, not certification', () => {
     const { rerender } = render(<ScorecardPreview data={{}}/>)
     expect(state()).toBe('invalid')
     rerender(<ScorecardPreview data={{ checks: [] }}/>)
-    expect(state()).toBe('empty')
+    expect(state()).toBe('partial')
+    expect(document.querySelector('[data-domain-card="security-scorecard"]')).toHaveAttribute('data-request-bound', 'false')
     expect(screen.getByText(/not a clean security report/)).toBeInTheDocument()
     rerender(<ScorecardPreview data={{ checks: [null, { name: 'Unknown check' }] }}/>)
     expect(state()).toBe('partial')
@@ -63,9 +74,53 @@ describe('Scorecard evidence, not certification', () => {
   })
 })
 
+describe('Scorecard exact executed-request identity', () => {
+  const api = apiCatalog.find((entry) => entry.id === 'openssf-scorecard')!
+  const requestUrl = 'https://api.securityscorecards.dev/projects/github.com/ossf/scorecard'
+  const exactData = { ...fixtures.scorecard, repo: { ...fixtures.scorecard.repo, name: 'github.com/ossf/scorecard' } }
+
+  it('fails closed unless the semantic result is bound to the exact repository GET', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api} data={exactData} requestUrl={requestUrl}/>)
+    let card = document.querySelector('[data-domain-card="security-scorecard"]')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-request-bound', 'false')
+
+    for (const executedRequest of [
+      { url: requestUrl, method: 'POST' },
+      { url: requestUrl, method: 'GET', body: {} },
+      { url: requestUrl + '?commit=abcdef', method: 'GET' },
+      { url: 'https://api.securityscorecards.dev/projects/github.com/example/demo', method: 'GET' },
+    ]) {
+      rerender(<ResponseDemoPreview api={api} data={exactData} requestUrl={requestUrl} executedRequest={executedRequest}/>)
+      card = document.querySelector('[data-domain-card="security-scorecard"]')
+      expect(card).toHaveAttribute('data-result-state', 'invalid')
+      expect(card).toHaveAttribute('data-request-bound', 'false')
+    }
+
+    rerender(<ResponseDemoPreview api={api} data={exactData} requestUrl={requestUrl} executedRequest={{ url: requestUrl, method: 'GET' }}/>)
+    card = document.querySelector('[data-domain-card="security-scorecard"]')
+    expect(card).toHaveAttribute('data-result-state', 'ready')
+    expect(card).toHaveAttribute('data-request-bound', 'true')
+    expect(card).toHaveAttribute('data-request-contract', 'exact-openssf-scorecard-project-v2')
+    expect(card).toHaveAttribute('data-request-repository', 'github.com/ossf/scorecard')
+    expect(card).toHaveAttribute('data-provider-repository', 'github.com/ossf/scorecard')
+  })
+
+  it('rejects response repository contradictions and only trusts exact-bound empty results', () => {
+    const exactRequest = { url: requestUrl, method: 'GET' }
+    const { rerender } = render(<ResponseDemoPreview api={api} data={{ ...exactData, repo: { ...exactData.repo, name: 'github.com/example/demo' } }} requestUrl={requestUrl} executedRequest={exactRequest}/>)
+    expect(document.querySelector('[data-domain-card="security-scorecard"]')).toHaveAttribute('data-result-state', 'invalid')
+
+    rerender(<ResponseDemoPreview api={api} data={{ ...exactData, checks: [] }} requestUrl={requestUrl} executedRequest={exactRequest}/>)
+    const card = document.querySelector('[data-domain-card="security-scorecard"]')
+    expect(card).toHaveAttribute('data-result-state', 'empty')
+    expect(card).toHaveAttribute('data-request-bound', 'true')
+  })
+})
+
 describe('Grammar review result states', () => {
   it('uses the context-local offset and retains the whole explanation and replacement', () => {
-    render(<GrammarPreview data={fixtures.grammar}/>)
+    render(<GrammarPreview data={fixtures.grammar} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(state()).toBe('issues')
     expect(document.querySelector('mark')).toHaveTextContent('are')
     expect(screen.getByText(fixtures.grammar.matches[0].message)).toBeInTheDocument()
@@ -73,14 +128,14 @@ describe('Grammar review result states', () => {
     expect(screen.getByRole('link', { name: 'LanguageTool' })).toHaveAttribute('href', 'https://languagetool.org')
   })
   it('distinguishes no issues from missing, malformed or incomplete results', () => {
-    const { rerender } = render(<GrammarPreview data={{ matches: [] }}/>)
+    const { rerender } = render(<GrammarPreview data={{ matches: [] }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(state()).toBe('no-issues')
     expect(screen.getByText(/does not guarantee the text is error-free/)).toBeInTheDocument()
     for (const data of [{}, { matches: null }, { matches: [null] }, { matches: [], error: 'failed' }]) {
-      rerender(<GrammarPreview data={data}/>); expect(state()).toBe('invalid')
+      rerender(<GrammarPreview data={data} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>); expect(state()).toBe('invalid')
       expect(screen.queryByRole('heading', { name: 'No issues returned' })).toBeNull()
     }
-    rerender(<GrammarPreview data={{ matches: [], warnings: { incompleteResults: true } }}/>)
+    rerender(<GrammarPreview data={{ matches: [], warnings: { incompleteResults: true } }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(state()).toBe('partial')
     expect(screen.getByRole('heading', { name: 'Partial checking results' })).toBeInTheDocument()
     expect(grammarModel({ matches: [null, fixtures.grammar.matches[0]] }).state).toBe('partial')
@@ -92,18 +147,18 @@ describe('Grammar review result states', () => {
   })
   it('shows deletion suggestions distinctly and preserves empty versus missing replacement arrays', () => {
     const issue = fixtures.grammar.matches[0]
-    const { rerender } = render(<GrammarPreview data={{ matches: [{ ...issue, replacements: [{ value: '' }] }] }}/>)
+    const { rerender } = render(<GrammarPreview data={{ matches: [{ ...issue, replacements: [{ value: '' }] }] }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(screen.getByText('Delete the flagged text')).toBeInTheDocument()
     expect(screen.queryByRole('button')).toBeNull()
-    rerender(<GrammarPreview data={{ matches: [{ ...issue, replacements: [] }] }}/>)
+    rerender(<GrammarPreview data={{ matches: [{ ...issue, replacements: [] }] }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(screen.getByText(/No replacement suggested/)).toBeInTheDocument()
-    rerender(<GrammarPreview data={{ matches: [{ ...issue, replacements: undefined }] }}/>)
+    rerender(<GrammarPreview data={{ matches: [{ ...issue, replacements: undefined }] }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     expect(screen.getByText(/suggestions were not supplied/)).toBeInTheDocument()
   })
   it('filters and reveals all issues without editing or resending the original sentence', () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
     const matches = Array.from({ length: 12 }, (_, i) => ({ ...fixtures.grammar.matches[0], rule: { category: { name: i % 2 ? 'Spelling' : 'Grammar' } } }))
-    render(<GrammarPreview data={{ matches }}/>)
+    render(<GrammarPreview data={{ matches }} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
     fireEvent.click(screen.getByRole('button', { name: 'Show more issues' }))
     expect(document.querySelectorAll('[data-issue-index]')).toHaveLength(12)
     fireEvent.change(screen.getByLabelText('Filter writing issues'), { target: { value: 'Spelling' } })
@@ -112,11 +167,44 @@ describe('Grammar review result states', () => {
   })
 })
 
+describe('Grammar exact executed-request identity', () => {
+  const api = apiCatalog.find((entry) => entry.id === 'languagetool-grammar-check')!
+
+  it('binds a semantic result only to the exact catalog POST form body', () => {
+    render(<ResponseDemoPreview api={api} data={fixtures.grammar} requestUrl="https://api.languagetool.org/v2/check" executedRequest={grammarRequest()}/>)
+    const card = document.querySelector('[data-domain-card="grammar-review"]')
+    expect(card).toHaveAttribute('data-result-state', 'issues')
+    expect(card).toHaveAttribute('data-request-contract', 'exact-languagetool-public-check-v2')
+    expect(card).toHaveAttribute('data-request-bound', 'true')
+  })
+
+  it('fails closed when execution evidence is absent or transport/body identity drifts', () => {
+    const { rerender } = render(<ResponseDemoPreview api={api} data={fixtures.grammar} requestUrl="https://api.languagetool.org/v2/check"/>)
+    let card = document.querySelector('[data-domain-card="grammar-review"]')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-request-bound', 'false')
+
+    const invalidRequests = [
+      grammarRequest({ method: 'GET' }),
+      grammarRequest({ url: 'https://api.languagetool.org/v2/check?language=en-US' }),
+      grammarRequest({ body: undefined }),
+      grammarRequest({ body: { text: 'This are a test.', language: 'auto' } }),
+      grammarRequest({ body: { text: 'This are a test.', language: 'en-US', enabledOnly: 'false' } }),
+    ]
+    for (const executedRequest of invalidRequests) {
+      rerender(<ResponseDemoPreview api={api} data={fixtures.grammar} requestUrl="https://api.languagetool.org/v2/check" executedRequest={executedRequest}/>)
+      card = document.querySelector('[data-domain-card="grammar-review"]')
+      expect(card).toHaveAttribute('data-result-state', 'invalid')
+      expect(card).toHaveAttribute('data-request-bound', 'false')
+    }
+  })
+})
+
 describe('Recall risk and remedy experience', () => {
   it('preserves complete safety narratives, provider dates and important flags', () => {
     const row = fixtures.recalls.results[0]
     const summary = row.Summary + ' Long full narrative.'.repeat(90)
-    render(<RecallsPreview data={{ Count: 1, results: [{ ...row, Summary: summary }] }} requestUrl="https://api.nhtsa.gov/recalls/recallsByVehicle?make=Example&model=Demo&modelYear=2020"/>)
+    render(<RecallsPreview data={{ Count: 1, results: [{ ...row, Summary: summary }] }} executedRequest={recallRequest()}/>)
     expect(state()).toBe('ready')
     expect(screen.getByRole('heading', { name: '2020 Example Demo' })).toBeInTheDocument()
     expect(document.querySelector('[data-recall-field="Summary"] p')).toHaveTextContent(summary)
@@ -128,19 +216,19 @@ describe('Recall risk and remedy experience', () => {
     expect(screen.getByRole('link', { name: 'Check your VIN with NHTSA' })).toHaveAttribute('href', 'https://www.nhtsa.gov/recalls')
   })
   it('never presents empty, malformed or mismatched results as a safety clearance', () => {
-    const { rerender } = render(<RecallsPreview data={{ Count: 0, results: [] }}/>)
+    const { rerender } = render(<RecallsPreview data={{ Count: 0, results: [] }} executedRequest={recallRequest()}/>)
     expect(state()).toBe('empty')
     expect(screen.getByText(/not a safety clearance/)).toBeInTheDocument()
     for (const data of [{}, { Count: 0 }, { Count: 0, results: null }, { results: [{}] }, { results: [], error: 'failure' }]) {
-      rerender(<RecallsPreview data={data}/>); expect(state()).toBe('invalid')
+      rerender(<RecallsPreview data={data} executedRequest={recallRequest()}/>); expect(state()).toBe('invalid')
     }
-    rerender(<RecallsPreview data={{ Count: 5, results: [] }}/>)
-    expect(state()).toBe('partial')
+    rerender(<RecallsPreview data={{ Count: 5, results: [] }} executedRequest={recallRequest()}/>)
+    expect(state()).toBe('invalid')
     expect(screen.queryByText(/No campaign records were returned/)).toBeNull()
-    expect(screen.getByText(/provider count differs/)).toBeInTheDocument()
+    expect(screen.getByText(/empty recall page without a trustworthy zero-result count/)).toBeInTheDocument()
   })
   it('retains incomplete campaigns with explicit missing remedy and unknown flags', () => {
-    render(<RecallsPreview data={{ Count: 1, results: [{ NHTSACampaignNumber: 'TEST-UNKNOWN', Component: 'Brakes' }] }}/>)
+    render(<RecallsPreview data={{ Count: 1, results: [{ NHTSACampaignNumber: 'TEST-UNKNOWN', Component: 'Brakes', Make: 'Example', Model: 'Demo', ModelYear: '2020' }] }} executedRequest={recallRequest()}/>)
     expect(state()).toBe('partial')
     expect(screen.getByText(/Remedy not supplied/)).toBeInTheDocument()
     expect(screen.getAllByText('0 flagged · 1 unknown')).toHaveLength(2)
@@ -149,7 +237,7 @@ describe('Recall risk and remedy experience', () => {
   it('keeps campaign identity, searchable full remedies and all returned records accessible', () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
     const results = Array.from({ length: 9 }, (_, i) => ({ ...fixtures.recalls.results[0], NHTSACampaignNumber: `TEST-${i}`, Remedy: i === 8 ? 'Unique full remedy search target.' : 'Consult the manufacturer.' }))
-    render(<RecallsPreview data={{ Count: 9, results }}/>)
+    render(<RecallsPreview data={{ Count: 9, results }} executedRequest={recallRequest()}/>)
     expect(document.querySelectorAll('[data-campaign-id]')).toHaveLength(4)
     fireEvent.click(screen.getByRole('button', { name: 'Show more campaigns' }))
     expect(document.querySelectorAll('[data-campaign-id]')).toHaveLength(9)
@@ -160,10 +248,20 @@ describe('Recall risk and remedy experience', () => {
     expect(screen.getByText(/original response still contains 9/)).toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalled()
   })
-  it('uses only recognized request metadata for the query heading and never guesses a VIN', () => {
+  it('uses only exact recognized request metadata for the query heading and never guesses a VIN', () => {
+    const canonical = 'https://api.nhtsa.gov/recalls/recallsByVehicle?make=Example&model=Demo&modelYear=2020'
+    expect(recallQuery(canonical)).toBe('2020 Example Demo')
+    expect(recallQuery(`${canonical}&foo=bar`)).toBeUndefined()
+    expect(recallQuery(`${canonical}&format=json`)).toBeUndefined()
+    expect(recallQuery(`${canonical}&make=Other`)).toBeUndefined()
     expect(recallQuery('https://example.com/?make=wrong')).toBeUndefined()
     expect(recallQuery('https://api.nhtsa.gov/other?make=wrong')).toBeUndefined()
     expect(recallQuery('invalid')).toBeUndefined()
+  })
+
+  it('fails closed when HTTP-success recall rows do not match the executed vehicle query', () => {
+    render(<RecallsPreview data={{ Count: 1, results: [{ ...fixtures.recalls.results[0], Make: 'Toyota', Model: 'Camry', ModelYear: '2020' }] }} executedRequest={recallRequest('Honda', 'Accord')}/>)
+    expect(state()).toBe('invalid')
   })
 })
 

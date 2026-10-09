@@ -1,4 +1,4 @@
-import { CardEmpty, CardHeading, Facts, finite, numericText, rows, text } from './cardPrimitives'
+import { asRecord, CardEmpty, CardHeading, Facts, finite, numericText, text } from './cardPrimitives'
 
 const MAX_VISIBLE_MATCHES = 12
 
@@ -37,16 +37,24 @@ const teamLabel = (name: unknown, id: unknown, side: 'Radiant' | 'Dire') => {
 }
 
 export function OpenDotaMatchesPreview({ data }: { data: unknown }) {
-  const matches = rows(data)
-  if (!matches.length) return <CardEmpty domain="pro-match-results" title="No professional matches returned" detail="OpenDota returned no professional match records for this request." state="empty"/>
+  if (!Array.isArray(data)) return <CardEmpty domain="pro-match-results" title="Invalid professional match response" detail="OpenDota did not return the expected proMatches array." state="invalid"/>
+  if (!data.length) return <CardEmpty domain="pro-match-results" title="No professional matches returned" detail="OpenDota returned no professional match records for this request." state="empty"/>
 
+  const providerMatches = data.map(asRecord)
+  const matches = providerMatches.filter((match) => finite(match.match_id) !== undefined)
+  if (!matches.length) return <CardEmpty domain="pro-match-results" title="Invalid professional match response" detail="OpenDota returned match rows without provider-owned match identifiers." state="invalid"/>
+
+  const invalidMatchCount = data.length - matches.length
+  const state = invalidMatchCount ? 'partial' : 'ready'
   const visible = matches.slice(0, MAX_VISIBLE_MATCHES)
   const firstId = finite(matches[0].match_id)
   return <div
     className="domain-card opendota-matches-preview"
     data-domain-card="pro-match-results"
-    data-result-state="ready"
-    data-provider-match-count={matches.length}
+    data-result-state={state}
+    data-provider-match-count={data.length}
+    data-valid-match-count={matches.length}
+    data-invalid-match-count={invalidMatchCount}
     data-visible-match-count={visible.length}
     data-primary-match-id={firstId}
     data-truncated={matches.length > visible.length ? 'true' : 'false'}
@@ -55,7 +63,8 @@ export function OpenDotaMatchesPreview({ data }: { data: unknown }) {
       eyebrow="OpenDota · Professional matches"
       title={`${matches.length} provider-returned match${matches.length === 1 ? '' : 'es'}`}
       description="Team identity, match-end kill counts, winner, league, series identifiers, start time, and duration are preserved with provider semantics."
-    ><span className="domain-state">Match semantics</span></CardHeading>
+    ><span className="domain-state">{state === 'partial' ? 'Partial match batch' : 'Match semantics'}</span></CardHeading>
+    {state === 'partial' && <p className="domain-note">Some provider rows were missing the OpenDota <code>match_id</code> identity and are excluded from the trusted match list.</p>}
 
     <ol className="opendota-match-list" aria-label="OpenDota professional match results">
       {visible.map((match, index) => {
@@ -74,7 +83,7 @@ export function OpenDotaMatchesPreview({ data }: { data: unknown }) {
         const startedAt = epochIso(match.start_time)
         const durationSeconds = finite(match.duration)
         return <li
-          key={matchId ?? index}
+          key={`${matchId}-${index}`}
           data-match-index={index + 1}
           data-match-id={matchId}
           data-radiant-team-id={radiantTeamId}
@@ -89,7 +98,7 @@ export function OpenDotaMatchesPreview({ data }: { data: unknown }) {
           data-duration-seconds={durationSeconds}
         >
           <header>
-            <div><small>{text(match.league_name) ?? 'League not supplied'} · Match {matchId === undefined ? 'ID not supplied' : numericText(matchId)}</small><h4>{radiant} <span aria-hidden="true">vs</span><span className="sr-only">versus</span> {dire}</h4></div>
+            <div><small>{text(match.league_name) ?? 'League not supplied'} · Match {numericText(matchId!)}</small><h4>{radiant} <span aria-hidden="true">vs</span><span className="sr-only">versus</span> {dire}</h4></div>
             <span>{winner === 'Not supplied' ? 'Winner not supplied' : `Winner · ${winner}`}</span>
           </header>
           <div className="opendota-score" aria-label={`${radiant} versus ${dire} match-end kill counts`}>

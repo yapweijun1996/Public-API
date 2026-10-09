@@ -1,3 +1,4 @@
+import type { ExecutedRequestContext } from '../useApiRequestRuntime'
 import { asRecord, CardEmpty, CardHeading, Facts, finite, rows, text } from './cardPrimitives'
 
 const booleanish = (value: unknown): boolean | undefined => {
@@ -10,10 +11,44 @@ const booleanish = (value: unknown): boolean | undefined => {
 const flagText = (value: boolean | undefined) => value === undefined ? 'Not supplied' : value ? 'Yes' : 'No'
 const stringList = (value: unknown) => Array.isArray(value) ? value.map((item) => text(item)).filter((item): item is string => Boolean(item)) : []
 
-export function ChemblMoleculePreview({ data }: { data: unknown }) {
+type ChemblRequest = { chemblId: string; transportBound: boolean }
+type ChemblRequestUrl = Omit<ChemblRequest, 'transportBound'>
+
+const parseRequestUrl = (requestUrl?: string): ChemblRequestUrl | undefined => {
+  if (!requestUrl) return undefined
+  try {
+    const url = new URL(requestUrl)
+    const match = /^\/chembl\/api\/data\/molecule\/([^/]+)\.json$/.exec(url.pathname)
+    if (url.protocol !== 'https:' || url.hostname !== 'www.ebi.ac.uk' || url.port || url.username || url.password || url.hash || url.search || !match) return undefined
+    const rawId = decodeURIComponent(match[1])
+    if (!rawId || rawId !== rawId.trim()) return undefined
+    const canonical = `https://www.ebi.ac.uk/chembl/api/data/molecule/${encodeURIComponent(rawId)}.json`
+    return requestUrl === canonical ? { chemblId: rawId.toUpperCase() } : undefined
+  } catch { return undefined }
+}
+
+const requestIdentity = (requestUrl?: string, executedRequest?: ExecutedRequestContext): ChemblRequest | null | undefined => {
+  const displayed = parseRequestUrl(requestUrl)
+  if (requestUrl && !displayed) return null
+  if (!executedRequest) return displayed ? { ...displayed, transportBound: false } : undefined
+  if (executedRequest.method.toUpperCase() !== 'GET' || executedRequest.body !== undefined || (requestUrl !== undefined && requestUrl !== executedRequest.url)) return null
+  const executed = parseRequestUrl(executedRequest.url)
+  return executed ? { ...executed, transportBound: true } : null
+}
+
+export function ChemblMoleculePreview({ data, requestUrl, executedRequest }: { data: unknown; requestUrl?: string; executedRequest?: ExecutedRequestContext }) {
+  const request = requestIdentity(requestUrl, executedRequest)
+  if (request === null) return <CardEmpty domain="molecule-profile" title="Invalid ChEMBL executed request" detail="The successful response is not bound to the exact supported bodyless GET ChEMBL molecule-detail request used by this demo." state="invalid"/>
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return <CardEmpty domain="molecule-profile" title="Invalid ChEMBL molecule response" detail="ChEMBL returned HTTP-success data without the documented molecule detail object." state="invalid"/>
+  }
   const root = asRecord(data)
   const chemblId = text(root.molecule_chembl_id)
-  if (!chemblId) return <CardEmpty domain="molecule-profile" title="Molecule profile unavailable" detail="ChEMBL did not return a molecule identifier for this record." state="empty"/>
+  if (!chemblId) return <CardEmpty domain="molecule-profile" title="Invalid ChEMBL molecule response" detail="ChEMBL returned a molecule detail object without the provider-owned molecule_chembl_id identity." state="invalid"/>
+  const requestedId = request?.chemblId
+  if (requestedId && chemblId.toUpperCase() !== requestedId) {
+    return <CardEmpty domain="molecule-profile" title="ChEMBL molecule identity mismatch" detail="The returned molecule identifier does not match the requested ChEMBL ID, so no molecule properties are presented as trustworthy." state="invalid"/>
+  }
 
   const preferredName = text(root.pref_name) ?? chemblId
   const moleculeType = text(root.molecule_type)
@@ -39,15 +74,22 @@ export function ChemblMoleculePreview({ data }: { data: unknown }) {
   const inchi = text(structures.standard_inchi)
   const inchiKey = text(structures.standard_inchi_key)
   const atcClassifications = stringList(root.atc_classifications)
-  const crossReferences = rows(root.cross_references).map((reference) => ({
-    source: text(reference.xref_src) ?? 'External source',
-    id: text(reference.xref_id) ?? text(reference.xref_name) ?? 'Not supplied',
-  }))
+  const providerCrossReferences = Array.isArray(root.cross_references) ? root.cross_references : []
+  const crossReferences = rows(providerCrossReferences).map((reference) => ({
+    source: text(reference.xref_src),
+    id: text(reference.xref_id) ?? text(reference.xref_name),
+  })).filter((reference): reference is { source: string; id: string } => Boolean(reference.source && reference.id))
+  const invalidCrossReferenceCount = providerCrossReferences.length - crossReferences.length
+  const state = request?.transportBound && moleculeType && invalidCrossReferenceCount === 0 ? 'ready' : 'partial'
 
   return <div
     className="domain-card chembl-molecule-preview"
     data-domain-card="molecule-profile"
-    data-result-state="ready"
+    data-result-state={state}
+    data-request-bound={request?.transportBound ? 'true' : 'false'}
+    data-request-contract="exact-chembl-molecule-json"
+    data-requested-chembl-id={requestedId}
+    data-identity-match={requestedId ? String(chemblId.toUpperCase() === requestedId) : undefined}
     data-primary-chembl-id={chemblId}
     data-primary-name={preferredName}
     data-molecule-type={moleculeType}
@@ -58,14 +100,19 @@ export function ChemblMoleculePreview({ data }: { data: unknown }) {
     data-molecular-formula={formula}
     data-molecular-weight={molecularWeight}
     data-atc-classification-count={atcClassifications.length}
+    data-provider-cross-reference-count={providerCrossReferences.length}
+    data-valid-cross-reference-count={crossReferences.length}
+    data-invalid-cross-reference-count={invalidCrossReferenceCount}
   >
     <CardHeading
       eyebrow="ChEMBL molecule record"
       title={preferredName}
       description={`${chemblId}${moleculeType ? ` · ${moleculeType}` : ''} · Provider-reported chemical and development metadata`}
     >
-      {maxPhase !== undefined && <span className="domain-state">Max phase {maxPhase}</span>}
+      <span className="domain-state">{state === 'partial' ? 'Partial provider response' : maxPhase !== undefined ? `Max phase ${maxPhase}` : 'Molecule identity verified'}</span>
     </CardHeading>
+
+    {state === 'partial' && <p className="domain-note">{request?.transportBound ? 'ChEMBL returned a molecule with matching provider identity, but one or more expected profile fields or cross-reference identities are unavailable or malformed. Only trustworthy fields are shown.' : 'The ChEMBL response is structurally useful, but executed-request identity is unavailable, so it cannot be marked ready.'}</p>}
 
     <Facts items={[
       { label: 'ChEMBL ID', value: <code>{chemblId}</code> },

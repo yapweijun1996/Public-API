@@ -2,7 +2,7 @@
   "provenance": "Synthetic contract fixtures for unit/browser tests; not live health evidence or actual advisories.",
   "scorecard": {
     "date": "2026-01-02T03:04:05Z", "score": 8.7,
-    "repo": {"name": "github.com/example/demo", "commit": "abcdef0123456789"}, "scorecard": {"version": "test-version"},
+    "repo": {"name": "github.com/ossf/scorecard", "commit": "abcdef0123456789"}, "scorecard": {"version": "test-version"},
     "checks": [
       {"name": "Security-Policy", "score": 0, "reason": "No policy file found in this synthetic example.", "documentation": {"short": "Looks for a documented disclosure policy.", "url": "https://github.com/ossf/scorecard/blob/main/docs/checks.md#security-policy"}, "details": ["Synthetic evidence: SECURITY.md not found."]},
       {"name": "Signed-Releases", "score": -1, "reason": "No releases available for inspection."},

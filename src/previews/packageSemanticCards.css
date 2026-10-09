@@ -1,0 +1,30 @@
+/* Package result-only composition. Loaded only with PackageSemanticPreviewBundle. */
+.package-release-preview { display: grid; gap: 14px; }
+.package-release-preview > header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, .32fr); gap: 16px; align-items: stretch; }
+.package-release-preview > header > div:first-child { padding: 5px 2px; }
+.package-release-preview > header small { color: #7f8da3; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.package-release-preview h3 { margin: 5px 0 0; color: #172844; font-size: 20px; }
+.package-release-preview p { margin: 6px 0 0; max-width: 720px; color: #697a92; line-height: 1.55; }
+.package-release-hero { padding: 14px; border: 1px solid color-mix(in srgb, var(--preview-accent) 25%, #e0e7ef); border-radius: 12px; background: color-mix(in srgb, var(--preview-accent) 7%, white); }
+.package-release-hero span { color: #7e8ba0; font-weight: 720; text-transform: uppercase; }
+.package-release-hero strong { display: block; margin-top: 5px; color: #162b4a; font-size: 24px; }
+.package-release-hero small { display: block; margin-top: 5px; color: #73849b; letter-spacing: 0; text-transform: none; }
+.package-channel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.package-channel-grid article { min-width: 0; padding: 12px; border: 1px solid #e2e8f1; border-radius: 10px; background: #fbfcfe; }
+.package-channel-grid small { display: block; color: #8793a7; font-weight: 720; text-transform: uppercase; }
+.package-channel-grid strong { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #283d5e; font-size: 12px; }
+.package-version-list { padding-top: 12px; border-top: 1px solid #e5eaf1; }
+.package-version-list > div:first-child { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.package-version-list > div:first-child strong { color: #273a59; }
+.package-version-list > div:first-child span { color: #8390a4; font-size: 10px; }
+.package-version-list > div:last-child { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+.package-version-list code { padding: 6px 8px; border: 1px solid #dfe7f1; border-radius: 8px; color: #3c587a; background: #f5f8fc; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .package-release-preview > header { grid-template-columns: 1fr; }
+  .package-channel-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 430px) {
+  .package-channel-grid { grid-template-columns: 1fr; }
+}

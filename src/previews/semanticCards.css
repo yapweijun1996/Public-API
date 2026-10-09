@@ -1,6 +1,7 @@
 /* Shared semantic record grid; loaded with SemanticCards rather than the response registry. */
 .semantic-card-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .semantic-card-grid article { min-width: 0; padding: 15px; border: 1px solid #dfe6ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgba(35,52,82,.035), inset 0 2px 0 color-mix(in srgb, var(--preview-accent) 22%, white); }
+.semantic-card-grid article:only-child { grid-column: 1 / -1; }
 .semantic-card-grid.single article { padding: 18px; }
 .semantic-card-grid header { display: grid; grid-template-columns: 31px minmax(0, 1fr) auto; align-items: start; gap: 9px; }
 .semantic-card-grid header > span { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 8px; color: color-mix(in srgb, var(--preview-accent) 78%, #31415c); background: color-mix(in srgb, var(--preview-accent) 10%, #f7f9fc); font: 780 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -21,6 +22,8 @@
 .preview-security-center .semantic-card-grid header em { color: #a12632; background: #ffeaed; }
 .preview-research-library .semantic-card-grid article { border-color: #d9eae5; }
 .preview-research-library .semantic-card-grid header > span { color: #17705d; background: #e7f7f2; }
+.preview-dblp-publications .semantic-card-grid article { border-color: #c9e3ec; }
+.preview-dblp-publications .semantic-card-grid header > span { color: #1f6f8b; background: #e8f6fa; }
 .preview-data-table .semantic-card-grid header > span { color: #3d647c; background: #e9f3f7; }
 
 

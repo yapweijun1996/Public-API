@@ -47,6 +47,13 @@
 .map-compass { width: 28px; height: 28px; display: grid; place-items: center; position: absolute; right: 12px; top: 12px; z-index: 2; border: 1px solid #d4e0e3; border-radius: 50%; color: #4b6c74; background: rgba(255,255,255,.85); font: 750 9px serif; }
 .location-map i { width: 25px; height: 25px; display: grid; place-items: center; position: absolute; z-index: 3; left: var(--point-x); top: var(--point-y); translate: -50% -50%; border: 3px solid #fff; border-radius: 50% 50% 50% 0; color: #fff; background: #ec5c55; box-shadow: 0 5px 12px rgba(65,76,89,.24); transform: rotate(-45deg); font-style: normal; }
 .location-map i b { transform: rotate(45deg); }
+.earthquake-list { margin: 0; padding: 0; display: grid; align-content: start; gap: 8px; list-style: none; }
+.earthquake-list li { min-width: 0; padding: 10px; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; border: 1px solid #dfe6ee; border-radius: 9px; background: #fff; }
+.earthquake-list li > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #9a3328; background: #fff0ed; font-weight: 750; }
+.earthquake-list li > div { min-width: 0; }
+.earthquake-list strong, .earthquake-list small { display: block; overflow-wrap: anywhere; }
+.earthquake-list strong { color: #26334e; line-height: 1.4; }
+.earthquake-list small { margin-top: 4px; color: #718096; font-size: 11px; }
 .location-preview ol,
 
 .solar-preview, .natural-events-preview, .transit-preview, .trivia-preview { margin-top: 18px; }
@@ -155,6 +162,9 @@
 
 
 @media (max-width: 760px) {
+  .market-preview { grid-template-columns: 1fr; padding: 15px; }
+  .market-sparkline { height: 125px; }
+  .market-metrics { grid-column: auto; grid-template-columns: 1fr; }
   .forecast-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .regional-reading-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .location-preview { grid-template-columns: 1fr; }
@@ -187,3 +197,74 @@
   .dictionary-hero strong { font-size: 36px; }
   .dictionary-hero > span { width: 55px; height: 55px; border-radius: 15px; font-size: 19px; }
 }
+
+/* ClinicalTrials.gov study titles and condition labels can contain long provider-owned tokens. Keep the semantic list inside narrow Request Lab cards without changing the shared shell. */
+.clinical-trials-preview .domain-list { min-width: 0; padding-inline-start: 22px; }
+.clinical-trials-preview .domain-list li,
+.clinical-trials-preview .domain-list strong,
+.clinical-trials-preview .domain-list span { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+/* Open Food Facts: request-bound product identity + nutrition facts. */
+.open-food-facts-preview .off-product-hero { display: grid; grid-template-columns: minmax(110px, 170px) 1fr; gap: 20px; align-items: start; }
+.open-food-facts-preview .off-product-hero > img { width: 100%; max-height: 190px; object-fit: contain; border: 1px solid #dce4ef; border-radius: 12px; background: #fff; }
+.open-food-facts-preview .off-product-hero .domain-heading { margin-bottom: 0; }
+.open-food-facts-preview .off-nutrition { margin-top: 20px; padding-top: 16px; border-top: 1px solid #dce4ef; }
+.open-food-facts-preview .off-nutrition > header { margin-bottom: 12px; }
+.open-food-facts-preview .off-nutrition > dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: 10px; margin: 0; }
+.open-food-facts-preview .off-nutrition > dl > div { min-width: 0; padding: 10px 12px; border: 1px solid #dce4ef; border-radius: 10px; background: #f8fbff; }
+.open-food-facts-preview .off-nutrition dt { color: #53657d; font-size: 12px; }
+.open-food-facts-preview .off-nutrition dd { margin: 4px 0 0; font-weight: 750; font-variant-numeric: tabular-nums; }
+.open-food-facts-preview .off-copy { margin-top: 20px; padding-top: 16px; border-top: 1px solid #dce4ef; }
+.open-food-facts-preview .off-copy p { margin-top: 6px; overflow-wrap: anywhere; }
+.open-food-facts-preview .off-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.open-food-facts-preview .off-tags span { max-width: 100%; padding: 5px 9px; border-radius: 999px; background: #eef4f8; color: #365069; font-size: 12px; overflow-wrap: anywhere; }
+@container domain-card (max-width: 520px) {
+  .open-food-facts-preview .off-product-hero { grid-template-columns: 1fr; }
+  .open-food-facts-preview .off-product-hero > img { width: min(180px, 70%); justify-self: center; }
+}
+
+/* CityBikes: request-bound network identity + bounded station availability. */
+.citybikes-network-preview .citybikes-station-map { margin-top: 18px; }
+/* CityBikes and geocoding share the same bounded identity-list shell. */
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) { margin: 0; padding: 0; display: grid; align-content: start; gap: 8px; list-style: none; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) li { min-width: 0; padding: 10px; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; border: 1px solid #dfe6ee; border-radius: 9px; background: #fff; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) li > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; font-weight: 750; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) li > div { min-width: 0; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) :is(strong, small) { display: block; overflow-wrap: anywhere; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) strong { color: #26334e; line-height: 1.4; }
+:is(.citybikes-network-preview .citybikes-station-list, .open-meteo-geocoding-preview .geocoding-list) small { margin-top: 4px; color: #718096; font-size: 11px; }
+.citybikes-network-preview .citybikes-station-list li > span { color: #17634f; background: #e8f7f1; }
+
+/* Request-bound media cards share the same bounded gallery shell on narrow Request Lab viewports. */
+.bounded-media-preview .media-preview { margin-top: 18px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 11px; }
+.bounded-media-preview .media-preview article { min-width: 0; overflow: hidden; border: 1px solid #dce4ee; border-radius: 12px; background: #fff; }
+.bounded-media-preview .media-preview img { width: 100%; max-width: 100%; height: 210px; display: block; object-fit: cover; }
+.bounded-media-preview .media-preview article > div { min-width: 0; padding: 12px 13px 14px; }
+.bounded-media-preview .media-preview :is(small, h3, p, a) { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.bounded-media-preview .media-preview small { color: #60758a; font-weight: 700; text-transform: uppercase; }
+.bounded-media-preview .media-preview h3 { margin-top: 5px; font-size: 14px; line-height: 1.4; }
+.bounded-media-preview .media-preview p { margin-top: 7px; color: #53657d; font-size: 12px; line-height: 1.5; }
+
+/* Open-Meteo geocoding: request-bound provider location identity plus agent-readable map/list evidence. */
+.open-meteo-geocoding-preview .location-preview { margin-top: 18px; }
+.open-meteo-geocoding-preview .geocoding-list li > span { color: #1f5b77; background: #eaf5fb; }
+
+/* Apple Search API: provider identities and storefront metadata without promotional artwork/previews. */
+.apple-itunes-search-preview .itunes-media-list { margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 10px; list-style: none; }
+.apple-itunes-search-preview .itunes-media-list :is(li, article, header > div, dd) { min-width: 0; }
+.apple-itunes-search-preview .itunes-media-list article { height: 100%; padding: 14px; border: 1px solid #dfe5ee; border-radius: 11px; background: #fff; }
+.apple-itunes-search-preview .itunes-media-list :is(h3, p, code, a, span, dd) { overflow-wrap: anywhere; }
+.apple-itunes-search-preview .itunes-media-list dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.apple-itunes-search-preview .itunes-media-list :is(a, article > span) { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Spaceflight News API: exact-request publisher articles with validated media and timestamps. */
+.spaceflight-news-preview .spaceflight-news-list { margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; list-style: none; }
+.spaceflight-news-preview .spaceflight-news-list :is(li, article, article > div, dd) { min-width: 0; }
+.spaceflight-news-preview .spaceflight-news-list article { height: 100%; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dfe5ee; border-radius: 11px; background: #fff; }
+.spaceflight-news-preview .spaceflight-news-list img { width: 100%; aspect-ratio: 16 / 9; display: block; object-fit: cover; background: #edf2f7; }
+.spaceflight-news-preview .spaceflight-news-list article > div { padding: 14px; display: flex; flex: 1; flex-direction: column; }
+.spaceflight-news-preview .spaceflight-news-list :is(h3, p, a, time, dd) { overflow-wrap: anywhere; }
+.spaceflight-news-preview .spaceflight-news-list h3 { margin-top: 5px; line-height: 1.35; }
+.spaceflight-news-preview .spaceflight-news-summary { margin-top: 9px; color: #53657d; line-height: 1.55; }
+.spaceflight-news-preview .spaceflight-news-list dl { margin: 13px 0; display: grid; gap: 8px; }
+.spaceflight-news-preview .spaceflight-news-list a { min-height: 44px; margin-top: auto; display: inline-flex; align-items: center; }

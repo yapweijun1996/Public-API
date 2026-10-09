@@ -1,0 +1,14 @@
+/* UK Police street-crime response styles; loaded with the CatalogFamily preview bundle. */
+.uk-street-crime-preview .domain-facts { grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr)); gap: 9px; margin-top: 14px; }
+.uk-street-crime-list { margin: 14px 0 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+.uk-street-crime-list > li { min-width: 0; padding: 14px; border: 1px solid #dce4ee; border-radius: 10px; background: #fff; }
+.uk-street-crime-list > li > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.uk-street-crime-list > li > header > div { min-width: 0; }
+.uk-street-crime-list small { color: #718096; text-transform: capitalize; }
+.uk-street-crime-list h4 { margin: 4px 0 0; overflow-wrap: anywhere; color: #243650; }
+.uk-street-crime-list code { max-width: 42%; overflow-wrap: anywhere; word-break: break-word; color: #506580; font-size: 10px; }
+.uk-street-crime-list .domain-facts { margin-bottom: 0; }
+@media (max-width: 620px) {
+  .uk-street-crime-list > li > header { display: grid; }
+  .uk-street-crime-list code { max-width: none; }
+}

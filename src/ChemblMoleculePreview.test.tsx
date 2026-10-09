@@ -34,7 +34,7 @@ describe('ChEMBL molecule semantic preview', () => {
       },
       atc_classifications: ['B01AC06', 'N02BA01'],
       cross_references: [{ xref_src: 'DailyMed', xref_id: 'aspirin' }],
-    }}/>)
+    }} requestUrl={api.buildUrl({ chemblId: 'CHEMBL25' })} executedRequest={{ url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET' }}/>)
 
     const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
     expect(preview).toHaveAttribute('data-preview-layout', 'molecule-profile')
@@ -62,6 +62,52 @@ describe('ChEMBL molecule semantic preview', () => {
     expect(preview.textContent ?? '').not.toMatch(/\d+ properties/)
   })
 
+
+  it('fails closed when HTTP-success data is not a molecule detail object', () => {
+    render(<ResponseDemoPreview api={api} data={[]} requestUrl={api.buildUrl({ chemblId: 'CHEMBL25' })} executedRequest={{ url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET' }}/>)
+    const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
+    expect(preview.querySelector('[data-domain-card="molecule-profile"]')).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('documented molecule detail object')
+  })
+
+  it('fails closed when the molecule detail object has no provider-owned identity', () => {
+    render(<ResponseDemoPreview api={api} data={{ pref_name: 'FABRICATED', molecule_type: 'Small molecule' }} requestUrl={api.buildUrl({ chemblId: 'CHEMBL25' })} executedRequest={{ url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET' }}/>)
+    const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
+    expect(preview.querySelector('[data-domain-card="molecule-profile"]')).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('provider-owned molecule_chembl_id identity')
+    expect(preview).not.toHaveTextContent('FABRICATED')
+  })
+
+  it('fails closed when the returned molecule identity does not match the direct request', () => {
+    render(<ResponseDemoPreview api={api} data={{ molecule_chembl_id: 'CHEMBL999', pref_name: 'FABRICATED', molecule_type: 'Small molecule' }} requestUrl={api.buildUrl({ chemblId: 'CHEMBL25' })} executedRequest={{ url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET' }}/>)
+    const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
+    expect(preview.querySelector('[data-domain-card="molecule-profile"]')).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('ChEMBL molecule identity mismatch')
+    expect(preview).not.toHaveTextContent('FABRICATED')
+  })
+
+  it('marks matching molecule identity partial when expected profile context is malformed', () => {
+    render(<ResponseDemoPreview api={api} data={{
+      molecule_chembl_id: 'CHEMBL25',
+      pref_name: 'ASPIRIN',
+      molecule_type: 'Small molecule',
+      molecule_properties: {},
+      molecule_structures: {},
+      cross_references: [{ xref_src: 'DailyMed', xref_id: 'aspirin' }, { xref_src: 'Broken source' }],
+    }} requestUrl={api.buildUrl({ chemblId: 'CHEMBL25' })} executedRequest={{ url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET' }}/>)
+    const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
+    const card = preview.querySelector('.chembl-molecule-preview')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-requested-chembl-id', 'CHEMBL25')
+    expect(card).toHaveAttribute('data-identity-match', 'true')
+    expect(card).toHaveAttribute('data-provider-cross-reference-count', '2')
+    expect(card).toHaveAttribute('data-valid-cross-reference-count', '1')
+    expect(card).toHaveAttribute('data-invalid-cross-reference-count', '1')
+    expect(preview).toHaveTextContent('Partial provider response')
+    expect(preview).toHaveTextContent('DailyMed')
+    expect(preview).not.toHaveTextContent('Broken source')
+  })
+
   it('keeps unknown boolean flags distinct from false', () => {
     render(<ResponseDemoPreview api={api} data={{
       molecule_chembl_id: 'CHEMBL999',
@@ -80,4 +126,19 @@ describe('ChEMBL molecule semantic preview', () => {
     expect(administration).toHaveTextContent('ParenteralNo')
     expect(administration).toHaveTextContent('TopicalNot supplied')
   })
+
+  it.each([
+    { label: 'POST execution', executedRequest: { url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'POST' } },
+    { label: 'GET with body', executedRequest: { url: api.buildUrl({ chemblId: 'CHEMBL25' }), method: 'GET', body: { unexpected: true } } },
+    { label: 'display/executed URL mismatch', executedRequest: { url: `${api.buildUrl({ chemblId: 'CHEMBL25' })}#drift`, method: 'GET' } },
+  ])('fails closed for $label transport drift', ({ executedRequest }) => {
+    const requestUrl = api.buildUrl({ chemblId: 'CHEMBL25' })
+    render(<ResponseDemoPreview api={api} data={{
+      molecule_chembl_id: 'CHEMBL25', pref_name: 'ASPIRIN', molecule_type: 'Small molecule', cross_references: [],
+    }} requestUrl={requestUrl} executedRequest={executedRequest}/>)
+    const preview = screen.getByRole('region', { name: 'ChEMBL Molecule Profile' })
+    expect(preview.querySelector('[data-domain-card="molecule-profile"]')).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('executed request')
+  })
+
 })

@@ -31,6 +31,17 @@ describe('final generic preview migrations', () => {
     expect(preview).not.toHaveTextContent('ipify Public IP record 1')
   })
 
+  it('fails malformed ipify HTTP-success identity closed instead of guessing IPv4', () => {
+    render(<ResponseDemoPreview api={ipify} data={{ ip: 'not-an-ip' }}/>)
+    const preview = screen.getByRole('region', { name: 'ipify Public IP' })
+    const card = preview.querySelector('[data-domain-card="public-ip"]')
+    expect(card).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).toHaveTextContent('Invalid public IP response')
+    expect(preview).toHaveTextContent('valid IPv4 or IPv6')
+    expect(preview).not.toHaveTextContent('not-an-ip')
+    expect(screen.queryByRole('button', { name: 'Copy public IP address' })).not.toBeInTheDocument()
+  })
+
   it('presents Cat Facts as readable provider content with explicit reported length', () => {
     const url = new URL(catfacts.buildUrl({}))
     expect(url.hostname).toBe('catfact.ninja')

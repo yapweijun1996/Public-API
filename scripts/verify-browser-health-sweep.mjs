@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { browser, evidence, root, sleep } from './lib/pages-origin-browser.mjs';
+import { decideHealthRetry } from './lib/health-retry-policy.mjs';
 
 const origin = 'https://yapweijun1996.github.io';
 const retryBudget = Math.max(0, Math.min(3, Number.parseInt(process.env.HEALTH_RETRIES || '2', 10) || 0));
@@ -9,13 +10,14 @@ const requestedIds = (process.env.HEALTH_IDS || '').split(',').map((value) => va
 const report = {
   origin,
   publication: 'unpublished local app bundle under the real GitHub Pages origin',
-  evidenceModel: 'first pass is immutable evidence; only first-pass failures receive bounded fresh-browser retries, while cadence-limited providers are excluded from generic automation',
+  evidenceModel: 'first pass is immutable evidence; retry-eligible first-pass failures receive bounded fresh-browser retries, provider-declared rate-limit backoff can defer same-run retries, and cadence-limited providers are excluded from generic automation',
   healthSemantics: 'point-in-time observational evidence only; never written into api-catalog.json health',
   classificationSemantics: 'same-run retry exhaustion is unresolved evidence, not proof of persistent provider failure; later independent browser confirmation is required before classifying durable drift',
   retryBudget,
   delayMs,
   firstPass: [],
   retries: {},
+  retryDeferrals: {},
   summary: {},
   errors: [],
 };
@@ -113,6 +115,7 @@ let catalog;
 let ids;
 let manualOnly;
 let cadenceLimited;
+let verificationPolicyById = new Map();
 let firstBrowser;
 try {
   firstBrowser = await openCandidateBrowser();
@@ -121,6 +124,7 @@ try {
   const enabledApis = catalog.apis.filter((api) => api.agentExecution?.mode === 'enabled');
   const enabled = enabledApis.map((api) => api.id);
   const verificationEligible = enabledApis.filter((api) => api.automatedVerification?.mode !== 'cadence-limited').map((api) => api.id);
+  verificationPolicyById = new Map(enabledApis.map((api) => [api.id, api.automatedVerification ?? catalog.automatedVerificationDefault ?? { mode: 'enabled' }]));
   cadenceLimited = enabledApis.filter((api) => api.automatedVerification?.mode === 'cadence-limited').map((api) => ({
     id: api.id,
     minimumIntervalSeconds: api.automatedVerification.minimumIntervalSeconds,
@@ -164,6 +168,12 @@ if (report.firstPass.length) {
   const failures = report.firstPass.filter((row) => !row.ok);
   for (const failure of failures) {
     report.retries[failure.id] = [];
+    const retryDecision = decideHealthRetry(failure, verificationPolicyById.get(failure.id));
+    if (!retryDecision.retry) {
+      report.retryDeferrals[failure.id] = retryDecision;
+      console.log(`retry deferred ${failure.id}: ${retryDecision.reason}`);
+      continue;
+    }
     for (let attempt = 1; attempt <= retryBudget; attempt += 1) {
       let retryBrowser;
       try {
@@ -185,18 +195,24 @@ if (report.firstPass.length) {
 
   const firstPassFailures = report.firstPass.filter((row) => !row.ok);
   const recovered = firstPassFailures.filter((row) => report.retries[row.id]?.some((retry) => retry.ok));
+  const deferred = firstPassFailures.filter((row) => report.retryDeferrals[row.id]);
+  const retryExhausted = firstPassFailures.filter((row) => !report.retryDeferrals[row.id] && !report.retries[row.id]?.some((retry) => retry.ok));
   const unresolved = firstPassFailures.filter((row) => !report.retries[row.id]?.some((retry) => retry.ok));
   report.summary = {
     firstPassTotal: report.firstPass.length,
     firstPassSuccesses: report.firstPass.filter((row) => row.ok).length,
     firstPassFailures: firstPassFailures.map((row) => row.id),
     recoveredTransients: recovered.map((row) => row.id),
+    deferredRateLimits: deferred.filter((row) => report.retryDeferrals[row.id]?.reason === 'rate-limit-backoff').map((row) => row.id),
+    retryExhausted: retryExhausted.map((row) => row.id),
     unresolvedAfterRetries: unresolved.map((row) => row.id),
   };
   if (unresolved.length) {
     report.followUp = {
       status: 'required',
-      reason: 'The bounded same-run retry window was exhausted. Preserve this evidence, but do not call the provider persistently down without a later independent browser check.',
+      reason: deferred.length
+        ? 'One or more provider SSOT policies require backoff after a provider-declared rate-limit response, so no same-run retry was sent. Preserve the unresolved first-pass evidence and recheck in a later independent run rather than calling the provider persistently down.'
+        : 'The bounded same-run retry window was exhausted. Preserve this evidence, but do not call the provider persistently down without a later independent browser check.',
       command: `HEALTH_IDS=${unresolved.map((row) => row.id).join(',')} HEALTH_RETRIES=0 npm run test:browser:health-sweep`,
     };
   }
@@ -207,5 +223,5 @@ if (report.firstPass.length) {
 }
 
 fs.writeFileSync(`${evidence}/browser-health-sweep.json`, `${JSON.stringify(report, null, 2)}\n`);
-console.log(JSON.stringify({ verdict: report.verdict, catalogCount: report.catalogCount, agentEnabledCount: report.agentEnabledCount, automatedVerificationEligibleCount: report.automatedVerificationEligibleCount, manualOnly: report.manualOnly, cadenceLimited: report.cadenceLimited, ...report.summary, evidence: `${evidence}/browser-health-sweep.json` }, null, 2));
+console.log(JSON.stringify({ verdict: report.verdict, catalogCount: report.catalogCount, agentEnabledCount: report.agentEnabledCount, automatedVerificationEligibleCount: report.automatedVerificationEligibleCount, manualOnly: report.manualOnly, cadenceLimited: report.cadenceLimited, retryDeferrals: report.retryDeferrals, ...report.summary, evidence: `${evidence}/browser-health-sweep.json` }, null, 2));
 process.exit(['PASS', 'PASS_WITH_TRANSIENTS'].includes(report.verdict) ? 0 : 1);

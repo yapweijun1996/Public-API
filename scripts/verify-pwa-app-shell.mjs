@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 import http from 'node:http'
-import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { createOwnedBrowserProfile, hasChildExited, removeOwnedBrowserProfile, terminateChildProcess } from './lib/browser-temp-profile.mjs'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)))
@@ -89,13 +89,14 @@ const appPort = await listen(appServer)
 const providerPort = await listen(providerServer)
 const appUrl = `http://127.0.0.1:${appPort}/Public-API/#/catalog`
 const providerUrl = `http://127.0.0.1:${providerPort}/provider.json`
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'public-api-pwa-profile-'))
+const profile = createOwnedBrowserProfile('public-api-pwa-profile-')
 const cdpPort = 9950 + Math.floor(Math.random() * 30)
 let chrome
 let ws
 try {
   chrome = spawn(process.env.CHROME_BIN || '/usr/bin/google-chrome', [
-    '--headless=new', '--no-sandbox', '--disable-gpu',
+    '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
+    '--disable-background-networking', '--disable-component-update', '--disable-default-apps', '--disable-sync',
     `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${profile}`, 'about:blank',
   ], { stdio: 'ignore' })
 
@@ -184,7 +185,7 @@ try {
   await wait(`document.querySelector('.catalog-panel')`, 15000)
   const offlineState = await evaluate(`({title:document.title,total:document.querySelector('.table-footer')?.textContent||'',controlled:Boolean(navigator.serviceWorker.controller),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1})`)
   assert.equal(offlineState.controlled, true)
-  assert(offlineState.total.includes('195 total'))
+  assert(offlineState.total.includes('196 total'))
   assert.equal(offlineState.overflow, false)
   await call('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
 
@@ -199,13 +200,14 @@ try {
     fixedPrecacheContentRevisioned: Object.keys(fixedPrecacheRevisions).length,
     crossOriginProviderCached: false,
     offlineReload: 'PASS',
-    catalogTotalVisibleOffline: 195,
+    catalogTotalVisibleOffline: 196,
     providerEvidence: 'synthetic cross-origin fixture only; no live provider health claim',
   }, null, 2))
 } finally {
   if (ws) ws.close()
-  if (chrome && chrome.exitCode === null) chrome.kill('SIGTERM')
+  const chromeExited = await terminateChildProcess(chrome)
   await closeServer(appServer)
   await closeServer(providerServer)
-  fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  if (chromeExited && hasChildExited(chrome)) removeOwnedBrowserProfile(profile)
+  else throw new Error('Chromium did not terminate; preserving its browser profile for safe owner-bound cleanup.')
 }

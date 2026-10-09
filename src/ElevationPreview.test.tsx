@@ -11,10 +11,12 @@ describe('Open-Meteo Elevation semantic preview', () => {
   afterEach(cleanup)
 
   it('keeps the request coordinate beside the response elevation', () => {
+    const requestUrl = "https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198"
     render(<ResponseDemoPreview
       api={api}
       data={{ elevation: [46] }}
-      requestUrl="https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198&format=json"
+      requestUrl={requestUrl}
+      executedRequest={{ url: requestUrl, method: 'GET' }}
     />)
 
     const preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
@@ -37,12 +39,70 @@ describe('Open-Meteo Elevation semantic preview', () => {
     expect(preview.querySelector('.semantic-card-grid')).not.toBeInTheDocument()
   })
 
-  it('fails semantically closed when the provider omits a numeric elevation', () => {
-    render(<ResponseDemoPreview api={api} data={{ elevation: [] }}/>)
+  it('does not trust a canonical display URL when the actual transport is not the exact bodyless GET', () => {
+    const requestUrl = 'https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198'
+    const { rerender } = render(<ResponseDemoPreview
+      api={api}
+      data={{ elevation: [46] }}
+      requestUrl={requestUrl}
+      executedRequest={{ url: requestUrl, method: 'POST' }}
+    />)
+
+    let preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    expect(preview.querySelector('[data-domain-card="terrain-elevation"]')).not.toHaveAttribute('data-result-state', 'ready')
+
+    rerender(<ResponseDemoPreview
+      api={api}
+      data={{ elevation: [46] }}
+      requestUrl={requestUrl}
+      executedRequest={{ url: requestUrl, method: 'GET', body: { unexpected: true } }}
+    />)
+    preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    expect(preview.querySelector('[data-domain-card="terrain-elevation"]')).not.toHaveAttribute('data-result-state', 'ready')
+
+    rerender(<ResponseDemoPreview
+      api={api}
+      data={{ elevation: [46] }}
+      requestUrl={requestUrl}
+      executedRequest={{ url: `${requestUrl}&extra=1`, method: 'GET' }}
+    />)
+    preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    expect(preview.querySelector('[data-domain-card="terrain-elevation"]')).not.toHaveAttribute('data-result-state', 'ready')
+  })
+
+  it('keeps the request coordinates visible but partial when the executed request identity is unavailable', () => {
+    const requestUrl = 'https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198'
+    render(<ResponseDemoPreview api={api} data={{ elevation: [46] }} requestUrl={requestUrl}/>)
 
     const preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
-    const empty = preview.querySelector('[data-domain-card="terrain-elevation"]')
-    expect(empty).toHaveAttribute('data-result-state', 'empty')
-    expect(preview).toHaveTextContent('Terrain elevation unavailable')
+    const card = preview.querySelector('.elevation-preview')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-request-bound', 'false')
+    expect(card).toHaveAttribute('data-request-latitude', '1.3521')
+    expect(card).toHaveAttribute('data-request-longitude', '103.8198')
+    expect(preview).toHaveTextContent('executed transport identity unavailable')
+  })
+
+  it('fails semantically closed when the provider elevation contract is malformed', () => {
+    const { rerender } = render(<ResponseDemoPreview
+      api={api}
+      data={{ elevation: ['46'] }}
+      requestUrl="https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198"
+    />)
+
+    let preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    let invalid = preview.querySelector('[data-domain-card="terrain-elevation"]')
+    expect(invalid).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).not.toHaveTextContent('46 m terrain elevation')
+
+    rerender(<ResponseDemoPreview
+      api={api}
+      data={{ elevation: [46, 47] }}
+      requestUrl="https://api.open-meteo.com/v1/elevation?latitude=1.3521&longitude=103.8198"
+    />)
+    preview = screen.getByRole('region', { name: 'Open-Meteo Elevation' })
+    invalid = preview.querySelector('[data-domain-card="terrain-elevation"]')
+    expect(invalid).toHaveAttribute('data-result-state', 'invalid')
+    expect(preview).not.toHaveTextContent('46 m terrain elevation')
   })
 })

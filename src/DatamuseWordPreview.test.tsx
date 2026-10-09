@@ -7,6 +7,9 @@ import { ResponseDemoPreview } from './responsePreview'
 const api = apiCatalog.find((candidate) => candidate.id === 'datamuse-rhymes')
 if (!api) throw new Error('Missing Datamuse fixture')
 
+const requestUrl = api.buildUrl({ word: 'orange' })
+const executedRequest = { url: requestUrl, method: 'GET' }
+
 describe('Datamuse documented sounds-like semantic preview', () => {
   afterEach(cleanup)
 
@@ -25,20 +28,39 @@ describe('Datamuse documented sounds-like semantic preview', () => {
   })
 
   it('distinguishes documented empty results from malformed HTTP-success records', () => {
-    const { rerender } = render(<ResponseDemoPreview api={api} requestUrl={api.buildUrl({ word: 'orange' })} data={[]}/>)
+    const { rerender } = render(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={executedRequest} data={[]}/>)
     let card = screen.getByRole('region', { name: 'Datamuse Sounds-Like Finder' }).querySelector('[data-domain-card="lexical-matches"]')
     expect(card).toHaveAttribute('data-result-state', 'empty')
     expect(card).toHaveTextContent('empty list')
 
-    rerender(<ResponseDemoPreview api={api} requestUrl={api.buildUrl({ word: 'orange' })} data={[{ score: 100, tags: ['n'] }]}/>)
+    rerender(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={executedRequest} data={[{ score: 100, tags: ['n'] }]}/>)
     card = screen.getByRole('region', { name: 'Datamuse Sounds-Like Finder' }).querySelector('[data-domain-card="lexical-matches"]')
     expect(card).toHaveAttribute('data-result-state', 'invalid')
     expect(card).toHaveTextContent('required word identity')
     expect(card).not.toHaveTextContent('Match 1')
   })
 
+  it('requires exact bodyless GET execution evidence before reporting request-bound lexical results', () => {
+    const response = [{ word: 'orange', score: 100, numSyllables: 2, tags: ['n', 'ipa_pron:ˈɔrʌndʒ'] }]
+
+    const { rerender } = render(<ResponseDemoPreview api={api} requestUrl={requestUrl} data={response}/>)
+    let card = screen.getByRole('region', { name: 'Datamuse Sounds-Like Finder' }).querySelector('.datamuse-word-preview')
+    expect(card).toHaveAttribute('data-result-state', 'partial')
+    expect(card).toHaveAttribute('data-request-bound', 'false')
+
+    rerender(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={{ url: requestUrl, method: 'POST' }} data={response}/>)
+    card = screen.getByRole('region', { name: 'Datamuse Sounds-Like Finder' }).querySelector('[data-domain-card="lexical-matches"]')
+    expect(card).toHaveAttribute('data-result-state', 'invalid')
+    expect(card).toHaveAttribute('data-request-bound', 'false')
+
+    rerender(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={{ url: requestUrl, method: 'GET' }} data={response}/>)
+    card = screen.getByRole('region', { name: 'Datamuse Sounds-Like Finder' }).querySelector('.datamuse-word-preview')
+    expect(card).toHaveAttribute('data-result-state', 'ready')
+    expect(card).toHaveAttribute('data-request-bound', 'true')
+  })
+
   it('keeps usable word records but marks a mixed provider payload partial', () => {
-    render(<ResponseDemoPreview api={api} requestUrl={api.buildUrl({ word: 'orange' })} data={[
+    render(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={executedRequest} data={[
       { word: 'orange', score: 100, tags: ['n'] },
       { score: 99, tags: ['adj'] },
     ]}/>)
@@ -54,7 +76,7 @@ describe('Datamuse documented sounds-like semantic preview', () => {
   })
 
   it('maps pronunciation, part of speech, syllables and provider ordering into dedicated semantic DOM', () => {
-    render(<ResponseDemoPreview api={api} requestUrl={api.buildUrl({ word: 'orange' })} data={[
+    render(<ResponseDemoPreview api={api} requestUrl={requestUrl} executedRequest={executedRequest} data={[
       { word: 'orange', score: 100, numSyllables: 2, tags: ['n', 'adj', 'v', 'pron:AO1 R AH0 N JH', 'ipa_pron:ˈɔrʌndʒ'] },
       { word: 'oranje', score: 97, numSyllables: 2, tags: ['n', 'pron:AO1 R IH0 N JH', 'ipa_pron:ˈɔrɪndʒ'] },
     ]}/>)

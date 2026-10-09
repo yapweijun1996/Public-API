@@ -37,6 +37,7 @@ try {
   assert.equal(result.data.length, 3, `Expected exactly 3 provider models, got ${result.data.length}`)
   const first = result.data[0] || {}
   assert(first.id || first.modelId, 'First Hugging Face model has no stable model ID')
+  assert(result.data.every((model) => String(model.id || model.modelId || '').toLowerCase().includes('gpt')), 'Provider returned a model ID that does not acknowledge search=gpt')
   assert(Object.hasOwn(first, 'gated'), 'full model metadata did not include gated state')
   assert(first.lastModified, 'full model metadata did not include lastModified')
 
@@ -52,6 +53,14 @@ try {
       layout: shell.dataset.previewLayout,
       fallback: shell.dataset.ssotFallback,
       domain: card.dataset.domainCard,
+      state: card.dataset.resultState,
+      requestBound: card.dataset.requestBound,
+      requestContract: card.dataset.requestContract,
+      requestedQuery: card.dataset.requestedQuery,
+      requestedLimit: Number(card.dataset.requestedLimit),
+      queryMismatchCount: Number(card.dataset.queryMismatchCount),
+      malformedPopularityCount: Number(card.dataset.malformedPopularityCount),
+      responseExceedsLimit: card.dataset.responseExceedsLimit,
       rowCount: Number(card.dataset.rowCount),
       visibleCount: Number(card.dataset.visibleCount),
       primaryModelId: card.dataset.primaryModelId,
@@ -67,6 +76,14 @@ try {
   assert.equal(dom.layout, 'ai-model-catalog')
   assert.equal(dom.fallback, 'false')
   assert.equal(dom.domain, 'ai-model-catalog')
+  assert.equal(dom.state, 'ready')
+  assert.equal(dom.requestBound, 'true')
+  assert.equal(dom.requestContract, 'exact-huggingface-model-search-v2')
+  assert.equal(dom.requestedQuery, 'gpt')
+  assert.equal(dom.requestedLimit, 3)
+  assert.equal(dom.queryMismatchCount, 0)
+  assert.equal(dom.malformedPopularityCount, 0)
+  assert.equal(dom.responseExceedsLimit, 'false')
   assert.equal(dom.rowCount, result.data.length)
   assert.equal(dom.visibleCount, Math.min(result.data.length, 8))
   assert.equal(dom.primaryModelId, expectedId)
@@ -98,6 +115,55 @@ try {
     licenseTag: expectedLicense, task: first.pipeline_tag, library: first.library_name,
     mobileOverflow: false, unnamedControls: 0,
   })
+
+  const syntheticUrl = 'https://huggingface.co/api/models?search=gpt&limit=2&full=true'
+  const syntheticBody = [
+    { id: 'openai-community/gpt2', gated: false, private: false, tags: ['license:mit'], downloads: '1', likes: '1' },
+    { id: 'google/bert-base-uncased', gated: false, private: false, downloads: 42, likes: 2 },
+  ]
+  const synthetic = await browser(`${root}/dist`, { fixtures: new Map([[syntheticUrl, { body: syntheticBody }]]) })
+  try {
+    await synthetic.nav('models-dev')
+    await setControl(synthetic, 'query', 'gpt')
+    await setControl(synthetic, 'count', '2')
+    const syntheticResult = await synthetic.run()
+    assert.equal(syntheticResult.ok, true, syntheticResult.error)
+    const semantic = await synthetic.ev(`(() => {
+      const shell = document.querySelector('.demo-preview')
+      const card = shell.querySelector('.huggingface-models-preview')
+      const firstRecord = card.querySelector('.semantic-card-grid article[data-record-index="1"]')
+      const facts = Object.fromEntries([...firstRecord.querySelectorAll('dl > div')].map((item) => [item.querySelector('dt')?.textContent || '', item.querySelector('dd')?.textContent || '']))
+      return {
+        state: card?.dataset.resultState,
+        providerCount: Number(card?.dataset.providerRecordCount),
+        validCount: Number(card?.dataset.validRecordCount),
+        invalidCount: Number(card?.dataset.invalidRecordCount),
+        requestBound: card?.dataset.requestBound,
+        requestedQuery: card?.dataset.requestedQuery,
+        queryMismatchCount: Number(card?.dataset.queryMismatchCount),
+        malformedPopularityCount: Number(card?.dataset.malformedPopularityCount),
+        primaryModelId: card?.dataset.primaryModelId,
+        facts,
+        text: card?.innerText || '',
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      }
+    })()`)
+    assert.deepEqual({ state: semantic.state, providerCount: semantic.providerCount, validCount: semantic.validCount, invalidCount: semantic.invalidCount, requestBound: semantic.requestBound, requestedQuery: semantic.requestedQuery, queryMismatchCount: semantic.queryMismatchCount, malformedPopularityCount: semantic.malformedPopularityCount, primaryModelId: semantic.primaryModelId }, { state: 'partial', providerCount: 2, validCount: 1, invalidCount: 1, requestBound: 'true', requestedQuery: 'gpt', queryMismatchCount: 1, malformedPopularityCount: 2, primaryModelId: 'openai-community/gpt2' })
+    assert.equal(semantic.text.includes('google/bert-base-uncased'), false)
+    assert.equal(semantic.text.includes('Only exact-request-bound model identities and strict provider-number evidence are trusted.'), true)
+    assert.equal(semantic.facts.Downloads, 'Not supplied')
+    assert.equal(semantic.facts.Likes, 'Not supplied')
+    assert.equal(semantic.overflow, false)
+    assert.deepEqual(synthetic.fixtureRequests.map((entry) => ({ url: entry.url, source: entry.source, status: entry.status })), [{ url: syntheticUrl, source: 'synthetic-fixture', status: 200 }])
+    await synthetic.viewport(390, 844)
+    assert.equal(await synthetic.ev(`document.documentElement.scrollWidth > document.documentElement.clientWidth + 1`), false)
+    assert.equal(unnamed((await synthetic.call('Accessibility.getFullAXTree')).nodes).length, 0)
+    report.checks.push({ id: 'models-dev', case: 'wrong-query + numeric-string HTTP-200 model list', source: 'synthetic fixture', semanticState: 'partial', providerRecords: 2, validRecords: 1, invalidRecords: 1, queryMismatches: 1, malformedPopularity: 2, fabricatedIdentity: false, mobileOverflow: false, unnamedControls: 0 })
+    report.errors.push(...synthetic.errors.map(String))
+  } finally {
+    await synthetic.close()
+  }
+
   report.errors.push(...b.errors.map(String))
   assert.deepEqual(report.errors, [])
   report.verdict = 'PASS'
