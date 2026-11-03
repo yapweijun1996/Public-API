@@ -8,6 +8,7 @@ export type RequestTransform =
   | `omitIfEquals:${string}`
   | `default:${string}`
   | `clamp:${number}:${number}`
+  | `fallbackIfNotIn:${string}:${string}`
   | `replace:' ':'_'`
   | { map: Record<string, string> }
   | 'omitIfEmpty'
@@ -33,6 +34,10 @@ const transformValue = (value: string, transform: RequestTransform): string | un
   if (transform === 'omitIfEmpty') return value === '' ? undefined : value
   if (transform.startsWith('omitIfEquals:')) return value === transform.slice('omitIfEquals:'.length) ? undefined : value
   if (transform.startsWith('default:')) return value === '' ? transform.slice('default:'.length) : value
+  if (transform.startsWith('fallbackIfNotIn:')) {
+    const [, allowedValues, fallback] = transform.split(':')
+    return allowedValues.split(',').includes(value) ? value : fallback
+  }
   if (transform.startsWith('clamp:')) {
     const [, minimum, maximum] = transform.split(':')
     const numeric = Number(value)

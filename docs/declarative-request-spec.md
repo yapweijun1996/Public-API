@@ -33,6 +33,7 @@ Body templates are JSON values; string values may contain `{parameterId}` slots.
 - `default:<value>`: substitute the literal suffix only for an empty input.
 - `clamp:<min>:<max>`: clamp a finite numeric input to inclusive bounds; leave non-numeric input unchanged.
 - `replace:' ':'_'`: replace literal ASCII spaces with underscores, without broader normalization.
+- `fallbackIfNotIn:<value1,value2,...>:<fallback>`: preserve an exact value in the finite allowlist and substitute the fallback otherwise.
 
 Do not add open-ended expression languages, callbacks, arbitrary regular expressions, or API-specific branches to this interpreter. If provider semantics need clamping, conditional endpoint selection, validation-dependent fallback, computed date windows, non-JSON request encoding, or another operation outside this set, retain a custom builder and explain why it is non-declarative.
 

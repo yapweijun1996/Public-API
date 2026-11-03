@@ -1270,11 +1270,10 @@ const nextKeylessApis: ApiDemo[] = [
     fields: [{ id: 'pair', label: 'Market pair', type: 'select', defaultValue: 'XBTUSD', help: 'Choose a public Kraken spot market.', options: [
       { label: 'BTC / USD', value: 'XBTUSD' }, { label: 'ETH / USD', value: 'ETHUSD' }, { label: 'SOL / USD', value: 'SOLUSD' }, { label: 'BTC / EUR', value: 'XBTEUR' },
     ] }],
-    request: { declarative: false, reason: 'Unsupported market pairs fall back to XBTUSD; the closed declarative map cannot express that fallback.' },
-    buildUrl: ({ pair = 'XBTUSD' }) => {
-      const supportedPair = ['XBTUSD', 'ETHUSD', 'SOLUSD', 'XBTEUR'].includes(pair) ? pair : 'XBTUSD'
-      return `https://api.kraken.com/0/public/Ticker?${new URLSearchParams({ pair: supportedPair, assetVersion: '1' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.kraken.com/0/public/Ticker?pair={pair}&assetVersion=1', hosts: ['api.kraken.com'],
+      transforms: { pair: 'fallbackIfNotIn:XBTUSD,ETHUSD,SOLUSD,XBTEUR:XBTUSD' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gitlab-public-projects', name: 'GitLab Public Projects', provider: 'GitLab', category: 'Developer',

@@ -112,8 +112,32 @@ describe('declarative request interpreter', () => {
     }
   })
 
+  it('captures original Kraken outputs for defaults and unsupported market pairs', () => {
+    const api = getApiById('kraken-public-ticker')
+    if (!api) throw new Error('Kraken API missing.')
+    expect(api.buildUrl(getDefaultParameters(api))).toBe('https://api.kraken.com/0/public/Ticker?pair=XBTUSD&assetVersion=1')
+    expect(api.buildUrl({ pair: 'ETHUSD' })).toBe('https://api.kraken.com/0/public/Ticker?pair=ETHUSD&assetVersion=1')
+    expect(api.buildUrl({ pair: '' })).toBe('https://api.kraken.com/0/public/Ticker?pair=XBTUSD&assetVersion=1')
+    expect(api.buildUrl({ pair: 'UNKNOWN' })).toBe('https://api.kraken.com/0/public/Ticker?pair=XBTUSD&assetVersion=1')
+  })
+  it('applies fallbackIfNotIn only to values outside the finite allowed set', () => {
+    const spec: DeclarativeRequestSpec = {
+      declarative: true,
+      method: 'GET',
+      urlTemplate: 'https://example.test/ticker?pair={pair}',
+      hosts: ['example.test'],
+      transforms: { pair: 'fallbackIfNotIn:XBTUSD,ETHUSD,SOLUSD,XBTEUR:XBTUSD' },
+      responseTransform: 'json',
+    }
+    expect(buildRequestFromSpec(spec, { pair: 'ETHUSD' }).url).toBe('https://example.test/ticker?pair=ETHUSD')
+    expect(buildRequestFromSpec(spec, { pair: '' }).url).toBe('https://example.test/ticker?pair=XBTUSD')
+    expect(buildRequestFromSpec(spec, { pair: 'UNKNOWN' }).url).toBe('https://example.test/ticker?pair=XBTUSD')
+  })
   it('preserves captured Research, Government, and Finance request outputs', () => {
     const cases = [
+      ['kraken-public-ticker', { pair: 'XBTUSD' }, 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD&assetVersion=1'],
+      ['kraken-public-ticker', { pair: 'ETHUSD' }, 'https://api.kraken.com/0/public/Ticker?pair=ETHUSD&assetVersion=1'],
+      ['kraken-public-ticker', { pair: 'UNKNOWN' }, 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD&assetVersion=1'],
       ['ecb-fx-rates', { currency: 'SGD' }, 'https://api.coinbase.com/v2/exchange-rates?currency=SGD'],
       ['un-sdg-goals', {}, 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List'],
       ['datacite-search', { query: 'machine learning', count: '8' }, 'https://api.datacite.org/dois?query=machine+learning&page%5Bsize%5D=8'],
