@@ -470,6 +470,11 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => {
   }
 }
 
+const declarativeRequest = (request: DeclarativeRequestSpec) => ({
+  request,
+  buildUrl: (parameters: Record<string, string>) => buildRequestFromSpec(request, parameters).url,
+})
+
 const localNow = new Date()
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const today = isoDate(localNow)
@@ -1067,7 +1072,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://docs.coinpaprika.com/', accent: '#f59e0b', monogram: 'CK', risk: 'Review',
     usageNote: 'Market data is informational, not investment advice. Display CoinPaprika attribution when publishing results.',
     fields: [{ id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'btc-bitcoin', help: 'Select a public ticker.', options: [{ label: 'Bitcoin', value: 'btc-bitcoin' }, { label: 'Ethereum', value: 'eth-ethereum' }, { label: 'Solana', value: 'sol-solana' }, { label: 'Tether', value: 'usdt-tether' }] }],
-    buildUrl: ({ coin = 'btc-bitcoin' }) => `https://api.coinpaprika.com/v1/tickers/${encode(coin || 'btc-bitcoin')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coinpaprika.com/v1/tickers/{coin}', hosts: ['api.coinpaprika.com'],
+      transforms: { coin: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-fuel-price', name: 'Malaysia Fuel Price', provider: 'data.gov.my', category: 'Finance',
@@ -1077,7 +1085,10 @@ const importedRecommendedApis: ApiDemo[] = [
     fields: [
       limitField({ label: 'History rows', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' }),
     ],
-    buildUrl: ({ limit = '52' }) => `https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=${limit.trim()}&sort=-date`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=fuelprice&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-marine', name: 'Marine Weather', provider: 'Open-Meteo', category: 'Weather',
@@ -1171,10 +1182,10 @@ const nextKeylessApis: ApiDemo[] = [
       queryField({ label: 'Search term', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search document titles and indexed Federal Register content.' }),
       limitField({ label: 'Documents', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 recent documents.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ per_page: limit.trim(), order: 'newest', 'conditions[term]': query.trim() })
-      return `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.federalregister.gov/api/v1/documents.json?per_page={limit}&order=newest&conditions%5Bterm%5D={query}', hosts: ['www.federalregister.gov'],
+      transforms: { limit: 'trim', query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wikipedia-search', name: 'Wikipedia Search', provider: 'Wikimedia Foundation', category: 'Knowledge',
@@ -1259,7 +1270,10 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All crime', value: 'all-crime' }, { label: 'Anti-social behaviour', value: 'anti-social-behaviour' }, { label: 'Burglary', value: 'burglary' }, { label: 'Vehicle crime', value: 'vehicle-crime' }, { label: 'Violence and sexual offences', value: 'violent-crime' },
       ] },
     ],
-    buildUrl: ({ latitude = '51.5074', longitude = '-0.1278', category = 'burglary' }) => `https://data.police.uk/api/crimes-street/${encode(category || 'burglary')}?${new URLSearchParams({ lat: latitude, lng: longitude }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://data.police.uk/api/crimes-street/{category}?lat={latitude}&lng={longitude}', hosts: ['data.police.uk'],
+      transforms: { latitude: 'trim', longitude: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-brewery-directory', name: 'Open Brewery Directory', provider: 'Open Brewery DB', category: 'Food',
@@ -1736,7 +1750,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/cpi_core', accent: '#0284c7', monogram: 'MCC', risk: 'Review',
     usageNote: 'DOSM defines this as a monthly CPI index with base 2010 = 100, not an inflation percentage. Core CPI excludes volatile-price or government-administered items. The demo filters division=overall and retains CC BY 4.0 attribution.',
     fields: [limitField({ label: 'Months', defaultValue: '12', min: 6, max: 60, step: 1, help: 'Return between 6 and 60 monthly overall-index observations.' })],
-    buildUrl: ({ limit = '12' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'cpi_core', filter: 'overall@division', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=cpi_core&filter=overall%40division&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-household-income', name: 'Malaysia Household Income', provider: 'data.gov.my', category: 'Economy',
@@ -1744,7 +1761,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/hh_income', accent: '#0369a1', monogram: 'MHI', risk: 'Review',
     usageNote: 'DOSM publishes nominal RM values that are not inflation-adjusted. HIES observations are survey years, not a complete consecutive annual series.',
     fields: [limitField({ label: 'Survey observations', defaultValue: '10', min: 6, max: 30, step: 1, help: 'Return between 6 and 30 published HIES observations.' })],
-    buildUrl: ({ limit = '10' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'hh_income', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=hh_income&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-population', name: 'Malaysia Population', provider: 'data.gov.my', category: 'Economy',
@@ -1752,7 +1772,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/population_malaysia', accent: '#0ea5e9', monogram: 'MPO', risk: 'Review',
     usageNote: "DOSM publishes population in thousands of people ('000). This demo filters all demographic dimensions to their overall totals so each row is one national yearly observation.",
     fields: [limitField({ label: 'Years', defaultValue: '10', min: 6, max: 57, step: 1, help: 'Return between 6 and 57 annual national-total observations.' })],
-    buildUrl: ({ limit = '10' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'population_malaysia', filter: 'both@sex,overall@age,overall@ethnicity', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=both%40sex%2Coverall%40age%2Coverall%40ethnicity&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'openfda-food-recalls', name: 'openFDA Food Recalls', provider: 'U.S. FDA', category: 'Food',
@@ -1985,7 +2008,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       { id: 'term', label: 'Search term', type: 'text', defaultValue: 'covid', minLength: 1, placeholder: 'e.g. covid', help: 'Search PubMed indexed terms and MeSH headings.' },
       { id: 'retmax', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 article identifiers.' },
     ],
-    buildUrl: ({ term = 'covid', retmax = '5' }) => `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${new URLSearchParams({ db: 'pubmed', term: term.trim(), retmode: 'json', retmax: retmax.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax={retmax}', hosts: ['eutils.ncbi.nlm.nih.gov'],
+      transforms: { term: 'form', retmax: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'rxnorm-drug-search', name: 'RxNorm Drug Search', provider: 'U.S. National Library of Medicine', category: 'Health', risk: 'Review',
@@ -2054,14 +2080,20 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     fields: [{ id: 'currency', label: 'Base currency', type: 'select', defaultValue: 'EUR', help: 'Choose the base currency for the rate table.', options: [
       { label: 'Euro', value: 'EUR' }, { label: 'US Dollar', value: 'USD' }, { label: 'Singapore Dollar', value: 'SGD' }, { label: 'British Pound', value: 'GBP' },
     ] }],
-    buildUrl: ({ currency = 'EUR' }) => `https://api.coinbase.com/v2/exchange-rates?${new URLSearchParams({ currency: currency || 'EUR' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coinbase.com/v2/exchange-rates{?currency}', hosts: ['api.coinbase.com'],
+      transforms: { currency: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'un-sdg-goals', name: 'UN Sustainable Development Goals', provider: 'United Nations Statistics Division', category: 'Government',
     description: 'Browse the official United Nations Sustainable Development Goal catalogue with goal codes, titles, descriptions, and API paths.',
     documentationUrl: 'https://unstats.un.org/SDGAPI/swagger/', accent: '#1cabe2', monogram: 'SDG',
     fields: [],
-    buildUrl: () => 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List', hosts: ['unstats.un.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'datacite-search', name: 'DataCite DOI Search', provider: 'DataCite', category: 'Research',
@@ -2071,8 +2103,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Research query', type: 'text', defaultValue: 'climate change', placeholder: 'e.g. climate change', minLength: 1, help: 'Search DataCite-indexed titles and metadata.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 DOI records.' },
     ],
-    buildUrl: ({ query = 'climate change', count = '5' }) =>
-      `https://api.datacite.org/dois?${new URLSearchParams({ query: query.trim(), 'page[size]': count.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.datacite.org/dois?query={query}&page%5Bsize%5D={count}', hosts: ['api.datacite.org'],
+      transforms: { query: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
     automatedVerification: {
       mode: 'enabled',
       retryOnRateLimit: false,
@@ -2085,7 +2119,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     description: 'Look up standardized identifiers, names, locations, and links for universities and research institutions.',
     documentationUrl: 'https://ror.readme.io/docs/rest-api', accent: '#1a4cb3', monogram: 'ROR',
     fields: [{ id: 'query', label: 'Organization search', type: 'text', defaultValue: 'stanford', placeholder: 'e.g. stanford', minLength: 1, help: 'Search research organization names or external identifiers for an interactive choice.' }],
-    buildUrl: ({ query = 'stanford' }) => `https://api.ror.org/v2/organizations?${new URLSearchParams({ query: query.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.ror.org/v2/organizations{?query}', hosts: ['api.ror.org'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'celestrak-satellites', name: 'CelesTrak Orbital Elements', provider: 'CelesTrak', category: 'Geo',
@@ -2178,7 +2215,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       ] },
       { id: 'year', label: 'Reference year', type: 'number', defaultValue: '2025', min: 2010, max: 2025, step: 1, help: 'Choose a published demo_pjan reference year from 2010 through 2025.' },
     ],
-    buildUrl: ({ country = 'DE', year = '2025' }) => `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?${new URLSearchParams({ format: 'JSON', geo: country, sex: 'T', age: 'TOTAL', time: year }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?format=JSON&geo={country}&sex=T&age=TOTAL&time={year}', hosts: ['ec.europa.eu'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'bls-timeseries', name: 'BLS Labor Statistics', provider: 'U.S. Bureau of Labor Statistics', category: 'Economy',
@@ -2250,8 +2290,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Article search', type: 'text', defaultValue: 'climate', placeholder: 'e.g. climate', minLength: 1, help: 'Search open-access article titles and metadata.' },
       { id: 'pageSize', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 articles.' },
     ],
-    buildUrl: ({ query = 'climate', pageSize = '5' }) =>
-      `https://doaj.org/api/search/articles/${encode(query.trim())}?${new URLSearchParams({ pageSize }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://doaj.org/api/search/articles/{query}?pageSize={pageSize}', hosts: ['doaj.org'],
+      transforms: { query: 'trim', pageSize: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'pubchem-compound', name: 'PubChem Compound Lookup', provider: 'PubChem', category: 'Research',
@@ -2900,7 +2942,10 @@ ORDER BY ?publ ?authorName`
       queryField({ label: 'Catalogue search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search Canadian datasets and publications by keyword.' }),
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 catalogue records.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '6' }) => `https://open.canada.ca/data/api/3/action/package_search?${new URLSearchParams({ q: query.trim(), rows: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://open.canada.ca/data/api/3/action/package_search?q={query}&rows={limit}', hosts: ['open.canada.ca'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gbif-occurrence-search', name: 'GBIF Occurrence Search', provider: 'GBIF', category: 'Biodiversity',
@@ -2961,7 +3006,10 @@ ORDER BY ?publ ?authorName`
     fields: [{ id: 'base', label: 'Base currency', type: 'select', defaultValue: 'SGD', help: 'Choose the currency whose current cross-rates should be displayed.', options: [
       { label: 'SGD · Singapore Dollar', value: 'SGD' }, { label: 'MYR · Malaysian Ringgit', value: 'MYR' }, { label: 'USD · US Dollar', value: 'USD' }, { label: 'EUR · Euro', value: 'EUR' }, { label: 'GBP · Pound Sterling', value: 'GBP' }, { label: 'JPY · Japanese Yen', value: 'JPY' }, { label: 'AUD · Australian Dollar', value: 'AUD' },
     ] }],
-    buildUrl: ({ base = 'SGD' }) => `https://open.er-api.com/v6/latest/${encode(base || 'SGD').toUpperCase()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://open.er-api.com/v6/latest/{base}', hosts: ['open.er-api.com'],
+      transforms: { base: 'uppercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'circl-vulnerability', name: 'CIRCL Vulnerability Lookup', provider: 'CIRCL', category: 'Security',
@@ -3013,7 +3061,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://tablebuilder.singstat.gov.sg/view-api/for-developers', accent: '#dc2626', monogram: 'CPI',
     usageNote: 'SingStat Developer APIs are rate-limited to 100 calls per minute per IP. This demo asks the provider for the latest 12 All Items observations using the documented limit and key-descending sort parameters instead of downloading the full history. Values may be revised; preserve the provider update date and 2024-base-year index context.',
     fields: [],
-    buildUrl: () => `https://tablebuilder.singstat.gov.sg/api/table/tabledata/M213752?${new URLSearchParams({ seriesNoORrowNo: '1', limit: '12', sortBy: 'key desc' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://tablebuilder.singstat.gov.sg/api/table/tabledata/M213752?seriesNoORrowNo=1&limit=12&sortBy=key+desc', hosts: ['tablebuilder.singstat.gov.sg'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'openalex-works-search', name: 'OpenAlex Works Search', provider: 'OpenAlex', category: 'Research',
@@ -3031,7 +3082,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       queryField({ label: 'Works search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search OpenAlex indexed works by text.' }),
       limitField({ label: 'Works', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 research works.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => `https://api.openalex.org/works?${new URLSearchParams({ search: query.trim(), per_page: limit.trim(), select: 'id,title,publication_year,cited_by_count,doi,authorships,open_access' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.openalex.org/works?search={query}&per_page={limit}&select=id,title,publication_year,cited_by_count,doi,authorships,open_access', hosts: ['api.openalex.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'oecd-cli', name: 'OECD Composite Leading Indicator', provider: 'OECD', category: 'Economy',

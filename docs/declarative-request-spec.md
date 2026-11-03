@@ -23,7 +23,8 @@ Body templates are JSON values; string values may contain `{parameterId}` slots.
 
 ## Closed transforms
 
-- `uppercase`, `lowercase`: fixed casing conversion.
+- `uppercase`, `lowercase`, `trim`: fixed casing conversion or surrounding-whitespace removal.
+- `form`: trim surrounding whitespace, then encode one value using `application/x-www-form-urlencoded` query-value semantics, including `+` for spaces.
 - `date:YYYYMMDD`, `date:YYYY-MM`: fixed ISO date projections.
 - `{ map: { input: output } }`: explicit finite value mapping; unmapped values remain unavailable to a map expression.
 - `omitIfEmpty`: omit an empty query value.

@@ -33,6 +33,17 @@ describe('declarative request interpreter', () => {
       headers: { Accept: 'application/json' }, body: { query: 'fox', count: '0' },
     })
   })
+  it('trims query inputs before URI-component encoding', () => {
+    const spec: DeclarativeRequestSpec = {
+      declarative: true,
+      method: 'GET',
+      urlTemplate: 'https://example.test/search{?query}',
+      hosts: ['example.test'],
+      transforms: { query: 'trim' },
+      responseTransform: 'json',
+    }
+    expect(buildRequestFromSpec(spec, { query: '  climate change  ' }).url).toBe('https://example.test/search?query=climate%20change')
+  })
 
   it('preserves captured Nager request outputs for default, enum, and representative inputs', () => {
     const api = getApiById('holidays')
@@ -50,6 +61,53 @@ describe('declarative request interpreter', () => {
       const expanded = new URL(request.url)
       expect(expanded.protocol).toBe('https:')
       expect(api.request.hosts).toContain(expanded.host)
+    }
+  })
+
+  it('preserves captured Research, Government, and Finance request outputs', () => {
+    const cases = [
+      ['ecb-fx-rates', { currency: 'SGD' }, 'https://api.coinbase.com/v2/exchange-rates?currency=SGD'],
+      ['un-sdg-goals', {}, 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List'],
+      ['datacite-search', { query: 'machine learning', count: '8' }, 'https://api.datacite.org/dois?query=machine+learning&page%5Bsize%5D=8'],
+      ['ror-search', { query: 'University of Oxford' }, 'https://api.ror.org/v2/organizations?query=University+of+Oxford'],
+      ['doaj-search', { query: 'climate research', pageSize: '7' }, 'https://doaj.org/api/search/articles/climate%20research?pageSize=7'],
+      ['exchange-rate-current', { base: 'myr' }, 'https://open.er-api.com/v6/latest/MYR'],
+      ['openalex-works-search', { query: 'machine learning', limit: '12' }, 'https://api.openalex.org/works?search=machine+learning&per_page=12&select=id,title,publication_year,cited_by_count,doi,authorships,open_access'],
+      ['coinpaprika-ticker', { coin: 'eth-ethereum' }, 'https://api.coinpaprika.com/v1/tickers/eth-ethereum'],
+      ['malaysia-fuel-price', { limit: '60' }, 'https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=60&sort=-date'],
+      ['federal-register-documents', { query: 'climate policy', limit: '10' }, 'https://www.federalregister.gov/api/v1/documents.json?per_page=10&order=newest&conditions%5Bterm%5D=climate+policy'],
+      ['uk-police-street-crime', { latitude: '52.4862', longitude: '-1.8904', category: 'all-crime' }, 'https://data.police.uk/api/crimes-street/all-crime?lat=52.4862&lng=-1.8904'],
+      ['malaysia-core-cpi', { limit: '24' }, 'https://api.data.gov.my/data-catalogue/?id=cpi_core&filter=overall%40division&limit=24&sort=-date'],
+      ['malaysia-household-income', { limit: '12' }, 'https://api.data.gov.my/data-catalogue/?id=hh_income&limit=12&sort=-date'],
+      ['malaysia-population', { limit: '20' }, 'https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=both%40sex%2Coverall%40age%2Coverall%40ethnicity&limit=20&sort=-date'],
+      ['pubmed-search', { term: 'machine learning', retmax: '8' }, 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=machine+learning&retmode=json&retmax=8'],
+      ['eurostat-population', { country: 'FR', year: '2024' }, 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?format=JSON&geo=FR&sex=T&age=TOTAL&time=2024'],
+      ['canada-open-data-search', { query: 'machine learning', limit: '9' }, 'https://open.canada.ca/data/api/3/action/package_search?q=machine+learning&rows=9'],
+      ['singstat-cpi-monthly', {}, 'https://tablebuilder.singstat.gov.sg/api/table/tabledata/M213752?seriesNoORrowNo=1&limit=12&sortBy=key+desc'],
+      ['ecb-fx-rates', { currency: 'EUR' }, 'https://api.coinbase.com/v2/exchange-rates?currency=EUR'],
+      ['datacite-search', { query: 'climate change', count: '5' }, 'https://api.datacite.org/dois?query=climate+change&page%5Bsize%5D=5'],
+      ['ror-search', { query: 'stanford' }, 'https://api.ror.org/v2/organizations?query=stanford'],
+      ['doaj-search', { query: 'climate', pageSize: '5' }, 'https://doaj.org/api/search/articles/climate?pageSize=5'],
+      ['exchange-rate-current', { base: 'SGD' }, 'https://open.er-api.com/v6/latest/SGD'],
+      ['openalex-works-search', { query: 'artificial intelligence', limit: '8' }, 'https://api.openalex.org/works?search=artificial+intelligence&per_page=8&select=id,title,publication_year,cited_by_count,doi,authorships,open_access'],
+      ['coinpaprika-ticker', { coin: 'btc-bitcoin' }, 'https://api.coinpaprika.com/v1/tickers/btc-bitcoin'],
+      ['malaysia-fuel-price', { limit: '52' }, 'https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=52&sort=-date'],
+      ['federal-register-documents', { query: 'artificial intelligence', limit: '8' }, 'https://www.federalregister.gov/api/v1/documents.json?per_page=8&order=newest&conditions%5Bterm%5D=artificial+intelligence'],
+      ['uk-police-street-crime', { latitude: '51.5074', longitude: '-0.1278', category: 'burglary' }, 'https://data.police.uk/api/crimes-street/burglary?lat=51.5074&lng=-0.1278'],
+      ['malaysia-core-cpi', { limit: '12' }, 'https://api.data.gov.my/data-catalogue/?id=cpi_core&filter=overall%40division&limit=12&sort=-date'],
+      ['malaysia-household-income', { limit: '10' }, 'https://api.data.gov.my/data-catalogue/?id=hh_income&limit=10&sort=-date'],
+      ['malaysia-population', { limit: '10' }, 'https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=both%40sex%2Coverall%40age%2Coverall%40ethnicity&limit=10&sort=-date'],
+      ['pubmed-search', { term: 'covid', retmax: '5' }, 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=covid&retmode=json&retmax=5'],
+      ['eurostat-population', { country: 'DE', year: '2025' }, 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?format=JSON&geo=DE&sex=T&age=TOTAL&time=2025'],
+      ['canada-open-data-search', { query: 'artificial intelligence', limit: '6' }, 'https://open.canada.ca/data/api/3/action/package_search?q=artificial+intelligence&rows=6'],
+    ] as const
+    for (const [id, params, captured] of cases) {
+      const api = getApiById(id)
+      if (!api || api.request?.declarative !== true) throw new Error(`${id} must use a declarative request.`)
+      const request = buildRequestFromSpec(api.request, { ...getDefaultParameters(api), ...params })
+      expect(api.buildUrl({ ...getDefaultParameters(api), ...params })).toBe(captured)
+      expect(request.url).toBe(captured)
+      expect(api.request.hosts).toContain(new URL(captured).host)
     }
   })
   it('keeps every declarative API URL HTTPS and within its declared host set', () => {
