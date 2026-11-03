@@ -1,3 +1,4 @@
+import { buildRequestFromSpec, type DeclarativeRequestSpec, type NonDeclarativeRequest } from './declarativeRequest'
 import { buildOpenFoodFactsProductUrl } from './openFoodFactsContract'
 
 export const apiCategories = [
@@ -97,6 +98,7 @@ export type ApiDemo = {
   responseContentTypes?: string[]
   parseResponse?: (text: string) => unknown
   successNoContent?: { statuses: number[]; data: unknown }
+  request?: DeclarativeRequestSpec | NonDeclarativeRequest
   risk?: 'Low' | 'Review'
   usageNote?: string
   agentExecution?: Extract<AgentExecutionPolicy, { mode: 'manual-only' }>
@@ -264,6 +266,14 @@ const nagerCurrentYear = new Date().getUTCFullYear()
 const nagerLatestCommunityYear = nagerCurrentYear + 5
 const nagerDefaultYear = String(nagerCurrentYear)
 
+const holidayRequestSpec: DeclarativeRequestSpec = {
+  declarative: true,
+  method: 'GET',
+  urlTemplate: 'https://nagerholidays.com/api/v4/Holidays/{country}/{year}',
+  hosts: ['nagerholidays.com'],
+  transforms: { country: 'uppercase' },
+  responseTransform: 'json',
+}
 const coreApis: ApiDemo[] = [
   {
     id: 'countries',
@@ -430,8 +440,11 @@ const coreApis: ApiDemo[] = [
       },
     ],
     usageNote: 'Uses the browser-ready Nager.Holidays Community API v4. The public documentation currently advertises CORS support and no rate limit; the Community API is intended for the current year through five years ahead.',
-    buildUrl: ({ year = nagerDefaultYear, country = 'SG' }) =>
-      `https://nagerholidays.com/api/v4/Holidays/${encode(country).toUpperCase()}/${encode(year)}`,
+    request: holidayRequestSpec,
+    buildUrl: (parameters) => buildRequestFromSpec(holidayRequestSpec, {
+      year: parameters.year ?? nagerDefaultYear,
+      country: parameters.country ?? 'SG',
+    }).url,
   },
 ]
 
@@ -439,11 +452,23 @@ type FixedApi = Omit<ApiDemo, 'fields' | 'buildUrl'> & {
   endpoint: string
 }
 
-const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
-  ...api,
-  fields: [],
-  buildUrl: () => endpoint,
-})
+const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => {
+  const parsed = new URL(endpoint)
+  const request: DeclarativeRequestSpec = {
+    declarative: true,
+    method: api.method ?? 'GET',
+    urlTemplate: endpoint,
+    hosts: [parsed.host],
+    ...(api.headers ? { headers: api.headers } : {}),
+    responseTransform: api.responseType === 'image' ? 'image-url' : api.responseType === 'text' ? 'text' : 'json',
+  }
+  return {
+    ...api,
+    request,
+    fields: [],
+    buildUrl: () => buildRequestFromSpec(request, {}).url,
+  }
+}
 
 const localNow = new Date()
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
