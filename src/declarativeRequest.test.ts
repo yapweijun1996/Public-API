@@ -80,6 +80,18 @@ describe('declarative request interpreter', () => {
       expect(buildRequestFromSpec(api.request, { status: 'open', days: '30', limit: '6', category: 'all', ...params }).url).toBe(expected)
     }
   })
+  it('preserves captured Rick and Morty defaults, status omission, and status filtering', () => {
+    const api = getApiById('rick-morty-characters')
+    if (!api || api.request?.declarative !== true) throw new Error('Rick and Morty must use a declarative request.')
+    const cases = [
+      [{}, 'https://rickandmortyapi.com/api/character?name=Rick'],
+      [{ name: '  Morty Smith  ', status: 'alive' }, 'https://rickandmortyapi.com/api/character?name=Morty%20Smith&status=alive'],
+    ] as const
+    for (const [params, expected] of cases) {
+      expect(api.buildUrl(params)).toBe(expected)
+      expect(buildRequestFromSpec(api.request, { name: 'Rick', status: 'all', ...params }).url).toBe(expected)
+    }
+  })
 
   it('preserves captured Nager request outputs for default, enum, and representative inputs', () => {
     const api = getApiById('holidays')

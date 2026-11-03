@@ -498,6 +498,14 @@ const eonetRequest: DeclarativeRequestSpec = {
   transforms: { category: 'omitIfEquals:all', days: 'trim', limit: 'trim' },
   responseTransform: 'json',
 }
+const rickMortyRequest: DeclarativeRequestSpec = {
+  declarative: true, method: 'GET',
+  urlTemplate: 'https://rickandmortyapi.com/api/character{?name,status}',
+  hosts: ['rickandmortyapi.com'],
+  transforms: { name: 'trim', status: 'omitIfEquals:all' },
+  responseTransform: 'json',
+}
+
 
 const additionalInteractiveApis: ApiDemo[] = [
   {
@@ -1338,12 +1346,10 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All statuses', value: 'all' }, { label: 'Alive', value: 'alive' }, { label: 'Dead', value: 'dead' }, { label: 'Unknown', value: 'unknown' },
       ] },
     ],
-    request: { declarative: false, reason: "Omits `status` when status is 'all'; closed templates cannot conditionally omit a query parameter for an enum choice." },
-    buildUrl: ({ name = 'Rick', status = 'all' }) => {
-      const params = new URLSearchParams({ name: name.trim() })
-      if (status !== 'all') params.set('status', status)
-      return `https://rickandmortyapi.com/api/character?${params.toString()}`
-    },
+    request: rickMortyRequest,
+    buildUrl: (parameters) => buildRequestFromSpec(rickMortyRequest, {
+      name: 'Rick', status: 'all', ...parameters,
+    }).url,
   },
   {
     id: 'wikimedia-pageviews', name: 'Wikimedia Pageviews', provider: 'Wikimedia Foundation', category: 'Knowledge',
