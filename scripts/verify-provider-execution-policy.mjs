@@ -51,7 +51,7 @@ try {
       const tool = tools.find(candidate => candidate.name === ${JSON.stringify(name)});
       if (!tool) return { ok: false, message: 'WEBMCP_TOOL_NOT_FOUND' };
       try {
-        const value = await document.modelContext.executeTool(tool, ${JSON.stringify(inputJson)});
+        const value = await document.modelContext.executeTool(tool, ${inputJson});
         return { ok: true, value };
       } catch (error) {
         return { ok: false, message: String(error?.message || error) };
@@ -166,7 +166,8 @@ try {
   }))`);
   assert.equal(machineResponse.status, 200);
   assert.match(machineResponse.contentType, /application\/json/i);
-  assert.equal(machineResponse.body.schemaVersion, 1);
+  assert.equal(machineResponse.body.schemaVersion, 2);
+  assert.match(machineResponse.body.contentHash, /^[0-9a-f]{8}$/);
   assert.equal(machineResponse.body.catalogCount, 196);
   assert.equal(machineResponse.body.health, 'not-included');
   assert.equal(machineResponse.body.apis.length, 196);

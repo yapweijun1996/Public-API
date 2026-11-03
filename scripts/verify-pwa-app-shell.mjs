@@ -208,6 +208,9 @@ try {
   const chromeExited = await terminateChildProcess(chrome)
   await closeServer(appServer)
   await closeServer(providerServer)
-  if (chromeExited && hasChildExited(chrome)) removeOwnedBrowserProfile(profile)
+  if (chromeExited && hasChildExited(chrome)) {
+    await sleep(100)
+    removeOwnedBrowserProfile(profile)
+  }
   else throw new Error('Chromium did not terminate; preserving its browser profile for safe owner-bound cleanup.')
 }

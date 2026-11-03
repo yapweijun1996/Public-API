@@ -1,4 +1,4 @@
-import { buildOpenFoodFactsProductUrl } from './openFoodFactsContract'
+import { buildRequestFromSpec, type DeclarativeRequestSpec, type NonDeclarativeRequest } from './declarativeRequest'
 
 export const apiCategories = [
   'Biodiversity',
@@ -97,6 +97,7 @@ export type ApiDemo = {
   responseContentTypes?: string[]
   parseResponse?: (text: string) => unknown
   successNoContent?: { statuses: number[]; data: unknown }
+  request?: DeclarativeRequestSpec | NonDeclarativeRequest
   risk?: 'Low' | 'Review'
   usageNote?: string
   agentExecution?: Extract<AgentExecutionPolicy, { mode: 'manual-only' }>
@@ -264,6 +265,18 @@ const nagerCurrentYear = new Date().getUTCFullYear()
 const nagerLatestCommunityYear = nagerCurrentYear + 5
 const nagerDefaultYear = String(nagerCurrentYear)
 
+const holidayRequestSpec: DeclarativeRequestSpec = {
+  declarative: true,
+  method: 'GET',
+  urlTemplate: 'https://nagerholidays.com/api/v4/Holidays/{country}/{year}',
+  hosts: ['nagerholidays.com'],
+  transforms: { country: 'uppercase' },
+  responseTransform: 'json',
+}
+const declarativeRequest = (request: DeclarativeRequestSpec) => ({
+  request,
+  buildUrl: (parameters: Record<string, string>) => buildRequestFromSpec(request, parameters).url,
+})
 const coreApis: ApiDemo[] = [
   {
     id: 'countries',
@@ -288,8 +301,10 @@ const coreApis: ApiDemo[] = [
         help: 'Use an ISO 3166-1 alpha-2 or alpha-3 country code such as SG or SGP.',
       },
     ],
-    buildUrl: ({ code = 'SGP' }) =>
-      `https://api.worldbank.org/v2/country/${encode((code || 'SGP').toUpperCase())}?format=json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.worldbank.org/v2/country/{code}?format=json', hosts: ['api.worldbank.org'],
+      transforms: { code: 'uppercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'weather',
@@ -301,15 +316,10 @@ const coreApis: ApiDemo[] = [
     accent: '#4da3ff',
     monogram: 'OM',
     fields: [...latLongFields()],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
-      const query = new URLSearchParams({
-        latitude,
-        longitude,
-        current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code',
-        timezone: 'auto',
-      })
-      return `https://api.open-meteo.com/v1/forecast?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m%2Crelative_humidity_2m%2Cwind_speed_10m%2Cweather_code&timezone=auto', hosts: ['api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'people',
@@ -338,10 +348,10 @@ const coreApis: ApiDemo[] = [
       },
     ],
     usageNote: 'Synthetic test data for prototypes and demos. The primary semantic card intentionally avoids generated contact, credential, street-address, and national-ID-like fields; review Random User copyright/UI Faces guidance before redistributing portraits.',
-    buildUrl: ({ count = '3', nationality = 'au' }) => {
-      const query = new URLSearchParams({ results: count.trim(), nat: nationality.trim() })
-      return `https://randomuser.me/api/1.4/?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://randomuser.me/api/1.4/?results={count}&nat={nationality}', hosts: ['randomuser.me'],
+      transforms: { count: 'trim', nationality: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dogs',
@@ -356,6 +366,7 @@ const coreApis: ApiDemo[] = [
       countField({ label: 'Photos', defaultValue: '4', min: 1, max: 10, step: 1, help: 'Request between 1 and 10 image URLs.' }),
     ],
     usageNote: 'Keep request frequency bounded and respect Dog CEO hosting. Dog CEO identifies the Stanford Dogs Dataset as the original source and describes the collection as open source, but the API or repository code licence does not establish reuse rights for each photo; verify image rights before reuse.',
+    request: { declarative: false, reason: 'Trims the count, uses its numeric path form only for safe integers from 1–10, and otherwise preserves the trimmed string; the closed spec has no conditional numeric normalization.' },
     buildUrl: ({ count = '4' }) => {
       const trimmed = count.trim()
       const numeric = Number(trimmed)
@@ -384,6 +395,7 @@ const coreApis: ApiDemo[] = [
         help: 'Choose a post from 1 to 100.',
       },
     ],
+    request: { declarative: false, reason: 'Uses canonical numeric path IDs only for safe integers from 1–100 and otherwise preserves the trimmed input; the closed spec cannot express the conditional normalization.' },
     buildUrl: ({ postId = '7' }) => {
       const trimmed = postId.trim()
       const numeric = Number(trimmed)
@@ -430,8 +442,11 @@ const coreApis: ApiDemo[] = [
       },
     ],
     usageNote: 'Uses the browser-ready Nager.Holidays Community API v4. The public documentation currently advertises CORS support and no rate limit; the Community API is intended for the current year through five years ahead.',
-    buildUrl: ({ year = nagerDefaultYear, country = 'SG' }) =>
-      `https://nagerholidays.com/api/v4/Holidays/${encode(country).toUpperCase()}/${encode(year)}`,
+    request: holidayRequestSpec,
+    buildUrl: (parameters) => buildRequestFromSpec(holidayRequestSpec, {
+      year: parameters.year ?? nagerDefaultYear,
+      country: parameters.country ?? 'SG',
+    }).url,
   },
 ]
 
@@ -439,11 +454,24 @@ type FixedApi = Omit<ApiDemo, 'fields' | 'buildUrl'> & {
   endpoint: string
 }
 
-const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => ({
-  ...api,
-  fields: [],
-  buildUrl: () => endpoint,
-})
+const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => {
+  const parsed = new URL(endpoint)
+  const request: DeclarativeRequestSpec = {
+    declarative: true,
+    method: api.method ?? 'GET',
+    urlTemplate: endpoint,
+    hosts: [parsed.host],
+    ...(api.headers ? { headers: api.headers } : {}),
+    responseTransform: api.responseType === 'image' ? 'image-url' : api.responseType === 'text' ? 'text' : 'json',
+  }
+  return {
+    ...api,
+    request,
+    fields: [],
+    buildUrl: () => buildRequestFromSpec(request, {}).url,
+  }
+}
+
 
 const localNow = new Date()
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -463,6 +491,22 @@ const daysAgo = (days: number) => {
   return date
 }
 
+const eonetRequest: DeclarativeRequestSpec = {
+  declarative: true, method: 'GET',
+  urlTemplate: 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open{&days,limit,category}',
+  hosts: ['eonet.gsfc.nasa.gov'],
+  transforms: { category: 'omitIfEquals:all', days: 'trim', limit: 'trim' },
+  responseTransform: 'json',
+}
+const rickMortyRequest: DeclarativeRequestSpec = {
+  declarative: true, method: 'GET',
+  urlTemplate: 'https://rickandmortyapi.com/api/character{?name,status}',
+  hosts: ['rickandmortyapi.com'],
+  transforms: { name: 'trim', status: 'omitIfEquals:all' },
+  responseTransform: 'json',
+}
+
+
 const additionalInteractiveApis: ApiDemo[] = [
   {
     id: 'geocoding-search', name: 'Global Geocoding', provider: 'Open-Meteo', category: 'Geo',
@@ -474,10 +518,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'name', label: 'Location', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', minLength: 2, help: 'Enter a place name or postal code. Two characters use exact-name matching; three or more use prefix matching.' },
       countField({ label: 'Results', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 matching locations.' }),
     ],
-    buildUrl: ({ name = 'Singapore', count = '6' }) => {
-      const query = new URLSearchParams({ name: name.trim(), count: count.trim(), language: 'en', format: 'json' })
-      return `https://geocoding-api.open-meteo.com/v1/search?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://geocoding-api.open-meteo.com/v1/search?name={name}&count={count}&language=en&format=json', hosts: ['geocoding-api.open-meteo.com'],
+      transforms: { name: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-air-quality', name: 'Global Air Quality', provider: 'Open-Meteo', category: 'Environment',
@@ -486,10 +530,10 @@ const additionalInteractiveApis: ApiDemo[] = [
     fields: [
       ...latLongFields(),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
-      const query = new URLSearchParams({ latitude, longitude, current: 'us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone', timezone: 'auto' })
-      return `https://air-quality-api.open-meteo.com/v1/air-quality?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude={latitude}&longitude={longitude}&current=us_aqi%2Cpm2_5%2Cpm10%2Cnitrogen_dioxide%2Cozone&timezone=auto', hosts: ['air-quality-api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'Air-quality data requires attribution to Open-Meteo and the Copernicus Atmosphere Monitoring Service (CAMS).',
   },
   {
@@ -501,10 +545,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'date', label: 'Date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD, today, or tomorrow.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', date = today }) => {
-      const query = new URLSearchParams({ lat: latitude, lng: longitude, date: date.trim() || 'today' })
-      return `https://api.sunrise-sunset.org/v2?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.sunrise-sunset.org/v2?lat={latitude}&lng={longitude}&date={date}', hosts: ['api.sunrise-sunset.org'],
+      transforms: { date: 'trim' }, responseTransform: 'json',
+    }),
     usageNote: 'Free and keyless. Display visible attribution to sunrise-sunset.org when using the data.',
   },
   {
@@ -519,11 +563,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'days', label: 'Recent days', type: 'number', defaultValue: '30', min: 1, max: 365, step: 1, help: 'Look back between 1 and 365 days.' },
       limitField({ label: 'Events', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 active events.' }),
     ],
-    buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
-      const query = new URLSearchParams({ status: 'open', days: days.trim(), limit: limit.trim() })
-      if (category !== 'all') query.set('category', category)
-      return `https://eonet.gsfc.nasa.gov/api/v3/events?${query.toString()}`
-    },
+    request: eonetRequest,
+    buildUrl: (parameters) => buildRequestFromSpec(eonetRequest, {
+      status: 'open', days: '30', limit: '6', category: 'all', ...parameters,
+    }).url,
   },
   {
     id: 'mbta-transit-routes', name: 'MBTA Transit Routes', provider: 'MBTA', category: 'Utility',
@@ -534,10 +577,10 @@ const additionalInteractiveApis: ApiDemo[] = [
         { label: 'Subway & light rail', value: '0,1' }, { label: 'Commuter rail', value: '2' }, { label: 'Bus', value: '3' }, { label: 'Ferry', value: '4' },
       ] },
     ],
-    buildUrl: ({ routeType = '0,1' }) => {
-      const query = new URLSearchParams({ 'filter[type]': routeType })
-      return `https://api-v3.mbta.com/routes?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api-v3.mbta.com/routes?filter%5Btype%5D={routeType}', hosts: ['api-v3.mbta.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'The MBTA allows keyless experimentation with a lower request allowance; production apps should request a free API key.',
   },
   {
@@ -554,10 +597,10 @@ const additionalInteractiveApis: ApiDemo[] = [
         { label: 'Easy', value: 'easy' }, { label: 'Medium', value: 'medium' }, { label: 'Hard', value: 'hard' },
       ] },
     ],
-    buildUrl: ({ amount = '6', category = '9', difficulty = 'medium' }) => {
-      const query = new URLSearchParams({ amount: amount.trim(), category, difficulty, type: 'multiple' })
-      return `https://opentdb.com/api.php?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://opentdb.com/api.php?amount={amount}&category={category}&difficulty={difficulty}&type=multiple', hosts: ['opentdb.com'],
+      transforms: { amount: 'trim' }, responseTransform: 'json',
+    }),
     usageNote: 'Free and keyless. Open Trivia DB data is licensed CC BY-SA 4.0. The provider limits each IP to one API request every 5 seconds and allows at most 50 questions per call; this browser demo caps a request at 10 questions.',
     automatedVerification: {
       mode: 'cadence-limited',
@@ -679,7 +722,10 @@ const importedRecommendedApis: ApiDemo[] = [
       limitField({ label: 'Articles', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 published articles from page 1.' }),
     ],
     headers: { Accept: 'application/vnd.forem.api-v1+json' },
-    buildUrl: ({ tag = 'javascript', limit = '8' }) => `https://dev.to/api/articles?${new URLSearchParams({ tag: tag.trim(), per_page: limit.trim(), page: '1' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dev.to/api/articles?tag={tag}&per_page={limit}&page=1', hosts: ['dev.to'],
+      headers: { Accept: 'application/vnd.forem.api-v1+json' }, transforms: { tag: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   fixedApi({
     id: 'fiscal-data-treasury', name: 'U.S. Treasury Agency Overview', provider: 'USAspending.gov', category: 'Finance',
@@ -713,7 +759,10 @@ const importedRecommendedApis: ApiDemo[] = [
       pattern: '[1-9][0-9]*', patternDescription: 'must be a positive decimal Hacker News item ID.',
       help: 'Enter the positive integer ID of a Hacker News story, comment, job, poll, or poll option.',
     })],
-    buildUrl: ({ itemId = '8863' }) => `https://hacker-news.firebaseio.com/v0/item/${encode(itemId)}.json?print=pretty`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://hacker-news.firebaseio.com/v0/item/{itemId}.json?print=pretty', hosts: ['hacker-news.firebaseio.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'The official Hacker News v0 API currently has no rate limit. Item lookup returns JSON null for an unknown ID; clients should tolerate additional provider fields.',
   },
   fixedApi({
@@ -750,8 +799,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Package search', defaultValue: 'react', placeholder: 'e.g. react', minLength: 1, help: 'Search npm packages using the registry text query.' }),
       limitField({ label: 'Packages', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 npm registry search results.' }),
     ],
-    buildUrl: ({ query = 'react', limit = '8' }) =>
-      `https://registry.npmjs.org/-/v1/search?${new URLSearchParams({ text: query.trim(), size: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://registry.npmjs.org/-/v1/search?text={query}&size={limit}', hosts: ['registry.npmjs.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cpe-search', name: 'NVD CPE Search', provider: 'NIST NVD', category: 'Developer',
@@ -764,8 +815,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'CPE keyword', defaultValue: 'openssl', placeholder: 'e.g. openssl', minLength: 1, help: 'Search across components of NVD CPE product names.' }),
       limitField({ label: 'Products', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return a bounded first page of 1 to 20 whole CPE product identities.' }),
     ],
-    buildUrl: ({ query = 'openssl', limit = '8' }) =>
-      `https://services.nvd.nist.gov/rest/json/cpes/2.0?${new URLSearchParams({ keywordSearch: query.trim(), resultsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cpes/2.0?keywordSearch={query}&resultsPerPage={limit}', hosts: ['services.nvd.nist.gov'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cve-detail', name: 'NVD CVE Detail', provider: 'NIST NVD', category: 'Developer',
@@ -776,7 +829,10 @@ const importedRecommendedApis: ApiDemo[] = [
     usageNote: NVD_USAGE_NOTE,
     automatedVerification: NVD_AUTOMATED_VERIFICATION,
     fields: [cveField('CVE identifier', 'CVE-2024-3094')],
-    buildUrl: ({ cve = 'CVE-2024-3094' }) => `https://services.nvd.nist.gov/rest/json/cves/2.0?${new URLSearchParams({ cveId: cve.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve}', hosts: ['services.nvd.nist.gov'],
+      transforms: { cve: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cves', name: 'NVD CVE Search', provider: 'NIST NVD', category: 'Developer',
@@ -790,8 +846,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'CVE description keywords', defaultValue: 'postgresql', placeholder: 'e.g. postgresql', minLength: 1, maxLength: 100, help: 'Search current CVE descriptions. NVD requires every space-separated term to match and applies a trailing wildcard to each term.' }),
       limitField({ label: 'CVEs', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return a bounded first page of 1 to 20 whole matching CVE records.' }),
     ],
-    buildUrl: ({ query = 'postgresql', limit = '8' }) =>
-      `https://services.nvd.nist.gov/rest/json/cves/2.0?${new URLSearchParams({ keywordSearch: query.trim(), resultsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={query}&resultsPerPage={limit}', hosts: ['services.nvd.nist.gov'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-recent-cves', name: 'NVD Recently Modified CVEs', provider: 'NIST NVD', category: 'Developer',
@@ -805,6 +863,7 @@ const importedRecommendedApis: ApiDemo[] = [
       options: NVD_RECENT_LOOKBACK_OPTIONS,
       help: 'Choose a bounded NVD last-modified window. NVD requires paired lastModStartDate/lastModEndDate values and limits one window to 120 consecutive days.',
     }],
+    request: { declarative: false, reason: 'Computes paired last-modified ISO timestamps by subtracting a selected day window from the current runtime date; the spec cannot perform date arithmetic.' },
     buildUrl: ({ lookbackDays = '7' }) => {
       const normalized = lookbackDays.trim()
       if (!NVD_RECENT_LOOKBACK_VALUES.has(normalized)) throw new Error('Unsupported NVD modified-window lookback.')
@@ -842,10 +901,10 @@ const importedRecommendedApis: ApiDemo[] = [
       textField('tags', { label: 'Required tags', defaultValue: 'javascript', placeholder: 'e.g. javascript;reactjs', minLength: 1, maxLength: 200, pattern: '[^;]+(?:;[^;]+){0,4}', patternDescription: 'Enter one to five semicolon-delimited Stack Overflow tags.', help: 'Every returned question must contain all requested tags. Separate up to five tags with semicolons.' }),
       limitField({ label: 'Questions', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 recently active questions.' }),
     ],
-    buildUrl: ({ tags = 'javascript', limit = '8' }) => {
-      const params = new URLSearchParams({ order: 'desc', sort: 'activity', tagged: tags.trim(), site: 'stackoverflow', pagesize: limit.trim() })
-      return `https://api.stackexchange.com/2.3/questions?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.stackexchange.com/2.3/questions?order=desc&sort=activity&tagged={tags}&site=stackoverflow&pagesize={limit}', hosts: ['api.stackexchange.com'],
+      transforms: { tags: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   fixedApi({
     id: 'uk-bank-holidays', name: 'UK Bank Holidays', provider: 'GOV.UK', category: 'Calendar',
@@ -863,6 +922,7 @@ const importedRecommendedApis: ApiDemo[] = [
       numberField('fiscalYear', { label: 'Federal fiscal year', defaultValue: String(defaultFederalFiscalYear), min: 2008, max: currentFederalFiscalYear, step: 1, help: 'Choose FY2008 through the current federal fiscal year. The request uses new_awards_only, so the award’s base transaction date must fall between October 1 and September 30.' }),
       limitField({ label: 'Awards', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 new prime contract awards for the selected federal fiscal year.' }),
     ],
+    request: { declarative: false, reason: 'POST body validates fiscalYear and limit, then derives the October–September award date period from fiscalYear; the closed JSON template cannot compute that two-field date window.' },
     buildUrl: () => 'https://api.usaspending.gov/api/v2/search/spending_by_award/',
     buildBody: ({ fiscalYear = String(defaultFederalFiscalYear), limit = '8' }) => {
       const safeFiscalYear = strictBoundedInteger(fiscalYear, 2008, currentFederalFiscalYear, 'Federal fiscal year')
@@ -934,6 +994,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'to', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'from', help: 'Use an ISO date in YYYY-MM-DD format on or after the start date, up to today.' },
       { id: 'group', label: 'Grouping', type: 'select', defaultValue: 'month', help: 'Monthly grouping keeps the long history compact.', options: [{ label: 'Monthly', value: 'month' }, { label: 'Weekly', value: 'week' }] },
     ],
+    request: { declarative: false, reason: 'Validates calendar dates and falls back to 1999-01-04 or the current date when either date is invalid; the closed transforms cannot validate dates or compute the current-date fallback.' },
     buildUrl: ({ from = '1999-01-04', to = today, group = 'month' }) => {
       const safeFrom = isIsoCalendarDate(from.trim()) ? from.trim() : '1999-01-04'
       const safeTo = isIsoCalendarDate(to.trim()) ? to.trim() : today
@@ -950,10 +1011,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Book search', defaultValue: 'artificial intelligence', minLength: 1, help: 'Search by title, author, subject, or keyword.' }),
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 books.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ q: query.trim(), limit, fields: 'key,title,author_name,first_publish_year,cover_i' })
-      return `https://openlibrary.org/search.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://openlibrary.org/search.json?q={query}&limit={limit}&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year%2Ccover_i', hosts: ['openlibrary.org'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-food-facts', name: 'Open Food Facts', provider: 'Open Food Facts', category: 'Food',
@@ -961,7 +1022,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://openfoodfacts.github.io/documentation/docs/Product-Opener/v3/products/get-api-v3-product-code/', accent: '#65a30d', monogram: 'OF',
     usageNote: 'Open Food Facts limits product reads to 15 product reads/minute/IP and asks API clients to identify their app with a custom User-Agent. Its official JavaScript SDK also documents browser window.fetch usage. Keep this browser demo low-volume and human-triggered; product data is community-contributed and may be incomplete or incorrect.',
     fields: [{ id: 'barcode', label: 'Barcode', type: 'text', defaultValue: '3017620422003', minLength: 1, maxLength: 32, pattern: '[0-9]+', patternDescription: 'must contain digits only.', help: 'Enter an EAN, UPC, or GTIN barcode as digits. Open Food Facts may normalize leading zeros on the server.' }],
-    buildUrl: ({ barcode = '3017620422003' }) => buildOpenFoodFactsProductUrl(barcode),
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://world.openfoodfacts.org/api/v3/product/{barcode}?fields=code%2Cproduct_name%2Cquantity%2Cnutriscore_grade%2Cnova_group%2Cnutriments%2Cimage_front_url%2Cingredients_text%2Callergens_tags%2Ccategories_tags', hosts: ['world.openfoodfacts.org'],
+      transforms: { barcode: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'free-dictionary', name: 'Free Dictionary', provider: 'FreeDictionaryAPI.com', category: 'Language',
@@ -969,7 +1033,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://freedictionaryapi.com/', accent: '#7c3aed', monogram: 'DI',
     usageNote: 'FreeDictionaryAPI.com allows 1,000 requests/hour/IP, serves Wiktionary-derived CC BY-SA 4.0 content, and requires visible FreeDictionaryAPI.com attribution plus a link back to the original Wiktionary page supplied in the response.',
     fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', minLength: 1, help: 'Enter one English word or headword.' }],
-    buildUrl: ({ word = 'hello' }) => `https://freedictionaryapi.com/api/v1/entries/en/${encode(word || 'hello')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://freedictionaryapi.com/api/v1/entries/en/{word}', hosts: ['freedictionaryapi.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'pokeapi', name: 'PokéAPI Explorer', provider: 'PokéAPI', category: 'Games',
@@ -977,6 +1044,7 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://pokeapi.co/docs', accent: '#eab308', monogram: 'PK',
     usageNote: 'PokéAPI is keyless and consumption-only. Its current fair-use policy asks clients to limit request frequency even though static hosting has no fixed rate limit; avoid bulk or abusive traffic.',
     fields: [{ id: 'pokemon', label: 'Pokémon', type: 'text', defaultValue: 'pikachu', minLength: 1, help: 'Use an exact Pokémon resource name or positive Pokédex/resource ID.' }],
+    request: { declarative: false, reason: 'Trims and lowercases the Pokémon resource slug before path encoding; no combined case-and-trim transform is supported.' },
     buildUrl: ({ pokemon = 'pikachu' }) => `https://pokeapi.co/api/v2/pokemon/${encode(pokemon.trim()).toLowerCase()}`,
   },
   {
@@ -988,15 +1056,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Artwork search', defaultValue: 'monet', minLength: 1, help: 'Search artwork titles, artists, or subjects.' }),
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: ART_INSTITUTE_SEARCH_CONTRACT.maxLimit, step: 1, help: 'Return between 1 and 20 public-domain search results; image-less rows are withheld from the semantic gallery.' }),
     ],
-    buildUrl: ({ query = 'monet', limit = '8' }) => {
-      const params = new URLSearchParams({
-        q: query.trim(),
-        limit: limit.trim(),
-        fields: ART_INSTITUTE_SEARCH_CONTRACT.fields,
-        'query[term][is_public_domain]': ART_INSTITUTE_SEARCH_CONTRACT.publicDomainFilter,
-      })
-      return `https://api.artic.edu/api/v1/artworks/search?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.artic.edu/api/v1/artworks/search?q={query}&limit={limit}&fields=id%2Ctitle%2Cartist_title%2Cdate_display%2Cimage_id%2Cis_public_domain&query%5Bterm%5D%5Bis_public_domain%5D=true', hosts: ['api.artic.edu'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'tvmaze-search', name: 'TVmaze Show Search', provider: 'TVmaze', category: 'Entertainment',
@@ -1004,13 +1067,17 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://www.tvmaze.com/api', accent: '#ec4899', monogram: 'TV',
     usageNote: 'TVmaze public API data is CC BY-SA and requires source attribution and ShareAlike. The free service promises at least 20 calls per 10 seconds per IP; back off after HTTP 429. Show images may be null, and this demo makes no separate image-reuse-rights claim.',
     fields: [{ id: 'show', label: 'Show title', type: 'text', defaultValue: 'severance', minLength: 1, help: 'Search for a television series.' }],
-    buildUrl: ({ show = 'severance' }) => `https://api.tvmaze.com/search/shows?q=${encode(show.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.tvmaze.com/search/shows?q={show}', hosts: ['api.tvmaze.com'],
+      transforms: { show: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gbif-species-search', name: 'GBIF Species Search', provider: 'GBIF', category: 'Biodiversity',
     description: 'Search scientific names, taxonomy, vernacular names, and species records.',
     documentationUrl: 'https://techdocs.gbif.org/en/openapi/v1/species', accent: '#16a34a', monogram: 'GB',
     fields: [queryField({ label: 'Species search', defaultValue: 'panthera', help: 'Search by scientific or common name.' })],
+    request: { declarative: false, reason: 'Falls back to the panthera query when the supplied query is empty; declarative transforms cannot express a conditional default.' },
     buildUrl: ({ query = 'panthera' }) => `https://api.gbif.org/v1/species/search?q=${encode(query || 'panthera')}&limit=8`,
   },
   {
@@ -1019,10 +1086,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://clinicaltrials.gov/data-about-studies/learn-about-api', accent: '#0284c7', monogram: 'CT', risk: 'Review',
     usageNote: 'For research demonstrations only. Do not use API results as medical advice or a substitute for professional care.',
     fields: [{ id: 'condition', label: 'Condition', type: 'text', defaultValue: 'Diabetes', minLength: 1, help: 'Search the ClinicalTrials.gov condition/disease search area, which may match condition terms, titles, MeSH terms, keywords, and provider synonyms.' }],
-    buildUrl: ({ condition = 'Diabetes' }) => {
-      const params = new URLSearchParams({ 'query.cond': condition.trim(), pageSize: '8', format: 'json' })
-      return `https://clinicaltrials.gov/api/v2/studies?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://clinicaltrials.gov/api/v2/studies?query.cond={condition}&pageSize=8&format=json', hosts: ['clinicaltrials.gov'],
+      transforms: { condition: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'openfda-drug-labels', name: 'openFDA Drug Labels', provider: 'U.S. Food and Drug Administration', category: 'Health',
@@ -1030,11 +1097,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://open.fda.gov/apis/drug/label/', accent: '#0369a1', monogram: 'FD', risk: 'Review',
     usageNote: 'For informational demonstrations only. Labels may be incomplete or outdated; never use this response for medical decisions.',
     fields: [{ id: 'brand', label: 'Brand name', type: 'text', defaultValue: 'Advil', minLength: 1, maxLength: 80, pattern: '[^"\\\\]+', patternDescription: 'must not contain double quotes or backslashes because those characters alter openFDA search syntax.', help: 'Search a drug brand-name phrase indexed by openFDA. Multi-word names are sent as one quoted phrase.' }],
-    buildUrl: ({ brand = 'Advil' }) => {
-      const phrase = brand.trim()
-      const params = new URLSearchParams({ search: `openfda.brand_name:"${phrase}"`, limit: '8' })
-      return `https://api.fda.gov/drug/label.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.fda.gov/drug/label.json?search=openfda.brand_name%3A%22{brand}%22&limit=8', hosts: ['api.fda.gov'],
+      transforms: { brand: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'coinpaprika-ticker', name: 'CoinPaprika Ticker', provider: 'CoinPaprika', category: 'Finance',
@@ -1042,7 +1108,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://docs.coinpaprika.com/', accent: '#f59e0b', monogram: 'CK', risk: 'Review',
     usageNote: 'Market data is informational, not investment advice. Display CoinPaprika attribution when publishing results.',
     fields: [{ id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'btc-bitcoin', help: 'Select a public ticker.', options: [{ label: 'Bitcoin', value: 'btc-bitcoin' }, { label: 'Ethereum', value: 'eth-ethereum' }, { label: 'Solana', value: 'sol-solana' }, { label: 'Tether', value: 'usdt-tether' }] }],
-    buildUrl: ({ coin = 'btc-bitcoin' }) => `https://api.coinpaprika.com/v1/tickers/${encode(coin || 'btc-bitcoin')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coinpaprika.com/v1/tickers/{coin}', hosts: ['api.coinpaprika.com'],
+      transforms: { coin: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-fuel-price', name: 'Malaysia Fuel Price', provider: 'data.gov.my', category: 'Finance',
@@ -1052,7 +1121,10 @@ const importedRecommendedApis: ApiDemo[] = [
     fields: [
       limitField({ label: 'History rows', defaultValue: '52', min: 12, max: 104, help: 'Each week can include a price level and a weekly-change row.' }),
     ],
-    buildUrl: ({ limit = '52' }) => `https://api.data.gov.my/data-catalogue/?id=fuelprice&limit=${limit.trim()}&sort=-date`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=fuelprice&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-marine', name: 'Marine Weather', provider: 'Open-Meteo', category: 'Weather',
@@ -1063,16 +1135,10 @@ const importedRecommendedApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, step: 1, help: 'Return between 1 and 7 whole forecast days.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '3' }) => {
-      const query = new URLSearchParams({
-        latitude,
-        longitude,
-        hourly: 'wave_height,wave_direction,wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction',
-        timezone: 'auto',
-        forecast_days: days.trim(),
-      })
-      return `https://marine-api.open-meteo.com/v1/marine?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://marine-api.open-meteo.com/v1/marine?latitude={latitude}&longitude={longitude}&hourly=wave_height%2Cwave_direction%2Cwave_period%2Csea_surface_temperature%2Cocean_current_velocity%2Cocean_current_direction&timezone=auto&forecast_days={days}', hosts: ['marine-api.open-meteo.com'],
+      transforms: { days: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nobel-prizes', name: 'Nobel Prize Explorer', provider: 'Nobel Prize Outreach', category: 'Research',
@@ -1086,10 +1152,10 @@ const importedRecommendedApis: ApiDemo[] = [
       ] },
       limitField({ label: 'Prize years', defaultValue: '6', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 whole recent prize records.' }),
     ],
-    buildUrl: ({ category = 'phy', limit = '6' }) => {
-      const query = new URLSearchParams({ nobelPrizeCategory: category.trim(), limit: limit.trim(), sort: 'desc' })
-      return `https://api.nobelprize.org/2.1/nobelPrizes?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nobelprize.org/2.1/nobelPrizes?nobelPrizeCategory={category}&limit={limit}&sort=desc', hosts: ['api.nobelprize.org'],
+      transforms: { category: 'trim', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'chess-player-stats', name: 'Lichess Player Ratings', provider: 'Lichess', category: 'Games',
@@ -1105,6 +1171,7 @@ const importedRecommendedApis: ApiDemo[] = [
     fields: [
       { id: 'username', label: 'Lichess username', type: 'text', defaultValue: 'thibault', placeholder: 'e.g. thibault', minLength: 1, help: 'Enter one public Lichess username. The request reads only public user data.' },
     ],
+    request: { declarative: false, reason: 'Trims and lowercases a user-supplied account slug before path encoding; the closed transforms do not include lowercase normalization.' },
     buildUrl: ({ username = 'thibault' }) => `https://lichess.org/api/user/${encode(username.trim().toLowerCase())}`,
   },
   {
@@ -1116,10 +1183,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Research query', defaultValue: 'agentic AI', placeholder: 'e.g. climate adaptation', minLength: 1, help: 'Search titles, authors, abstracts, and other Crossref metadata.' }),
       { id: 'rows', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 whole work records.' },
     ],
-    buildUrl: ({ query = 'agentic AI', rows = '8' }) => {
-      const params = new URLSearchParams({ query: query.trim(), rows: rows.trim(), select: 'DOI,title,author,published,publisher,is-referenced-by-count,type,URL' })
-      return `https://api.crossref.org/v1/works?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.crossref.org/v1/works?query={query}&rows={rows}&select=DOI%2Ctitle%2Cauthor%2Cpublished%2Cpublisher%2Cis-referenced-by-count%2Ctype%2CURL', hosts: ['api.crossref.org'],
+      transforms: { query: 'form', rows: 'trim' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -1135,6 +1202,7 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Inspect an open-source vulnerability, affected packages, ecosystem ranges, aliases, and references.',
     documentationUrl: 'https://google.github.io/osv.dev/api/', accent: '#b42318', monogram: 'OS',
     fields: [{ id: 'vulnerabilityId', label: 'OSV or GHSA ID', type: 'text', defaultValue: 'GHSA-jfh8-c2jp-5v3q', placeholder: 'e.g. GHSA-jfh8-c2jp-5v3q', help: 'Enter the exact case-sensitive OSV, CVE, or GitHub Security Advisory identifier. OSV API request values are case-sensitive.' }],
+    request: { declarative: false, reason: 'Falls back to the default vulnerability ID when the supplied value is blank; closed template transforms cannot conditionally substitute a value.' },
     buildUrl: ({ vulnerabilityId = 'GHSA-jfh8-c2jp-5v3q' }) => `https://api.osv.dev/v1/vulns/${encode(vulnerabilityId.trim() || 'GHSA-jfh8-c2jp-5v3q')}`,
   },
   {
@@ -1146,10 +1214,10 @@ const nextKeylessApis: ApiDemo[] = [
       queryField({ label: 'Search term', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search document titles and indexed Federal Register content.' }),
       limitField({ label: 'Documents', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 recent documents.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ per_page: limit.trim(), order: 'newest', 'conditions[term]': query.trim() })
-      return `https://www.federalregister.gov/api/v1/documents.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.federalregister.gov/api/v1/documents.json?per_page={limit}&order=newest&conditions%5Bterm%5D={query}', hosts: ['www.federalregister.gov'],
+      transforms: { limit: 'trim', query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wikipedia-search', name: 'Wikipedia Search', provider: 'Wikimedia Foundation', category: 'Knowledge',
@@ -1161,10 +1229,10 @@ const nextKeylessApis: ApiDemo[] = [
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 matching pages.' }),
     ],
     headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' },
-    buildUrl: ({ query = 'Singapore', limit = '8' }) => {
-      const params = new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim(), gsrlimit: limit.trim(), prop: 'pageimages|extracts', exintro: '1', explaintext: '1', piprop: 'thumbnail', pithumbsize: '480', format: 'json', origin: '*' })
-      return `https://en.wikipedia.org/w/api.php?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit={limit}&prop=pageimages%7Cextracts&exintro=1&explaintext=1&piprop=thumbnail&pithumbsize=480&format=json&origin=%2A', hosts: ['en.wikipedia.org'],
+      headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' }, transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-flood', name: 'Global Flood Forecast', provider: 'Open-Meteo', category: 'Environment',
@@ -1175,10 +1243,10 @@ const nextKeylessApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '7', min: 1, max: 30, step: 1, help: 'Return between 1 and 30 daily discharge values.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '7' }) => {
-      const params = new URLSearchParams({ latitude, longitude, daily: 'river_discharge,river_discharge_mean,river_discharge_max', forecast_days: days.trim() })
-      return `https://flood-api.open-meteo.com/v1/flood?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://flood-api.open-meteo.com/v1/flood?latitude={latitude}&longitude={longitude}&daily=river_discharge%2Criver_discharge_mean%2Criver_discharge_max&forecast_days={days}', hosts: ['flood-api.open-meteo.com'],
+      transforms: { days: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-history', name: 'Historical Weather', provider: 'Open-Meteo', category: 'Weather',
@@ -1189,10 +1257,10 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'startDate', label: 'Start date', type: 'date', defaultValue: '2025-01-01', help: 'Open-Meteo requires an ISO date in YYYY-MM-DD format.' },
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: '2025-01-14', minimumFromField: 'startDate', help: 'Open-Meteo requires YYYY-MM-DD; choose an end date on or after the start date.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = '2025-01-01', endDate = '2025-01-14' }) => {
-      const params = new URLSearchParams({ latitude, longitude, start_date: startDate.trim(), end_date: endDate.trim(), daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum', timezone: 'auto' })
-      return `https://archive-api.open-meteo.com/v1/archive?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://archive-api.open-meteo.com/v1/archive?latitude={latitude}&longitude={longitude}&start_date={startDate}&end_date={endDate}&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum&timezone=auto', hosts: ['archive-api.open-meteo.com'],
+      transforms: { startDate: 'trim', endDate: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'kraken-public-ticker', name: 'Kraken Market Ticker', provider: 'Kraken', category: 'Finance',
@@ -1202,10 +1270,10 @@ const nextKeylessApis: ApiDemo[] = [
     fields: [{ id: 'pair', label: 'Market pair', type: 'select', defaultValue: 'XBTUSD', help: 'Choose a public Kraken spot market.', options: [
       { label: 'BTC / USD', value: 'XBTUSD' }, { label: 'ETH / USD', value: 'ETHUSD' }, { label: 'SOL / USD', value: 'SOLUSD' }, { label: 'BTC / EUR', value: 'XBTEUR' },
     ] }],
-    buildUrl: ({ pair = 'XBTUSD' }) => {
-      const supportedPair = ['XBTUSD', 'ETHUSD', 'SOLUSD', 'XBTEUR'].includes(pair) ? pair : 'XBTUSD'
-      return `https://api.kraken.com/0/public/Ticker?${new URLSearchParams({ pair: supportedPair, assetVersion: '1' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.kraken.com/0/public/Ticker?pair={pair}&assetVersion=1', hosts: ['api.kraken.com'],
+      transforms: { pair: 'fallbackIfNotIn:XBTUSD,ETHUSD,SOLUSD,XBTEUR:XBTUSD' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gitlab-public-projects', name: 'GitLab Public Projects', provider: 'GitLab', category: 'Developer',
@@ -1215,10 +1283,10 @@ const nextKeylessApis: ApiDemo[] = [
       queryField({ label: 'Project search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search public project names, paths, and descriptions.' }),
       limitField({ label: 'Projects', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 public projects.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ visibility: 'public', search: query.trim(), order_by: 'star_count', sort: 'desc', per_page: limit.trim() })
-      return `https://gitlab.com/api/v4/projects?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://gitlab.com/api/v4/projects?visibility=public&search={query}&order_by=star_count&sort=desc&per_page={limit}', hosts: ['gitlab.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'uk-police-street-crime', name: 'UK Street Crime', provider: 'UK Home Office', category: 'Government',
@@ -1234,7 +1302,10 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All crime', value: 'all-crime' }, { label: 'Anti-social behaviour', value: 'anti-social-behaviour' }, { label: 'Burglary', value: 'burglary' }, { label: 'Vehicle crime', value: 'vehicle-crime' }, { label: 'Violence and sexual offences', value: 'violent-crime' },
       ] },
     ],
-    buildUrl: ({ latitude = '51.5074', longitude = '-0.1278', category = 'burglary' }) => `https://data.police.uk/api/crimes-street/${encode(category || 'burglary')}?${new URLSearchParams({ lat: latitude, lng: longitude }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://data.police.uk/api/crimes-street/{category}?lat={latitude}&lng={longitude}', hosts: ['data.police.uk'],
+      transforms: { latitude: 'trim', longitude: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-brewery-directory', name: 'Open Brewery Directory', provider: 'Open Brewery DB', category: 'Food',
@@ -1256,6 +1327,7 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All types', value: 'all' }, { label: 'Micro', value: 'micro' }, { label: 'Brewpub', value: 'brewpub' }, { label: 'Regional', value: 'regional' }, { label: 'Contract', value: 'contract' },
       ] },
     ],
+    request: { declarative: false, reason: "Omits `by_type` when type is 'all'; closed templates cannot conditionally omit a query parameter for an enum choice." },
     buildUrl: ({ country = 'united_states', type = 'all' }) => {
       const params = new URLSearchParams({ by_country: country.trim(), per_page: '8' })
       if (type.trim() !== 'all') params.set('by_type', type.trim())
@@ -1273,11 +1345,10 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All statuses', value: 'all' }, { label: 'Alive', value: 'alive' }, { label: 'Dead', value: 'dead' }, { label: 'Unknown', value: 'unknown' },
       ] },
     ],
-    buildUrl: ({ name = 'Rick', status = 'all' }) => {
-      const params = new URLSearchParams({ name: name.trim() })
-      if (status !== 'all') params.set('status', status)
-      return `https://rickandmortyapi.com/api/character?${params.toString()}`
-    },
+    request: rickMortyRequest,
+    buildUrl: (parameters) => buildRequestFromSpec(rickMortyRequest, {
+      name: 'Rick', status: 'all', ...parameters,
+    }).url,
   },
   {
     id: 'wikimedia-pageviews', name: 'Wikimedia Pageviews', provider: 'Wikimedia Foundation', category: 'Knowledge',
@@ -1287,6 +1358,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'article', label: 'Article title', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Use an English Wikipedia article title.' },
       { id: 'days', label: 'History days', type: 'number', defaultValue: '14', min: 7, max: 90, help: 'Chart between 7 and 90 completed days.' },
     ],
+    request: { declarative: false, reason: 'Computes a calendar-relative completed-day window, compacts both dates, replaces article spaces with underscores, and falls back to Singapore for an empty title.' },
     buildUrl: ({ article = 'Singapore', days = '14' }) => {
       const safeDays = clampInt(days, 7, 90, 14)
       const end = daysAgo(1)
@@ -1307,6 +1379,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed Formula 1 season.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
       { id: 'round', label: 'Race round', type: 'number', defaultValue: '1', min: 1, max: 30, help: 'Choose the Grand Prix round number.' },
     ],
+    request: { declarative: false, reason: 'Clamps the race round to 1–30 and substitutes season 2025 when blank; the closed transforms cannot clamp integers or apply conditional defaults.' },
     buildUrl: ({ season = '2025', round = '1' }) => `https://api.jolpi.ca/ergast/f1/${season || '2025'}/${String(clampInt(round, 1, 30, 1))}/qualifying/`,
   },
   {
@@ -1318,8 +1391,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Package search', defaultValue: 'react', placeholder: 'e.g. react', minLength: 1, help: 'Search package names and descriptions.' }),
       limitField({ label: 'Packages', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 package records.' }),
     ],
-    buildUrl: ({ query = 'react', limit = '8' }) =>
-      `https://packagist.org/search.json?${new URLSearchParams({ q: query.trim(), per_page: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://packagist.org/search.json?q={query}&per_page={limit}', hosts: ['packagist.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nhtsa-vehicle-recalls', name: 'NHTSA Vehicle Recalls', provider: 'NHTSA', category: 'Vehicle',
@@ -1330,10 +1405,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'model', label: 'Vehicle model', type: 'text', defaultValue: 'accord', help: 'Use a model name supported by the selected manufacturer.' },
       numberField('year', { label: 'Model year', defaultValue: '2020', min: 1949, max: localNow.getFullYear() + 1, step: 1, help: 'Narrow by model year to reduce response size.' }),
     ],
-    buildUrl: ({ make = 'honda', model = 'accord', year = '2020' }) => {
-      const query = new URLSearchParams({ make: make.trim(), model: model.trim(), modelYear: year.trim() })
-      return `https://api.nhtsa.gov/recalls/recallsByVehicle?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nhtsa.gov/recalls/recallsByVehicle?make={make}&model={model}&modelYear={year}', hosts: ['api.nhtsa.gov'],
+      transforms: { make: 'trim', model: 'trim', year: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'anilist-graphql', name: 'AniList Media Search', provider: 'AniList', category: 'Entertainment',
@@ -1352,6 +1427,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'page', label: 'Page', type: 'number', defaultValue: '1', min: 1, max: 10, help: 'Return page 1 to 10.' },
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 records.' }),
     ],
+    request: { declarative: false, reason: 'POST JSON embeds a static multiline GraphQL document and computes variables with query fallback, numeric clamping, and media-type mapping; the closed body spec cannot express those transformations.' },
     buildUrl: () => 'https://graphql.anilist.co',
     buildBody: ({ query = 'Fullmetal Alchemist', mediaType = 'ANIME', page = '1', limit = '6' }) => ({
       query: `query ($search: String, $page: Int, $perPage: Int, $type: MediaType) {
@@ -1395,10 +1471,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'contentType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Query images or audio separately.', options: [{ label: 'Images', value: 'image' }, { label: 'Audio', value: 'audio' }] },
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 media records.' }),
     ],
-    buildUrl: ({ query = 'space', contentType = 'image', limit = '8' }) => {
-      const mediaPath = contentType === 'audio' ? 'audio' : contentType === 'image' ? 'images' : contentType.trim()
-      return `https://api.openverse.org/v1/${mediaPath}/?${new URLSearchParams({ q: query.trim(), page_size: limit.trim(), page: '1' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.openverse.org/v1/{contentType}/?q={query}&page_size={limit}&page=1', hosts: ['api.openverse.org'],
+      transforms: { contentType: { map: { image: 'images', audio: 'audio' } }, query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'apple-itunes-search', name: 'Apple iTunes Search', provider: 'Apple', category: 'Media',
@@ -1412,6 +1488,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'country', label: 'Country', type: 'text', defaultValue: 'sg', placeholder: 'e.g. sg', minLength: 2, maxLength: 2, pattern: '[A-Za-z]{2}', patternDescription: 'must contain exactly two letters for an ISO 3166-1 alpha-2 country code.', help: 'Use a two-letter ISO 3166-1 alpha-2 country code for the iTunes Store storefront, such as SG or US.' },
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 results.' }),
     ],
+    request: { declarative: false, reason: 'Derives the media query value from membership in the podcast-entity set, then serializes four query fields; the closed spec cannot derive one field conditionally from another.' },
     buildUrl: ({ query = 'Beatles', entity = 'song', country = 'sg', limit = '8' }) => {
       const media = appleItunesPodcastEntities.has(entity) ? 'podcast' : 'music'
       return `https://itunes.apple.com/search?${new URLSearchParams({
@@ -1439,10 +1516,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'year', label: 'Hebrew year', type: 'number', defaultValue: '5787', min: 5700, max: 5800, step: 1, help: 'Use a four-digit Hebrew year. Public-API sends yt=H so the provider interprets the year as Hebrew, not Gregorian.' },
       { id: 'israel', label: 'Holiday schedule', type: 'select', defaultValue: 'off', help: 'Choose the Diaspora or Israel holiday schedule for the full Hebrew year.', options: [{ label: 'Diaspora', value: 'off' }, { label: 'Israel', value: 'on' }] },
     ],
-    buildUrl: ({ year = '5787', israel = 'off' }) => `https://www.hebcal.com/hebcal?${new URLSearchParams({
-      v: '1', cfg: 'json', year: year.trim(), yt: 'H', month: 'x',
-      maj: 'on', min: 'on', mod: 'on', nx: 'on', mf: 'on', ss: 'on', s: 'on', leyning: 'off', i: israel,
-    }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.hebcal.com/hebcal?v=1&cfg=json&year={year}&yt=H&month=x&maj=on&min=on&mod=on&nx=on&mf=on&ss=on&s=on&leyning=off&i={israel}', hosts: ['www.hebcal.com'],
+      transforms: { year: 'trim', israel: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'aladhan-prayer-times', name: 'AlAdhan Prayer Times', provider: 'Al-Adhan', category: 'Calendar',
@@ -1457,6 +1534,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'method', label: 'Calculation method', type: 'select', defaultValue: '11', help: 'Choose one built-in method advertised by AlAdhan. Method 11 is the Singapore preset.', options: aladhanMethodOptions },
       { id: 'date', label: 'Date', type: 'date', defaultValue: today, help: 'Use a Gregorian date in YYYY-MM-DD format. Public-API converts it to AlAdhan’s DD-MM-YYYY path format.' },
     ],
+    request: { declarative: false, reason: 'Converts a Gregorian YYYY-MM-DD date to DD-MM-YYYY, validates the calculation method against a provider allowlist, and falls back for empty coordinates; these transformations are unavailable in the closed spec.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', method = '11', date = today }) => {
       const safeMethod = aladhanMethodOptions.some((option) => option.value === method) ? method : '11'
       return `https://api.aladhan.com/v1/timings/${toDmyDate(date || today)}?${new URLSearchParams({
@@ -1476,6 +1554,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'dataset', label: 'Dataset', type: 'select', defaultValue: 'drivers', help: 'Pick a public F1 data table.', options: [{ label: 'Drivers', value: 'drivers' }, { label: 'Constructors', value: 'constructors' }, { label: 'Races', value: 'races' }] },
       limitField({ label: 'Rows', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 rows.' }),
     ],
+    request: { declarative: false, reason: 'Clamps the result limit, validates the dataset against an allowlist, and substitutes a default season; the closed spec has no numeric clamp or conditional fallback.' },
     buildUrl: ({ season = '2025', dataset = 'drivers', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 30, 8)
       const safeDataset = ['drivers', 'constructors', 'races'].includes(dataset) ? dataset : 'drivers'
@@ -1491,8 +1570,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'tag', label: 'Content type', type: 'select', defaultValue: 'story', help: 'Choose stories or comments.', options: [{ label: 'Stories', value: 'story' }, { label: 'Comments', value: 'comment' }, { label: 'Stories and comments', value: '(story,comment)' }] },
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 search hits.' }),
     ],
-    buildUrl: ({ query = 'OpenAI', tag = 'story', limit = '6' }) =>
-      `https://hn.algolia.com/api/v1/search?${new URLSearchParams({ query: query.trim(), tags: tag, hitsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://hn.algolia.com/api/v1/search?query={query}&tags={tag}&hitsPerPage={limit}', hosts: ['hn.algolia.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'bank-of-canada-valet', name: 'Bank of Canada Valet', provider: 'Bank of Canada', category: 'Finance',
@@ -1503,8 +1584,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'startDate', label: 'Start date', type: 'date', defaultValue: isoDate(daysAgo(30)), help: 'Bank of Canada Valet requires YYYY-MM-DD.' },
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'startDate', help: 'Bank of Canada Valet requires YYYY-MM-DD on or after the start date.' },
     ],
-    buildUrl: ({ series = 'FXUSDCAD', startDate = isoDate(daysAgo(30)), endDate = today }) =>
-      `https://www.bankofcanada.ca/valet/observations/${encode(series.trim())}/json?${new URLSearchParams({ start_date: startDate.trim(), end_date: endDate.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.bankofcanada.ca/valet/observations/{series}/json?start_date={startDate}&end_date={endDate}', hosts: ['www.bankofcanada.ca'],
+      transforms: { series: 'trim', startDate: 'trim', endDate: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'swiss-transit-connections', name: 'Swiss Transit Connections', provider: 'Swiss Mobility', category: 'Utility',
@@ -1516,8 +1599,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'to', label: 'Destination', type: 'text', defaultValue: 'Geneva', placeholder: 'e.g. Geneva', minLength: 1, help: 'Enter a destination station or place name.' },
       limitField({ label: 'Connections', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 connections.' }),
     ],
-    buildUrl: ({ from = 'Zurich', to = 'Geneva', limit = '6' }) =>
-      `https://transport.opendata.ch/v1/connections?${new URLSearchParams({ from: from.trim(), to: to.trim(), limit: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://transport.opendata.ch/v1/connections?from={from}&to={to}&limit={limit}', hosts: ['transport.opendata.ch'],
+      transforms: { from: 'form', to: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nasa-power-climate', name: 'NASA POWER Climate', provider: 'NASA POWER', category: 'Environment',
@@ -1530,6 +1615,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'startDate', help: 'Choose an ISO date in YYYY-MM-DD format on or after the start date. Public-API converts it to NASA POWER’s YYYYMMDD wire format.' },
       { id: 'parameters', label: 'Parameters', type: 'text', defaultValue: 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN', minLength: 1, help: 'Comma-separated POWER parameter codes.' },
     ],
+    request: { declarative: false, reason: 'Validates calendar dates and converts YYYY-MM-DD to YYYYMMDD before URL serialization; the closed spec cannot validate or reformat dates.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = isoDate(daysAgo(30)), endDate = today, parameters = 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN' }) => {
       const start = startDate.trim()
       const end = endDate.trim()
@@ -1553,11 +1639,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     fields: [
       ...latLongFields(),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) =>
-      `https://api.open-meteo.com/v1/elevation?${new URLSearchParams({
-        latitude: latitude || '1.3521',
-        longitude: longitude || '103.8198',
-      }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.open-meteo.com/v1/elevation?latitude={latitude}&longitude={longitude}', hosts: ['api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'zippopotam-postcode', name: 'Zippopotam Postcode', provider: 'Zippopotam', category: 'Geo',
@@ -1568,6 +1653,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'country', label: 'Country code', type: 'text', defaultValue: 'us', placeholder: 'e.g. us', minLength: 2, maxLength: 2, pattern: '[A-Za-z]{2}', patternDescription: 'must contain exactly two letters for an ISO 3166-1 alpha-2 country code.', help: 'Use a supported ISO 3166-1 alpha-2 country code such as US, GB, or MY.' },
       { id: 'postalCode', label: 'Postcode', type: 'text', defaultValue: '10001', placeholder: 'e.g. 10001', help: 'Provide a supported country-specific postcode.' },
     ],
+    request: { declarative: false, reason: 'Lowercases the country path component and substitutes fallback country/postcode values before path encoding; the closed spec cannot lowercase or express these fallbacks.' },
     buildUrl: ({ country = 'us', postalCode = '10001' }) =>
       `https://api.zippopotam.us/${encode((country || 'us').toLowerCase())}/${encode(postalCode || '10001')}`,
   },
@@ -1580,6 +1666,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'station', label: 'Station', type: 'select', defaultValue: 'Brussels-South', help: 'Choose a Belgian railway station.', options: [{ label: 'Brussels-South', value: 'Brussels-South' }, { label: 'Gent-Sint-Pieters', value: 'Gent-Sint-Pieters' }, { label: 'Antwerpen-Centraal', value: 'Antwerpen-Centraal' }, { label: 'Brugge', value: 'Brugge' }] },
       { id: 'direction', label: 'Board direction', type: 'select', defaultValue: 'departure', help: 'Show departing or arriving services.', options: [{ label: 'Departures', value: 'departure' }, { label: 'Arrivals', value: 'arrival' }] },
     ],
+    request: { declarative: false, reason: 'Substitutes fallback station and direction values and adds fixed query fields; the closed spec cannot express conditional fallbacks.' },
     buildUrl: ({ station = 'Brussels-South', direction = 'departure' }) => `https://api.irail.be/liveboard/?${new URLSearchParams({ station: station || 'Brussels-South', format: 'json', lang: 'en', arrdep: direction || 'departure', alerts: 'false' }).toString()}`,
   },
   {
@@ -1590,6 +1677,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'News search', defaultValue: 'NASA', minLength: 1, placeholder: 'e.g. NASA', help: 'Search titles and summaries from indexed spaceflight publishers.' }),
       limitField({ label: 'Articles', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 articles.' }),
     ],
+    request: { declarative: false, reason: 'Passes the search value through URLSearchParams without trimming it; the closed form encoder trims surrounding whitespace and the plain component encoder uses different space encoding.' },
     buildUrl: ({ query = 'NASA', limit = '6' }) => {
       return `https://api.spaceflightnewsapi.net/v4/articles/?${new URLSearchParams({ search: query, limit, ordering: '-published_at' }).toString()}`
     },
@@ -1610,14 +1698,20 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Launch search', defaultValue: 'SpaceX', placeholder: 'e.g. SpaceX', minLength: 1, maxLength: 120, help: 'Filter upcoming launches by the provider\'s documented mission, launch, pad, rocket, spacecraft, or launch-service-provider search fields.' }),
       limitField({ label: 'Launches', defaultValue: '4', min: 1, max: 6, step: 1, help: 'Return between 1 and 6 upcoming launches.' }),
     ],
-    buildUrl: ({ query = 'SpaceX', limit = '4' }) => `https://ll.thespacedevs.com/2.3.0/launches/upcoming/?${new URLSearchParams({ search: query.trim(), limit, ordering: 'net' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search={query}&limit={limit}&ordering=net', hosts: ['ll.thespacedevs.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wiktionary-entry', name: 'Wiktionary Definitions', provider: 'Wikimedia Foundation', category: 'Language',
     description: 'Look up structured English definitions, parts of speech, examples, related words, and language information.',
     documentationUrl: 'https://en.wiktionary.org/api/rest_v1/', accent: '#7c3aed', monogram: 'WK',
     fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', placeholder: 'e.g. serendipity', minLength: 1, help: 'Enter one English Wiktionary headword.' }],
-    buildUrl: ({ word = 'hello' }) => `https://en.wiktionary.org/api/rest_v1/page/definition/${encode(word)}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://en.wiktionary.org/api/rest_v1/page/definition/{word}', hosts: ['en.wiktionary.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'animechan-random-quote', name: 'Anime Quote Generator', provider: 'AnimeChan', category: 'Entertainment',
@@ -1625,7 +1719,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://animechan.io/docs', accent: '#2e51a2', monogram: 'AC',
     usageNote: 'The keyless free tier allows 100 requests per day per IP address. Exceeding that limit returns HTTP 429, and the free-tier window refills 24 hours after its first request. Keep requests user-driven and avoid high-frequency refreshes.',
     fields: [],
-    buildUrl: () => 'https://api.animechan.io/v1/quotes/random',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.animechan.io/v1/quotes/random', hosts: ['api.animechan.io'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'jokeapi-safe', name: 'Safe Joke Generator', provider: 'JokeAPI', category: 'Games',
@@ -1636,7 +1733,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'category', label: 'Category', type: 'select', defaultValue: 'Programming', help: 'Choose a safe joke category.', options: [{ label: 'Programming', value: 'Programming' }, { label: 'Pun', value: 'Pun' }, { label: 'Miscellaneous', value: 'Misc' }, { label: 'Christmas', value: 'Christmas' }] },
       { id: 'type', label: 'Joke format', type: 'select', defaultValue: 'twopart', help: 'Return a one-line or setup-and-delivery joke.', options: [{ label: 'Setup and delivery', value: 'twopart' }, { label: 'Single line', value: 'single' }] },
     ],
-    buildUrl: ({ category = 'Programming', type = 'twopart' }) => `https://v2.jokeapi.dev/joke/${encode(category || 'Programming')}?${new URLSearchParams({ safe_mode: '', type: type || 'twopart', amount: '1' }).toString().replace('safe_mode=', 'safe-mode')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://v2.jokeapi.dev/joke/{category}?safe-mode&type={type}&amount=1', hosts: ['v2.jokeapi.dev'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'dummyjson-recipes', name: 'Recipe Explorer', provider: 'DummyJSON', category: 'Food',
@@ -1647,9 +1747,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Recipe search', defaultValue: 'pasta', minLength: 1, placeholder: 'e.g. pasta', help: 'Search recipe names and indexed recipe text.' }),
       limitField({ label: 'Recipes', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 recipes.' }),
     ],
-    buildUrl: ({ query = 'pasta', limit = '6' }) => {
-      return `https://dummyjson.com/recipes/search?${new URLSearchParams({ q: query.trim(), limit: limit.trim() }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dummyjson.com/recipes/search?q={query}&limit={limit}', hosts: ['dummyjson.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'brasilapi-postcode', name: 'Brazil Postcode Explorer', provider: 'BrasilAPI', category: 'Geo',
@@ -1666,6 +1767,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       patternDescription: 'must contain exactly eight digits, optionally formatted as 12345-678.',
       help: 'Enter exactly eight digits, with or without a hyphen.',
     }],
+    request: { declarative: false, reason: 'Trims the postcode and removes an optional hyphen before path encoding; the closed transforms cannot remove that formatting character.' },
     buildUrl: ({ postcode = '01310930' }) => `https://brasilapi.com.br/api/cep/v2/${encode(postcode.trim().replace('-', ''))}`,
   },
   {
@@ -1676,6 +1778,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'author', label: 'Poet', type: 'select', defaultValue: 'Emily Dickinson', help: 'Choose a poet represented in PoetryDB.', options: [{ label: 'Emily Dickinson', value: 'Emily Dickinson' }, { label: 'William Shakespeare', value: 'William Shakespeare' }, { label: 'William Blake', value: 'William Blake' }, { label: 'Edgar Allan Poe', value: 'Edgar Allan Poe' }] },
       countField({ label: 'Poems', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' }),
     ],
+    request: { declarative: false, reason: 'Clamps poem count to 1–4 and falls back to a default author before path encoding; the closed spec cannot clamp or conditionally substitute.' },
     buildUrl: ({ author = 'Emily Dickinson', count = '3' }) => {
       const safeCount = clampInt(count, 1, 4, 3)
       return `https://poetrydb.org/author,random/${encode(author || 'Emily Dickinson')};${safeCount}/title,author,lines,linecount`
@@ -1696,13 +1799,17 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'bitcoin', help: 'Choose one CoinGecko asset identifier.', options: [{ label: 'Bitcoin', value: 'bitcoin' }, { label: 'Ethereum', value: 'ethereum' }, { label: 'Solana', value: 'solana' }, { label: 'Dogecoin', value: 'dogecoin' }] },
       { id: 'currency', label: 'Quote currency', type: 'select', defaultValue: 'usd', help: 'Choose a supported quote currency.', options: [{ label: 'USD', value: 'usd' }, { label: 'SGD', value: 'sgd' }, { label: 'EUR', value: 'eur' }] },
     ],
-    buildUrl: ({ coin = 'bitcoin', currency = 'usd' }) => `https://api.coingecko.com/api/v3/simple/price?${new URLSearchParams({ ids: coin || 'bitcoin', vs_currencies: currency || 'usd', include_market_cap: 'true', include_24hr_vol: 'true', include_24hr_change: 'true', include_last_updated_at: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies={currency}&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true', hosts: ['api.coingecko.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'swapi-people', name: 'Star Wars People', provider: 'SWAPI', category: 'Entertainment',
     description: 'Search Star Wars characters and inspect species-era profile fields including birth year, homeworld, and films.',
     documentationUrl: 'https://swapi.dev/documentation', accent: '#ca8a04', monogram: 'SW',
     fields: [queryField({ label: 'Character search', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' })],
+    request: { declarative: false, reason: 'Trims the search term and substitutes Luke when blank; the closed transforms cannot conditionally apply that default.' },
     buildUrl: ({ query = 'Luke' }) => `https://swapi.dev/api/people/?${new URLSearchParams({ search: query.trim() || 'Luke' }).toString()}`,
   },
   {
@@ -1711,7 +1818,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/cpi_core', accent: '#0284c7', monogram: 'MCC', risk: 'Review',
     usageNote: 'DOSM defines this as a monthly CPI index with base 2010 = 100, not an inflation percentage. Core CPI excludes volatile-price or government-administered items. The demo filters division=overall and retains CC BY 4.0 attribution.',
     fields: [limitField({ label: 'Months', defaultValue: '12', min: 6, max: 60, step: 1, help: 'Return between 6 and 60 monthly overall-index observations.' })],
-    buildUrl: ({ limit = '12' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'cpi_core', filter: 'overall@division', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=cpi_core&filter=overall%40division&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-household-income', name: 'Malaysia Household Income', provider: 'data.gov.my', category: 'Economy',
@@ -1719,7 +1829,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/hh_income', accent: '#0369a1', monogram: 'MHI', risk: 'Review',
     usageNote: 'DOSM publishes nominal RM values that are not inflation-adjusted. HIES observations are survey years, not a complete consecutive annual series.',
     fields: [limitField({ label: 'Survey observations', defaultValue: '10', min: 6, max: 30, step: 1, help: 'Return between 6 and 30 published HIES observations.' })],
-    buildUrl: ({ limit = '10' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'hh_income', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=hh_income&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'malaysia-population', name: 'Malaysia Population', provider: 'data.gov.my', category: 'Economy',
@@ -1727,7 +1840,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://data.gov.my/data-catalogue/population_malaysia', accent: '#0ea5e9', monogram: 'MPO', risk: 'Review',
     usageNote: "DOSM publishes population in thousands of people ('000). This demo filters all demographic dimensions to their overall totals so each row is one national yearly observation.",
     fields: [limitField({ label: 'Years', defaultValue: '10', min: 6, max: 57, step: 1, help: 'Return between 6 and 57 annual national-total observations.' })],
-    buildUrl: ({ limit = '10' }) => `https://api.data.gov.my/data-catalogue/?${new URLSearchParams({ id: 'population_malaysia', filter: 'both@sex,overall@age,overall@ethnicity', limit: limit.trim(), sort: '-date' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=both%40sex%2Coverall%40age%2Coverall%40ethnicity&limit={limit}&sort=-date', hosts: ['api.data.gov.my'],
+      transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'openfda-food-recalls', name: 'openFDA Food Recalls', provider: 'U.S. FDA', category: 'Food',
@@ -1737,6 +1853,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Recall search', defaultValue: 'peanut', placeholder: 'e.g. peanut', minLength: 1, maxLength: 80, pattern: '[^"\\\\]+', patternDescription: 'must not contain double quotes or backslashes because those characters alter openFDA search syntax.', help: 'Search one quoted phrase across FDA product descriptions and reasons for recall.' }),
       limitField({ label: 'Records', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 records.' }),
     ],
+    request: { declarative: false, reason: 'Constructs a two-field quoted OR search expression and clamps result limit to 1–30; this is computed provider syntax, not a closed substitution.' },
     buildUrl: ({ query = 'peanut', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 30, 8)
       const phrase = query.trim() || 'peanut'
@@ -1754,6 +1871,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Icon keyword', defaultValue: 'home', placeholder: 'e.g. home', help: 'Search icon keywords across public sets.' }),
       limitField({ label: 'Icons', defaultValue: '32', min: 32, max: 60, help: 'Iconify accepts 32 to 999 search results; this demo caps the browser payload at 60.' }),
     ],
+    request: { declarative: false, reason: 'Falls back to query home when blank and clamps result limit to 32–60; closed transforms cannot apply either conditional default or numeric clamp.' },
     buildUrl: ({ query = 'home', limit = '32' }) => {
       const safeLimit = clampInt(limit, 32, 60, 32)
       return `https://api.iconify.design/search?${new URLSearchParams({ query: query.trim() || 'home', limit: String(safeLimit) }).toString()}`
@@ -1769,12 +1887,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'collection', label: 'Collection', type: 'select', defaultValue: 'formula', help: 'Select Formula or Cask metadata source.',
         options: [{ label: 'Formula', value: 'formula' }, { label: 'Cask', value: 'cask' }] },
     ],
-    buildUrl: ({ formula = 'node', collection = 'formula' }) => {
-      const name = encode(formula.trim() || 'node')
-      return collection === 'cask'
-        ? `https://formulae.brew.sh/api/cask/${name}.json`
-        : `https://formulae.brew.sh/api/formula/${name}.json`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://formulae.brew.sh/api/{collection}/{formula}.json', hosts: ['formulae.brew.sh'],
+      transforms: { collection: { map: { formula: 'formula', cask: 'cask' } }, formula: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'npm-download-counts', name: 'npm Download Counts', provider: 'npm', category: 'Developer',
@@ -1785,6 +1901,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'period', label: 'Window', type: 'select', defaultValue: 'last-week', help: 'Choose a point download period.',
         options: [{ label: 'Last week', value: 'last-week' }, { label: 'Last month', value: 'last-month' }, { label: 'Last day', value: 'last-day' }] },
     ],
+    request: { declarative: false, reason: 'Maps period to one of three supported path segments, defaults invalid periods to last-week, and falls back to package react when blank.' },
     buildUrl: ({ packageName = 'react', period = 'last-week' }) => {
       const safePeriod = ['last-day', 'last-week', 'last-month'].includes(period) ? period : 'last-week'
       return `https://api.npmjs.org/downloads/point/${safePeriod}/${encode(packageName || 'react')}`
@@ -1800,6 +1917,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'adminLevel', label: 'Admin level', type: 'select', defaultValue: 'ADM0', help: 'geoBoundaries accepts ADM0 through ADM5, but available levels vary by country.',
         options: [{ label: 'ADM0', value: 'ADM0' }, { label: 'ADM1', value: 'ADM1' }, { label: 'ADM2', value: 'ADM2' }, { label: 'ADM3', value: 'ADM3' }, { label: 'ADM4', value: 'ADM4' }, { label: 'ADM5', value: 'ADM5' }] },
     ],
+    request: { declarative: false, reason: 'Uppercases the country code and substitutes default country/admin-level path components; the closed spec cannot uppercase or express fallbacks.' },
     buildUrl: ({ countryIso = 'SGP', adminLevel = 'ADM0' }) =>
       `https://www.geoboundaries.org/api/current/gbOpen/${encode((countryIso || 'SGP').toUpperCase())}/${encode(adminLevel || 'ADM0')}/`,
   },
@@ -1822,6 +1940,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'endLongitude', label: 'End longitude', type: 'number', defaultValue: '103.851959', min: -180, max: 180, help: 'Destination longitude in degrees.' },
       numberField('alternatives', { label: 'Alternatives', defaultValue: '1', min: 1, max: 3, step: 1, help: 'Request up to one to three alternative routes; OSRM does not guarantee that every requested alternative exists.' }),
     ],
+    request: { declarative: false, reason: 'Parses each coordinate as a finite number and composes four normalized coordinate values into one ordered path segment; the closed spec cannot parse or compose fields.' },
     buildUrl: ({ startLatitude = '1.3521', startLongitude = '103.8198', endLatitude = '1.290270', endLongitude = '103.851959', alternatives = '1' }) => {
       const coordinate = (value: string) => {
         const trimmed = value.trim()
@@ -1843,7 +1962,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://docs.opendota.com/', accent: '#16a34a', monogram: 'ODT',
     usageNote: 'OpenDota /proMatches does not expose a result-count limit; it currently returns a provider-sized recent batch and supports less_than_match_id only for older-match pagination. The Request Lab therefore does not claim a non-existent limit control.',
     fields: [],
-    buildUrl: () => 'https://api.opendota.com/api/proMatches',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.opendota.com/api/proMatches', hosts: ['api.opendota.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'openligadb-matches', name: 'OpenLigaDB', provider: 'OpenLigaDB', category: 'Sports',
@@ -1855,6 +1977,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'season', label: 'Season year', type: 'number', defaultValue: '2025', min: 2000, max: localNow.getFullYear(), help: 'Use a published season start year.' },
       { id: 'matchday', label: 'Matchday', type: 'number', defaultValue: '1', min: 1, max: 50, help: 'Load one matchday to keep the browser response small and reliable.' },
     ],
+    request: { declarative: false, reason: 'Clamps season and matchday independently to integer ranges and falls back to season 2025/matchday 1; the closed spec cannot clamp or substitute.' },
     buildUrl: ({ league = 'bl1', season = '2025', matchday = '1' }) => {
       const safeSeason = clampInt(season, 2000, localNow.getFullYear(), 2025)
       const safeMatchday = clampInt(matchday, 1, 50, 1)
@@ -1869,6 +1992,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Member name', defaultValue: 'Rishi', placeholder: 'e.g. Rishi', help: 'Match current Commons or Lords members whose name contains this text.' }),
       limitField({ label: 'Members', defaultValue: '10', min: 1, max: 20, help: 'Return between 1 and 20 members. The provider calls this parameter take and caps it at 20.' }),
     ],
+    request: { declarative: false, reason: 'Clamps limit to an integer from 1–20 and falls back to Rishi for an empty query; the closed transforms cannot clamp or conditionally substitute.' },
     buildUrl: ({ query = 'Rishi', limit = '10' }) => {
       const safeLimit = clampInt(limit, 1, 20, 10)
       return `https://members-api.parliament.uk/api/Members/Search?${new URLSearchParams({
@@ -1886,6 +2010,7 @@ const verifiedKeylessApis: ApiDemo[] = [
     fields: [
       { id: 'date', label: 'Schedule date', type: 'date', defaultValue: today, help: 'Use a published game date in YYYY-MM-DD format.' },
     ],
+    request: { declarative: false, reason: 'Validates the supplied calendar date and substitutes today when invalid; closed transforms cannot validate ISO calendar dates or compute the current date.' },
     buildUrl: ({ date = today }) => {
       const targetDate = isIsoCalendarDate(date.trim()) ? date.trim() : today
       const params = new URLSearchParams({
@@ -1909,13 +2034,17 @@ const verifiedExpansionApis: ApiDemo[] = [
         { label: 'TXT', value: 'TXT' }, { label: 'CNAME', value: 'CNAME' }, { label: 'NS', value: 'NS' },
       ] },
     ],
-    buildUrl: ({ name = 'example.com', type = 'A' }) => `https://dns.google/resolve?${new URLSearchParams({ name: name.trim(), type }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dns.google/resolve?name={name}&type={type}', hosts: ['dns.google'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'color-api', name: 'The Color API', provider: 'TheColorAPI', category: 'Utility',
     description: 'Convert a hex color into RGB, HSL, HSV, CMYK, a named color match, and a contrast recommendation.',
     documentationUrl: 'https://www.thecolorapi.com/docs', accent: '#24b1e0', monogram: 'HEX',
     fields: [{ id: 'hex', label: 'Hex color', type: 'text', defaultValue: '24B1E0', placeholder: 'e.g. 24B1E0', pattern: '#?(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})', patternDescription: 'must be a 3- or 6-digit hexadecimal color, with an optional leading #.', help: 'Enter 3 or 6 hexadecimal digits, with or without the leading #.' }],
+    request: { declarative: false, reason: 'Removes an optional leading # and falls back to 24B1E0 when blank; the closed transforms cannot remove a leading character conditionally.' },
     buildUrl: ({ hex = '24B1E0' }) => `https://www.thecolorapi.com/id?hex=${encode((hex || '24B1E0').replace(/^#/, ''))}`,
   },
   {
@@ -1927,7 +2056,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Search term', type: 'text', defaultValue: 'moon', placeholder: 'e.g. moon', minLength: 1, help: 'Search NASA media titles and descriptions.' },
       { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Filter by media type.', options: [{ label: 'Image', value: 'image' }, { label: 'Video', value: 'video' }, { label: 'Audio', value: 'audio' }] },
     ],
-    buildUrl: ({ query = 'moon', mediaType = 'image' }) => `https://images-api.nasa.gov/search?${new URLSearchParams({ q: query.trim(), media_type: mediaType, page_size: '8' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://images-api.nasa.gov/search?q={query}&media_type={mediaType}&page_size=8', hosts: ['images-api.nasa.gov'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'lichess-top-players', name: 'Lichess Top Players', provider: 'Lichess', category: 'Games',
@@ -1946,6 +2078,7 @@ const verifiedExpansionApis: ApiDemo[] = [
       ] },
       { id: 'count', label: 'Players', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 top players.' },
     ],
+    request: { declarative: false, reason: 'Clamps player count to 1–10 with fallback 5 and substitutes blitz when perfType is blank; closed transforms cannot perform numeric clamping or conditional defaults.' },
     buildUrl: ({ perfType = 'blitz', count = '5' }) => {
       const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 5))
       return `https://lichess.org/api/player/top/${safeCount}/${encode(perfType || 'blitz')}`
@@ -1960,7 +2093,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       { id: 'term', label: 'Search term', type: 'text', defaultValue: 'covid', minLength: 1, placeholder: 'e.g. covid', help: 'Search PubMed indexed terms and MeSH headings.' },
       { id: 'retmax', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 article identifiers.' },
     ],
-    buildUrl: ({ term = 'covid', retmax = '5' }) => `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${new URLSearchParams({ db: 'pubmed', term: term.trim(), retmode: 'json', retmax: retmax.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={term}&retmode=json&retmax={retmax}', hosts: ['eutils.ncbi.nlm.nih.gov'],
+      transforms: { term: 'form', retmax: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'rxnorm-drug-search', name: 'RxNorm Drug Search', provider: 'U.S. National Library of Medicine', category: 'Health', risk: 'Review',
@@ -1968,7 +2104,10 @@ const verifiedExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html', accent: '#0369a1', monogram: 'RX',
     usageNote: 'Data source: U.S. National Library of Medicine (NLM) RxNorm. For terminology normalization demonstrations only. Never treat this response as medical or prescribing advice.',
     fields: [{ id: 'name', label: 'Drug name', type: 'text', defaultValue: 'ibuprofen', minLength: 1, placeholder: 'e.g. ibuprofen', help: 'Enter a generic or brand drug name.' }],
-    buildUrl: ({ name = 'ibuprofen' }) => `https://rxnav.nlm.nih.gov/REST/drugs.json?${new URLSearchParams({ name: name.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rxnav.nlm.nih.gov/REST/drugs.json?name={name}', hosts: ['rxnav.nlm.nih.gov'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'inaturalist-observations', name: 'iNaturalist Observations', provider: 'iNaturalist', category: 'Biodiversity',
@@ -1986,7 +2125,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       reason: 'iNaturalist recommends about one API request per second and around 10,000 requests per day, and may throttle excess traffic with HTTP 429. Generic verification records the 429 and defers another provider request instead of immediately retrying.',
       policyUrl: 'https://www.inaturalist.org/pages/api+recommended+practices',
     },
-    buildUrl: ({ taxonName = 'Panthera', perPage = '6' }) => `https://api.inaturalist.org/v1/observations?${new URLSearchParams({ taxon_name: taxonName.trim(), per_page: perPage, photos: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.inaturalist.org/v1/observations?taxon_name={taxonName}&per_page={perPage}&photos=true', hosts: ['api.inaturalist.org'],
+      transforms: { taxonName: 'form' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -1997,6 +2139,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.first.org/epss/api', accent: '#b42318', monogram: 'EPS', risk: 'Review',
     usageNote: 'EPSS is a probability estimate, not a guarantee of exploitation. Use alongside CVSS and CISA KEV status.',
     fields: [cveField('CVE identifier')],
+    request: { declarative: false, reason: 'Falls back to CVE-2021-44228 when the trimmed CVE input is blank; closed template transforms cannot conditionally substitute a value.' },
     buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://api.first.org/data/v1/epss?${new URLSearchParams({ cve: cve.trim() || 'CVE-2021-44228' }).toString()}`,
   },
   {
@@ -2007,6 +2150,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { label: 'Node.js', value: 'nodejs' }, { label: 'Python', value: 'python' }, { label: 'PostgreSQL', value: 'postgresql' },
       { label: 'Ubuntu', value: 'ubuntu' }, { label: 'PHP', value: 'php' }, { label: 'Java (OpenJDK)', value: 'java' },
     ] }],
+    request: { declarative: false, reason: 'Falls back to product nodejs when the selected product is blank; closed templates cannot conditionally substitute a path value.' },
     buildUrl: ({ product = 'nodejs' }) => `https://endoflife.date/api/v1/products/${encode(product || 'nodejs')}`,
   },
   {
@@ -2020,6 +2164,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       ] },
       { id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'react', minLength: 1, placeholder: 'e.g. react', help: 'Enter a package name for the selected ecosystem.' },
     ],
+    request: { declarative: false, reason: 'Substitutes npm for a blank system and react for a blank package name; closed template transforms cannot apply conditional path defaults.' },
     buildUrl: ({ system = 'npm', packageName = 'react' }) => `https://api.deps.dev/v3/systems/${encode(system || 'npm')}/packages/${encode(packageName || 'react')}`,
   },
   {
@@ -2029,14 +2174,20 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     fields: [{ id: 'currency', label: 'Base currency', type: 'select', defaultValue: 'EUR', help: 'Choose the base currency for the rate table.', options: [
       { label: 'Euro', value: 'EUR' }, { label: 'US Dollar', value: 'USD' }, { label: 'Singapore Dollar', value: 'SGD' }, { label: 'British Pound', value: 'GBP' },
     ] }],
-    buildUrl: ({ currency = 'EUR' }) => `https://api.coinbase.com/v2/exchange-rates?${new URLSearchParams({ currency: currency || 'EUR' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coinbase.com/v2/exchange-rates{?currency}', hosts: ['api.coinbase.com'],
+      transforms: { currency: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'un-sdg-goals', name: 'UN Sustainable Development Goals', provider: 'United Nations Statistics Division', category: 'Government',
     description: 'Browse the official United Nations Sustainable Development Goal catalogue with goal codes, titles, descriptions, and API paths.',
     documentationUrl: 'https://unstats.un.org/SDGAPI/swagger/', accent: '#1cabe2', monogram: 'SDG',
     fields: [],
-    buildUrl: () => 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://unstats.un.org/SDGAPI/v1/sdg/Goal/List', hosts: ['unstats.un.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'datacite-search', name: 'DataCite DOI Search', provider: 'DataCite', category: 'Research',
@@ -2046,8 +2197,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Research query', type: 'text', defaultValue: 'climate change', placeholder: 'e.g. climate change', minLength: 1, help: 'Search DataCite-indexed titles and metadata.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 DOI records.' },
     ],
-    buildUrl: ({ query = 'climate change', count = '5' }) =>
-      `https://api.datacite.org/dois?${new URLSearchParams({ query: query.trim(), 'page[size]': count.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.datacite.org/dois?query={query}&page%5Bsize%5D={count}', hosts: ['api.datacite.org'],
+      transforms: { query: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
     automatedVerification: {
       mode: 'enabled',
       retryOnRateLimit: false,
@@ -2060,7 +2213,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     description: 'Look up standardized identifiers, names, locations, and links for universities and research institutions.',
     documentationUrl: 'https://ror.readme.io/docs/rest-api', accent: '#1a4cb3', monogram: 'ROR',
     fields: [{ id: 'query', label: 'Organization search', type: 'text', defaultValue: 'stanford', placeholder: 'e.g. stanford', minLength: 1, help: 'Search research organization names or external identifiers for an interactive choice.' }],
-    buildUrl: ({ query = 'stanford' }) => `https://api.ror.org/v2/organizations?${new URLSearchParams({ query: query.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.ror.org/v2/organizations{?query}', hosts: ['api.ror.org'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'celestrak-satellites', name: 'CelesTrak Orbital Elements', provider: 'CelesTrak', category: 'Geo',
@@ -2078,7 +2234,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     fields: [{ id: 'group', label: 'Bounded satellite group', type: 'select', defaultValue: 'stations', help: 'Choose a bounded GP group. Large Active and Starlink sets are intentionally excluded from this browser demo.', options: [
       { label: 'Space stations', value: 'stations' }, { label: 'GPS operational', value: 'gps-ops' },
     ] }],
-    buildUrl: ({ group = 'stations' }) => `https://celestrak.org/NORAD/elements/gp.php?${new URLSearchParams({ GROUP: group || 'stations', FORMAT: 'json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json', hosts: ['celestrak.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'cleveland-museum-search', name: 'Cleveland Museum Open Access', provider: 'The Cleveland Museum of Art', category: 'Media',
@@ -2089,10 +2248,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Artwork search', type: 'text', defaultValue: 'monet', minLength: 1, placeholder: 'e.g. monet', help: 'Search artwork titles, artists, or subjects.' },
       { id: 'limit', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 artworks.' },
     ],
-    buildUrl: ({ query = 'monet', limit = '6' }) => {
-      const params = new URLSearchParams({ q: query.trim(), limit: limit.trim(), has_image: '1', cc0: '' })
-      return `https://openaccess-api.clevelandart.org/api/artworks/?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://openaccess-api.clevelandart.org/api/artworks/?q={query}&limit={limit}&has_image=1&cc0=', hosts: ['openaccess-api.clevelandart.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'scryfall-card-search', name: 'Scryfall Card Search', provider: 'Scryfall', category: 'Games',
@@ -2108,14 +2267,20 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     },
     fields: [{ id: 'query', label: 'Card search', type: 'text', defaultValue: 'dragon', minLength: 1, placeholder: 'e.g. dragon', help: 'Search card names, types, or rules text.' }],
     headers: { Accept: 'application/json' },
-    buildUrl: ({ query = 'dragon' }) => `https://api.scryfall.com/cards/search?${new URLSearchParams({ q: query.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.scryfall.com/cards/search?q={query}', hosts: ['api.scryfall.com'],
+      headers: { Accept: 'application/json' }, transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dnd5e-spell-lookup', name: 'D&D 5e Spell Lookup', provider: 'D&D 5e API', category: 'Games',
     description: 'Look up a Dungeons & Dragons 5th edition spell with range, components, and effect description.',
     documentationUrl: 'https://www.dnd5eapi.co/docs/', accent: '#7c2d12', monogram: 'DND',
     fields: [{ id: 'spellIndex', label: 'Spell', type: 'text', defaultValue: 'fireball', minLength: 1, maxLength: 80, pattern: '[a-z0-9]+(?:-[a-z0-9]+)*', patternDescription: 'must be a lowercase D&D 5e resource slug using letters, numbers, and single hyphens.', placeholder: 'e.g. fireball', help: 'Enter the exact 2014 spell resource slug, such as magic-missile.' }],
-    buildUrl: ({ spellIndex = 'fireball' }) => `https://www.dnd5eapi.co/api/2014/spells/${encode(spellIndex)}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.dnd5eapi.co/api/2014/spells/{spellIndex}', hosts: ['www.dnd5eapi.co'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'qr-code-generator', name: 'QR Code Generator', provider: 'goQR.me', category: 'Utility',
@@ -2127,6 +2292,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'size', label: 'Image size', type: 'select', defaultValue: '200x200', help: 'Choose the output image dimensions.', options: [{ label: '150 × 150', value: '150x150' }, { label: '200 × 200', value: '200x200' }, { label: '300 × 300', value: '300x300' }] },
     ],
     headers: { Accept: 'image/png' },
+    request: { declarative: false, reason: 'Returns binary PNG content and declares an image response plus Accept: image/png; the closed response-transform set does not model binary image responses.' },
     buildUrl: ({ data = 'https://example.com', size = '200x200' }) => `https://api.qrserver.com/v1/create-qr-code/?${new URLSearchParams({ data: data.trim() || 'https://example.com', size: size || '200x200' }).toString()}`,
     responseType: 'image',
     responseContentTypes: ['image/png'],
@@ -2137,7 +2303,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://wheretheiss.at/w/developer', accent: '#0ea5e9', monogram: 'ISS',
     usageNote: 'The provider limits requests to roughly one per second. This demo makes one current-position request per user run and reports provider orbital position data in kilometers.',
     fields: [],
-    buildUrl: () => 'https://api.wheretheiss.at/v1/satellites/25544',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.wheretheiss.at/v1/satellites/25544', hosts: ['api.wheretheiss.at'],
+      responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2153,7 +2322,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       ] },
       { id: 'year', label: 'Reference year', type: 'number', defaultValue: '2025', min: 2010, max: 2025, step: 1, help: 'Choose a published demo_pjan reference year from 2010 through 2025.' },
     ],
-    buildUrl: ({ country = 'DE', year = '2025' }) => `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?${new URLSearchParams({ format: 'JSON', geo: country, sex: 'T', age: 'TOTAL', time: year }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?format=JSON&geo={country}&sex=T&age=TOTAL&time={year}', hosts: ['ec.europa.eu'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'bls-timeseries', name: 'BLS Labor Statistics', provider: 'U.S. Bureau of Labor Statistics', category: 'Economy',
@@ -2170,7 +2342,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [{ id: 'seriesId', label: 'Series', type: 'select', defaultValue: 'LNS14000000', help: 'Choose a tracked BLS time series.', options: [
       { label: 'Unemployment rate', value: 'LNS14000000' }, { label: 'CPI — all items', value: 'CUUR0000SA0' }, { label: 'CPI — food', value: 'CUUR0000SAF1' },
     ] }],
-    buildUrl: ({ seriesId = 'LNS14000000' }) => `https://api.bls.gov/publicAPI/v1/timeseries/data/${encode(seriesId || 'LNS14000000')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.bls.gov/publicAPI/v1/timeseries/data/{seriesId}', hosts: ['api.bls.gov'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'fema-disasters', name: 'FEMA Disaster Declarations', provider: 'FEMA OpenFEMA', category: 'Government',
@@ -2178,6 +2353,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.fema.gov/about/openfema/disaster-declarations-summaries', accent: '#1a4480', monogram: 'FEMA',
     usageNote: 'DisasterDeclarationsSummaries is area-level: one federal declaration can appear in many rows, one per designated geographic area. OpenFEMA describes the source as raw NEMIS data that may contain a small percentage of human error.',
     fields: [{ id: 'limit', label: 'Declared-area rows', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 recent designated-area records; repeated disaster IDs are expected.' }],
+    request: { declarative: false, reason: 'Clamps the requested limit to 1–10 and uses 5 for invalid or zero input; the closed transforms cannot clamp integers or apply numeric fallbacks.' },
     buildUrl: ({ limit = '5' }) => {
       const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 5))
       return `https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?${new URLSearchParams({ '$top': String(safeLimit), '$orderby': 'declarationDate desc' }).toString()}`
@@ -2191,13 +2367,17 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [{ id: 'station', label: 'CO-OPS station', type: 'select', defaultValue: '8518750', help: 'Choose a NOAA coastal water-level station.', options: [
       { label: 'The Battery, NY', value: '8518750' }, { label: 'San Francisco, CA', value: '9414290' }, { label: 'Key West, FL', value: '8724580' },
     ] }],
-    buildUrl: ({ station = '8518750' }) => `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?${new URLSearchParams({ station: station || '8518750', product: 'water_level', date: 'latest', datum: 'MLLW', units: 'metric', time_zone: 'gmt', application: 'Public_API_Workbench', format: 'json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station={station}&product=water_level&date=latest&datum=MLLW&units=metric&time_zone=gmt&application=Public_API_Workbench&format=json', hosts: ['api.tidesandcurrents.noaa.gov'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'rdap-domain-lookup', name: 'RDAP Domain Lookup', provider: 'RDAP.org', category: 'Developer',
     description: 'Look up a domain\'s registration status, registrar, nameservers, and key events using the modern WHOIS replacement.',
     documentationUrl: 'https://about.rdap.org/', accent: '#111827', monogram: 'RDAP',
     fields: [{ id: 'domain', label: 'Domain name', type: 'text', defaultValue: 'google.com', placeholder: 'e.g. google.com', help: 'Enter a registered domain name.' }],
+    request: { declarative: false, reason: 'Falls back to google.com when the domain is blank; closed templates cannot conditionally substitute a path value.' },
     buildUrl: ({ domain = 'google.com' }) => `https://rdap.org/domain/${encode(domain || 'google.com')}`,
   },
   {
@@ -2213,6 +2393,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     },
     fields: [{ id: 'text', label: 'Text to check', type: 'text', defaultValue: 'This are a test.', placeholder: 'e.g. This are a test.', help: 'Enter a short English sentence to check.' }],
     method: 'POST', bodyEncoding: 'form',
+    request: { declarative: false, reason: 'POSTs form fields with a constant language and trims text with an empty-text fallback; the closed body spec cannot express conditional fallback.' },
     buildUrl: () => 'https://api.languagetool.org/v2/check',
     buildBody: ({ text = 'This are a test.' }) => ({ text: text.trim() || 'This are a test.', language: 'en-US' }),
   },
@@ -2225,15 +2406,20 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Article search', type: 'text', defaultValue: 'climate', placeholder: 'e.g. climate', minLength: 1, help: 'Search open-access article titles and metadata.' },
       { id: 'pageSize', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 articles.' },
     ],
-    buildUrl: ({ query = 'climate', pageSize = '5' }) =>
-      `https://doaj.org/api/search/articles/${encode(query.trim())}?${new URLSearchParams({ pageSize }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://doaj.org/api/search/articles/{query}?pageSize={pageSize}', hosts: ['doaj.org'],
+      transforms: { query: 'trim', pageSize: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'pubchem-compound', name: 'PubChem Compound Lookup', provider: 'PubChem', category: 'Research',
     description: 'Look up a chemical compound\'s molecular formula, weight, and IUPAC name by common name.',
     documentationUrl: 'https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest-tutorial', accent: '#2e6da4', monogram: 'PCH',
     fields: [{ id: 'name', label: 'Compound name', type: 'text', defaultValue: 'aspirin', placeholder: 'e.g. aspirin', minLength: 1, help: 'Enter a common chemical or drug name.' }],
-    buildUrl: ({ name = 'aspirin' }) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encode(name.trim() || 'aspirin')}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name}/property/MolecularFormula,MolecularWeight,IUPACName/JSON', hosts: ['pubchem.ncbi.nlm.nih.gov'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'chembl-molecule', name: 'ChEMBL Molecule Profile', provider: 'ChEMBL', category: 'Health', risk: 'Review',
@@ -2241,6 +2427,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.ebi.ac.uk/chembl/api/data/docs', accent: '#6a1b9a', monogram: 'CHM',
     usageNote: 'For research and education demonstrations only. Not a substitute for clinical or regulatory drug information.',
     fields: [{ id: 'chemblId', label: 'ChEMBL ID', type: 'text', defaultValue: 'CHEMBL25', placeholder: 'e.g. CHEMBL25', help: 'Enter a ChEMBL molecule identifier (CHEMBL25 is aspirin).' }],
+    request: { declarative: false, reason: 'Substitutes CHEMBL25 when the path identifier is empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ chemblId = 'CHEMBL25' }) => `https://www.ebi.ac.uk/chembl/api/data/molecule/${encode(chemblId || 'CHEMBL25')}.json`,
   },
   {
@@ -2248,7 +2435,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Look up a protein\'s function, organism, gene, and annotation score by accession number.',
     documentationUrl: 'https://www.uniprot.org/help/accession_numbers', accent: '#00639c', monogram: 'UNI',
     fields: [{ id: 'accession', label: 'UniProt accession', type: 'text', defaultValue: 'P05067', placeholder: 'e.g. P05067', pattern: '[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2}', patternDescription: 'must be a valid 6- or 10-character UniProtKB accession.', help: 'Use the official 6- or 10-character UniProtKB accession format, such as P05067 or A0A023GPI8.' }],
-    buildUrl: ({ accession = 'P05067' }) => `https://rest.uniprot.org/uniprotkb/${encode(accession.trim() || 'P05067')}.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rest.uniprot.org/uniprotkb/{accession}.json', hosts: ['rest.uniprot.org'],
+      transforms: { accession: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'rcsb-pdb-entry', name: 'RCSB Protein Data Bank Entry', provider: 'RCSB PDB', category: 'Research',
@@ -2256,6 +2446,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.rcsb.org/docs/programmatic-access/web-apis-overview', accent: '#4a4a4a', monogram: 'PDB',
     usageNote: 'RCSB and wwPDB are transitioning to 12-character extended PDB IDs. This direct core-entry demo accepts a current four-character PDB ID or its official transitional pdb_0000XXXX alias; because the live Data API does not currently resolve that alias directly, the browser normalizes the one-to-one transitional form back to its four-character ID at the provider boundary. Extended-only IDs issued after the July 21, 2027 archive transition are not yet claimed as supported and this contract must be re-evaluated before that cutover.',
     fields: [{ id: 'entryId', label: 'PDB entry ID', type: 'text', defaultValue: '4HHB', placeholder: 'e.g. 4HHB or pdb_00004hhb', minLength: 4, maxLength: 12, pattern: '(?:[A-Za-z0-9]{4}|[Pp][Dd][Bb]_0000[A-Za-z0-9]{4})', patternDescription: 'must be a four-character PDB ID or a transitional pdb_0000XXXX extended alias for an entry that still has a legacy ID.', help: 'Enter 4HHB or its transitional extended alias pdb_00004hhb. Extended-only IDs issued after the 2027 transition are not yet supported by this direct core-entry demo.' }],
+    request: { declarative: false, reason: 'Trims and uppercases the identifier, then strips the official pdb_0000 transitional prefix to recover the four-character provider ID; the closed transforms cannot perform this conditional normalization.' },
     buildUrl: ({ entryId = '4HHB' }) => {
       const normalized = (entryId.trim() || '4HHB').toUpperCase()
       const transitionalAlias = normalized.match(/^PDB_0000([A-Z0-9]{4})$/)
@@ -2273,7 +2464,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       pattern: 'ENS[A-Z]*G[0-9]{11}', patternDescription: 'must be an unversioned Ensembl gene stable ID such as ENSG00000157764.',
       help: 'Enter an unversioned Ensembl gene stable ID (default is human BRAF). Transcript, protein, and version-suffixed IDs are rejected before the provider request.',
     }],
-    buildUrl: ({ geneId = 'ENSG00000157764' }) => `https://rest.ensembl.org/lookup/id/${encode(geneId.trim() || 'ENSG00000157764')}?${new URLSearchParams({ 'content-type': 'application/json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rest.ensembl.org/lookup/id/{geneId}?content-type=application%2Fjson', hosts: ['rest.ensembl.org'],
+      transforms: { geneId: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'obis-marine-occurrences', name: 'OBIS Marine Occurrences', provider: 'Ocean Biodiversity Information System', category: 'Biodiversity',
@@ -2284,7 +2478,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'scientificName', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', minLength: 1, help: 'Enter a marine species scientific name. OBIS may resolve historical or synonym names to a current accepted scientific name.' },
       { id: 'size', label: 'Occurrences', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 occurrence records.' },
     ],
-    buildUrl: ({ scientificName = 'Delphinus delphis', size = '5' }) => `https://api.obis.org/v3/occurrence?${new URLSearchParams({ scientificname: scientificName.trim(), size: size.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.obis.org/v3/occurrence?scientificname={scientificName}&size={size}', hosts: ['api.obis.org'],
+      transforms: { scientificName: 'form', size: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'worms-species-lookup', name: 'WoRMS Marine Species Registry', provider: 'World Register of Marine Species', category: 'Biodiversity',
@@ -2293,7 +2490,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     usageNote: 'WoRMS AphiaRecords preserve the queried name and its taxonomic status. valid_AphiaID identifies the current final accepted name; do not hide synonym or unaccepted-name relationships. AphiaRecordsByName documents HTTP 204 as Nothing found.',
     successNoContent: { statuses: [204], data: [] },
     fields: [{ id: 'name', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', help: 'Enter a marine species scientific name.' }],
-    buildUrl: ({ name = 'Delphinus delphis' }) => `https://www.marinespecies.org/rest/AphiaRecordsByName/${encode(name || 'Delphinus delphis')}?${new URLSearchParams({ like: 'false' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.marinespecies.org/rest/AphiaRecordsByName/{name}?like=false', hosts: ['www.marinespecies.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'paleobiodb-taxa', name: 'Paleobiology Database Taxa', provider: 'Paleobiology Database', category: 'Nature',
@@ -2301,6 +2501,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://paleobiodb.org/data1.2/', accent: '#7a5230', monogram: 'PBDB',
     usageNote: 'PBDB defines n_occs as fossil occurrences identified as the named taxon or any of its subtaxa. It is not a direct-only count for the exact name.',
     fields: [{ id: 'name', label: 'Taxon name', type: 'text', defaultValue: 'Tyrannosaurus', placeholder: 'e.g. Tyrannosaurus', help: 'Enter a genus or species name.' }],
+    request: { declarative: false, reason: 'Trims the taxon name, substitutes Tyrannosaurus when empty, and adds the fixed provider vocabulary query; the closed spec cannot express the fallback.' },
     buildUrl: ({ name = 'Tyrannosaurus' }) => `https://paleobiodb.org/data1.2/taxa/list.json?${new URLSearchParams({ name: name.trim() || 'Tyrannosaurus', vocab: 'pbdb' }).toString()}`,
   },
   {
@@ -2315,6 +2516,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
         { label: 'Gage height (00065)', value: '00065' },
       ] },
     ],
+    request: { declarative: false, reason: 'Strips an optional USGS- prefix, restores that prefix in the query, and maps the measurement to one allowlisted code; the closed spec cannot compose or conditionally map these values.' },
     buildUrl: ({ site = '01646500', parameter = '00060' }) => {
       const siteNumber = site.trim().replace(/^USGS-/i, '') || '01646500'
       const parameterCode = parameter === '00065' ? '00065' : '00060'
@@ -2331,7 +2533,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Inspect a Ruby gem\'s latest version, downloads, authors, and license.',
     documentationUrl: 'https://guides.rubygems.org/rubygems-org-api/', accent: '#e9573f', monogram: 'GEM',
     fields: [{ id: 'gemName', label: 'Gem name', type: 'text', defaultValue: 'rails', placeholder: 'e.g. rails', help: 'Enter a published RubyGems package name.' }],
-    buildUrl: ({ gemName = 'rails' }) => `https://rubygems.org/api/v1/gems/${encode(gemName || 'rails')}.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rubygems.org/api/v1/gems/{gemName}.json', hosts: ['rubygems.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'nuget-package-lookup', name: 'NuGet Package Lookup', provider: 'NuGet Gallery', category: 'Developer',
@@ -2339,7 +2544,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://learn.microsoft.com/nuget/api/overview', accent: '#004880', monogram: 'NUG',
     usageNote: 'Uses NuGet.org’s SemVer 2 registration hive. Packages with 128+ versions can omit registration leaves from the index; this one-request demo reports page ranges honestly instead of following extra page requests.',
     fields: [{ id: 'packageId', label: 'Package ID', type: 'text', defaultValue: 'newtonsoft.json', placeholder: 'e.g. newtonsoft.json', help: 'Enter a published NuGet package identifier.' }],
-    buildUrl: ({ packageId = 'newtonsoft.json' }) => `https://api.nuget.org/v3/registration5-gz-semver2/${encode((packageId || 'newtonsoft.json').toLowerCase())}/index.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nuget.org/v3/registration5-gz-semver2/{packageId}/index.json', hosts: ['api.nuget.org'],
+      transforms: { packageId: 'lowercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'internet-archive-search', name: 'Internet Archive Search', provider: 'Internet Archive', category: 'Media',
@@ -2355,6 +2563,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Search term', type: 'text', defaultValue: 'singapore', placeholder: 'e.g. singapore', minLength: 1, help: 'Search titles and descriptions across the archive.' },
       { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'texts', help: 'Filter by archived media type.', options: [{ label: 'Texts & books', value: 'texts' }, { label: 'Audio', value: 'audio' }, { label: 'Movies', value: 'movies' }, { label: 'Software', value: 'software' }] },
     ],
+    request: { declarative: false, reason: 'Builds a compound query from text and media type and appends seven repeated fl[] parameters; the closed query spec cannot compose the expression or emit repeated fields.' },
     buildUrl: (parameters) => {
       const query = parameters.query === undefined ? 'singapore' : parameters.query.trim()
       const mediaType = parameters.mediaType === undefined ? 'texts' : parameters.mediaType
@@ -2369,6 +2578,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://ipwhois.io/documentation', accent: '#0f766e', monogram: 'GEO',
     usageNote: 'IP geolocation is approximate network-derived data, not device GPS or a precise personal address. The free endpoint allows 1,000 requests/day; browser CORS requests are counted per domain, so the quota is shared across Public-API traffic from this origin.',
     fields: [{ id: 'ip', label: 'IP address', type: 'text', defaultValue: '8.8.8.8', placeholder: 'e.g. 8.8.8.8', help: 'Enter one public IPv4 or IPv6 address. Reserved or invalid addresses can return HTTP 200 with success=false.' }],
+    request: { declarative: false, reason: 'Trims the IP path and substitutes 8.8.8.8 for an empty value; the closed spec has no empty-value fallback.' },
     buildUrl: ({ ip = '8.8.8.8' }) => `https://ipwho.is/${encode(ip.trim() || '8.8.8.8')}`,
   },
   {
@@ -2383,6 +2593,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       ] },
       { id: 'expression', label: 'Expression', type: 'text', defaultValue: '2x+2x', placeholder: 'e.g. 2x+2x', minLength: 1, help: 'Use ^ for powers and avoid spaces.' },
     ],
+    request: { declarative: false, reason: 'Substitutes defaults for empty operation/expression path segments; the closed spec cannot express conditional empty-value fallback.' },
     buildUrl: ({ operation = 'simplify', expression = '2x+2x' }) => `https://newton.vercel.app/api/v2/${encode(operation || 'simplify')}/${encode(expression || '2x+2x')}`,
   },
   {
@@ -2392,6 +2603,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.datamuse.com/api/', accent: '#be185d', monogram: 'DTM',
     usageNote: 'The stable catalog ID is retained for deep-link compatibility, but the live request now uses the documented sl=sounds-like contract rather than the older undocumented rel_rhy parameter. Datamuse says result score values are useful only for ordering, asks public apps to acknowledge Datamuse, and allows keyless use up to 100,000 requests/day only through 2026-12-31; starting 2027-01-01 every request will require an API key, so this browser-native demo must be re-evaluated before then.',
     fields: [{ id: 'word', label: 'Sounds like', type: 'text', defaultValue: 'orange', placeholder: 'e.g. orange', minLength: 1, maxLength: 80, help: 'Enter an English word or phrase. Datamuse will rank vocabulary entries with similar pronunciation.' }],
+    request: { declarative: false, reason: 'Trims the search word and substitutes orange when empty while adding fixed query fields; the closed spec cannot express the fallback.' },
     buildUrl: ({ word = 'orange' }) => `https://api.datamuse.com/words?${new URLSearchParams({ sl: word.trim() || 'orange', max: '8', md: 'psr', ipa: '1' }).toString()}`,
   },
   {
@@ -2400,6 +2612,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://open5e.com/api-docs', accent: '#166534', monogram: 'O5E',
     usageNote: 'Uses the current Open5e V2 creatures endpoint with case-insensitive name matching. The live demo caps results at 8 and requests only the source, identity, combat, movement, and perception fields used by the semantic card; familiar monster names can appear more than once when different source documents or game systems provide distinct versions.',
     fields: [{ id: 'search', label: 'Monster name contains', type: 'text', defaultValue: 'dragon', placeholder: 'e.g. dragon', help: 'Case-insensitive partial-name search across Open5e V2 creatures.' }],
+    request: { declarative: false, reason: 'Trims the partial-name query and substitutes dragon when empty while adding fixed projection and limit fields; the closed spec cannot express the fallback.' },
     buildUrl: ({ search = 'dragon' }) => `https://api.open5e.com/v2/creatures/?${new URLSearchParams({
       name__icontains: search.trim() || 'dragon',
       limit: '8',
@@ -2418,6 +2631,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'seed', label: 'Seed text', type: 'text', defaultValue: 'test', placeholder: 'e.g. test', help: 'Any text seed deterministically generates the same avatar.' },
     ],
     headers: { Accept: 'image/svg+xml' },
+    request: { declarative: false, reason: 'Returns binary SVG image content and declares image response handling plus Accept: image/svg+xml; the closed response-transform set does not model binary images.' },
     buildUrl: ({ style = 'identicon', seed = 'test' }) => `https://api.dicebear.com/9.x/${encode(style || 'identicon')}/svg?${new URLSearchParams({ seed: seed.trim() || 'test' }).toString()}`,
     responseType: 'image',
     responseContentTypes: ['image/svg+xml'],
@@ -2427,7 +2641,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Generate a random, bite-sized fact about cats for lightweight content demos.',
     documentationUrl: 'https://catfact.ninja/', accent: '#ea580c', monogram: 'CAT',
     fields: [],
-    buildUrl: () => 'https://catfact.ninja/fact',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://catfact.ninja/fact', hosts: ['catfact.ninja'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'gleif-lei',
@@ -2443,10 +2660,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Legal name', type: 'text', defaultValue: 'Royal Bank of Canada', minLength: 1, placeholder: 'e.g. Royal Bank', help: 'Enter a legal name fragment to search public LEI records.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 50, step: 1, help: 'Return between 1 and 50 records.' },
     ],
-    buildUrl: ({ query = 'Royal Bank of Canada', count = '8' }) => `https://api.gleif.org/api/v1/lei-records?${new URLSearchParams({
-      'filter[entity.legalName]': query.trim(),
-      'page[size]': count.trim(),
-    }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D={query}&page%5Bsize%5D={count}', hosts: ['api.gleif.org'],
+      transforms: { query: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'fdic-bankfind',
@@ -2461,6 +2678,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'bankName', label: 'Bank name', type: 'text', defaultValue: 'Wells Fargo', placeholder: 'e.g. Wells Fargo', minLength: 1, help: 'Search FDIC bank metadata by public institution name.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 institutions.' },
     ],
+    request: { declarative: false, reason: 'Builds the provider search expression by prefixing NAME: and uppercasing the bank name before query encoding; the closed transforms cannot compose a prefix with casing.' },
     buildUrl: ({ bankName = 'Wells Fargo', count = '6' }) => {
       const normalizedBankName = bankName.trim().toUpperCase()
       return `https://api.fdic.gov/banks/institutions?${new URLSearchParams({
@@ -2485,6 +2703,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 50, help: 'Return between 1 and 50 establishments from the first result page.' },
     ],
     headers: { 'x-api-version': '2' },
+    request: { declarative: false, reason: 'Clamps parsed result count to 1–50 and substitutes Cafe for an empty establishment name; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ name = 'Cafe', count = '5' }) => {
       const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 5))
       return `https://api.ratings.food.gov.uk/Establishments?${new URLSearchParams({
@@ -2509,6 +2728,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'riverName', label: 'Exact river name', type: 'text', defaultValue: 'River Severn', placeholder: 'e.g. River Severn', minLength: 1, help: 'Use the Environment Agency river name exactly; the provider does not treat this field as a contains search.' },
       { id: 'count', label: 'Stations', type: 'number', defaultValue: '8', min: 1, max: 50, help: 'Return between 1 and 50 matching station records.' },
     ],
+    request: { declarative: false, reason: 'Clamps parsed station count to 1–50 and substitutes River Severn for an empty exact-match filter; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ riverName = 'River Severn', count = '8' }) => {
       const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 8))
       return `https://environment.data.gov.uk/flood-monitoring/id/stations?${new URLSearchParams({
@@ -2526,6 +2746,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'origin', label: 'Origin country ISO3', type: 'text', defaultValue: 'SYR', placeholder: 'e.g. SYR', minLength: 3, maxLength: 3, pattern: '[A-Za-z]{3}', patternDescription: 'must contain exactly three letters for an ISO 3166-1 alpha-3 country code.', help: 'Use exactly three ISO 3166-1 alpha-3 letters such as SYR; cf_type=ISO makes UNHCR interpret this field as ISO3.' },
       { id: 'year', label: 'Year', type: 'number', defaultValue: '2025', min: 2010, max: 2025, help: 'Choose a published annual end-of-year snapshot from 2010 through 2025.' },
     ],
+    request: { declarative: false, reason: 'Clamps year to 2010–2025, duplicates it into yearFrom/yearTo, and uppercases the ISO3 origin; the closed transforms cannot clamp or reuse one transformed value across distinct query keys.' },
     buildUrl: ({ origin = 'SYR', year = '2025' }) => {
       const safeYear = Math.min(2025, Math.max(2010, Number.parseInt(year, 10) || 2025))
       return `https://api.unhcr.org/population/v1/population/?${new URLSearchParams({ yearFrom: String(safeYear), yearTo: String(safeYear), coo: (origin.trim() || 'SYR').toUpperCase(), cf_type: 'ISO', limit: '1' }).toString()}`
@@ -2537,7 +2758,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://goadmin.ifrc.org/api-docs/swagger-ui/', accent: '#d9232e', monogram: 'IFR', risk: 'Review',
     usageNote: 'IFRC GO exposes event-level and field-report impact figures from different sources. Keep IFRC, government, and other-source figures separate and verify source reports before operational decisions.',
     fields: [],
-    buildUrl: () => 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-disaster_start_date',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-disaster_start_date', hosts: ['goadmin.ifrc.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-climate',
@@ -2563,6 +2787,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
           { label: 'NICAM16 8S', value: 'NICAM16_8S' },
         ] },
     ],
+    request: { declarative: false, reason: 'Clamps start/end years, constructs January 1/December 31 date bounds, and falls back for coordinates; the closed spec cannot clamp numbers, compose dates, or substitute empty coordinates.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startYear = '2020', endYear = '2026', model = 'CMCC_CM2_VHR4' }) => {
       const safeStartYear = Math.min(2050, Math.max(1950, Number.parseInt(startYear, 10) || 2020))
       const safeEndYear = Math.min(2050, Math.max(1950, Number.parseInt(endYear, 10) || 2026))
@@ -2586,6 +2811,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Model search', type: 'text', defaultValue: 'gpt', placeholder: 'e.g. gpt', minLength: 1, help: 'Search public model IDs. Hugging Face documents this search string as being contained in returned model IDs.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 25, step: 1, help: 'Return between 1 and 25 models.' },
     ],
+    request: { declarative: false, reason: 'Clamps the result limit to 1–25 and substitutes gpt for an empty query; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ query = 'gpt', count = '8' }) => `https://huggingface.co/api/models?${new URLSearchParams({ search: query.trim() || 'gpt', limit: String(Math.min(25, Math.max(1, Number.parseInt(count, 10) || 8))), full: 'true' }).toString()}`,
   },
   {
@@ -2602,6 +2828,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'base', label: 'Base currency', type: 'text', defaultValue: 'EUR', placeholder: 'e.g. EUR', minLength: 3, maxLength: 3, pattern: '[A-Za-z]{3}', patternDescription: 'must be a three-letter currency code.', help: 'Use a supported three-letter currency code such as EUR, USD, or SGD.' },
       { id: 'symbols', label: 'Target currencies', type: 'text', defaultValue: 'USD,SGD,GBP', placeholder: 'e.g. USD,SGD,GBP', minLength: 3, pattern: '[A-Za-z]{3}(?:\\s*,\\s*[A-Za-z]{3})*', patternDescription: 'must be a comma-separated list of three-letter currency codes.', help: 'Comma-separate supported three-letter currency codes. VATComply filters the response to those currencies.' },
     ],
+    request: { declarative: false, reason: 'Splits the comma-delimited symbols, trims and uppercases each symbol independently, then rejoins them; the closed transforms cannot compose per-token casing and trimming.' },
     buildUrl: ({ base = 'EUR', symbols = 'USD,SGD,GBP' }) => {
       const normalizedBase = base.trim().toUpperCase() || 'EUR'
       const normalizedSymbols = symbols.split(',').map((symbol) => symbol.trim().toUpperCase()).join(',') || 'USD,SGD,GBP'
@@ -2618,7 +2845,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#f59e0b',
     monogram: 'MPB',
     fields: [],
-    buildUrl: () => 'https://mempool.space/api/v1/fees/recommended',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://mempool.space/api/v1/fees/recommended', hosts: ['mempool.space'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'metacpan',
@@ -2633,6 +2863,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Module name', type: 'text', defaultValue: 'Mojolicious', placeholder: 'e.g. DBIx::Class', minLength: 1, help: 'Enter an exact Perl module name. MetaCPAN searches module.name and keeps only the latest indexed release.' },
       { id: 'count', label: 'Maximum matches', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Limit the exact-name result set to between 1 and 20 records.' },
     ],
+    request: { declarative: false, reason: 'JSON-quotes the exact module name inside a compound search expression and clamps result size to 1–20; the closed spec cannot JSON-escape or clamp.' },
     buildUrl: ({ query = 'Mojolicious', count = '6' }) => {
       const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
       return `https://fastapi.metacpan.org/v1/module/_search?${new URLSearchParams({ q: `module.name:${JSON.stringify(query.trim())} AND status:latest`, size: String(safeCount) }).toString()}`
@@ -2648,6 +2879,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#0d9488',
     monogram: 'HXP',
     fields: [{ id: 'package', label: 'Package', type: 'text', defaultValue: 'ecto', placeholder: 'e.g. ecto', help: 'Enter an official Hex package name.' }],
+    request: { declarative: false, reason: 'Trims the package path and substitutes ecto when empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ package: packageName = 'ecto' }) => `https://hex.pm/api/packages/${encode(packageName.trim() || 'ecto')}`,
   },
   {
@@ -2657,6 +2889,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     usageNote: 'Uses the Hosted Pub Repository Specification v2 package endpoint and its recommended v2 media type. Direct package misses are provider HTTP 404 responses, not semantic empty package objects.',
     fields: [{ id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'riverpod', placeholder: 'e.g. riverpod', help: 'Enter an exact package name from pub.dev.' }],
     headers: { Accept: 'application/vnd.pub.v2+json' },
+    request: { declarative: false, reason: 'Trims the package path and substitutes riverpod when empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ packageName = 'riverpod' }) => `https://pub.dev/api/packages/${encode(packageName.trim() || 'riverpod')}`,
   },
   {
@@ -2671,6 +2904,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [
       { id: 'module', label: 'Module path', type: 'text', defaultValue: 'github.com/gin-gonic/gin', placeholder: 'e.g. github.com/gin-gonic/gin', help: 'Enter a fully-qualified module path.' },
     ],
+    request: { declarative: false, reason: 'Escapes uppercase letters in every Go module path segment to !lowercase while preserving slash separators, then parses the text version list; the closed transforms cannot escape Go proxy paths or implement the custom response parser.' },
     buildUrl: ({ module = 'github.com/gin-gonic/gin' }) => {
       const requestedModule = module.trim() || 'github.com/gin-gonic/gin'
       const modulePath = encode(escapeGoProxyModulePath(requestedModule)).replace(/%2F/g, '/')
@@ -2692,7 +2926,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [
       { id: 'appId', label: 'Flathub app ID', type: 'text', defaultValue: 'org.gnome.Calculator', placeholder: 'e.g. org.gnome.Calculator', minLength: 1, help: 'Enter an exact non-empty Flathub application ID.' },
     ],
-    buildUrl: ({ appId = 'org.gnome.Calculator' }) => `https://flathub.org/api/v2/appstream/${encode(appId.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://flathub.org/api/v2/appstream/{appId}', hosts: ['flathub.org'],
+      transforms: { appId: 'trim' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2717,6 +2954,7 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
         help: 'Enter owner/repo or a full github.com/owner/repo path.',
       },
     ],
+    request: { declarative: false, reason: 'Trims repository input, strips optional scheme/www prefixes, and conditionally prepends github.com; the closed spec cannot parse or conditionally normalize repository URLs.' },
     buildUrl: ({ repository = 'github.com/ossf/scorecard' }) => {
       const rawRepository = repository.trim() || 'github.com/ossf/scorecard'
       const normalizedRepository = rawRepository.replace(/^https?:\/\//, '').replace(/^www\./, '')
@@ -2732,7 +2970,10 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://opencitations.net/index/api/v2', accent: '#0f766e', monogram: 'OCI',
     usageNote: 'OpenCitations citation-count is index-scoped, not a universal citation total. Anonymous REST API calls are rate-limited to 180 requests/minute per IP; OpenCitations recommends data dumps for large-scale retrieval.',
     fields: [{ id: 'doi', label: 'DOI', type: 'text', defaultValue: '10.1109/5.771073', placeholder: 'e.g. 10.1109/5.771073', help: 'Use a valid DOI string.' }],
-    buildUrl: ({ doi = '10.1109/5.771073' }) => `https://api.opencitations.net/index/v2/citation-count/doi:${encodeURIComponent(doi.trim() || '10.1109/5.771073')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.opencitations.net/index/v2/citation-count/doi:{doi}', hosts: ['api.opencitations.net'],
+      transforms: { doi: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'vam-collections',
@@ -2764,12 +3005,10 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
         help: 'Return between 1 and 20 records.',
       },
     ],
-    buildUrl: ({ query = 'eastern', count = '6' }) => {
-      return `https://api.vam.ac.uk/v2/objects/search?${new URLSearchParams({
-        q: query.trim(),
-        page_size: count,
-      }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.vam.ac.uk/v2/objects/search?q={query}&page_size={count}', hosts: ['api.vam.ac.uk'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2796,7 +3035,10 @@ const publicApi200MilestoneApis: ApiDemo[] = [
       limitField({ label: 'Advisories', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 advisories.' }),
     ],
     headers: { Accept: 'application/vnd.github+json' },
-    buildUrl: ({ ecosystem = 'npm', severity = 'high', limit = '6' }) => `https://api.github.com/advisories?${new URLSearchParams({ ecosystem, severity, per_page: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.github.com/advisories?ecosystem={ecosystem}&severity={severity}&per_page={limit}', hosts: ['api.github.com'],
+      headers: { Accept: 'application/vnd.github+json' }, transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dblp-search', name: 'DBLP Publication Search', provider: 'DBLP', category: 'Research',
@@ -2815,6 +3057,7 @@ const publicApi200MilestoneApis: ApiDemo[] = [
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 matching publications.' }),
     ],
     headers: { Accept: 'application/sparql-results+json' },
+    request: { declarative: false, reason: 'Constructs SPARQL with a safely escaped query literal and interpolated row limit, then URL-encodes the complete query; this is structured query generation, not a closed template substitution.' },
     buildUrl: ({ query = 'large language models', limit = '6' }) => {
       const queryText = query.trim()
       const requestedLimit = limit.trim()
@@ -2845,7 +3088,10 @@ ORDER BY ?publ ?authorName`
     fields: [{ id: 'network', label: 'Bike network', type: 'select', defaultValue: 'youbike-taipei', help: 'Choose a public bike-sharing network.', options: [
       { label: 'Taipei · YouBike', value: 'youbike-taipei' }, { label: 'Paris · Vélib', value: 'velib' }, { label: 'London · Santander Cycles', value: 'santander-cycles' }, { label: 'New York · Citi Bike', value: 'citi-bike-nyc' }, { label: 'Barcelona · Bicing', value: 'bicing' },
     ] }],
-    buildUrl: ({ network = 'youbike-taipei' }) => `https://api.citybik.es/v2/networks/${encodeURIComponent(network.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.citybik.es/v2/networks/{network}', hosts: ['api.citybik.es'],
+      transforms: { network: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wikimedia-commons-search', name: 'Wikimedia Commons Search', provider: 'Wikimedia Foundation', category: 'Media',
@@ -2857,7 +3103,10 @@ ORDER BY ?publ ?authorName`
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 media files.' }),
     ],
     headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' },
-    buildUrl: ({ query = 'Singapore skyline', limit = '6' }) => `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim(), gsrnamespace: '6', gsrlimit: limit.trim(), prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '400', format: 'json', origin: '*' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrnamespace=6&gsrlimit={limit}&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=400&format=json&origin=%2A', hosts: ['commons.wikimedia.org'],
+      headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' }, transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
 
   {
@@ -2865,6 +3114,7 @@ ORDER BY ?publ ?authorName`
     description: 'Inspect npm package tags and published versions from the jsDelivr public package metadata API.',
     documentationUrl: 'https://www.jsdelivr.com/docs/data.jsdelivr.com', accent: '#f97316', monogram: 'JSD',
     fields: [{ id: 'packageName', label: 'npm package', type: 'text', defaultValue: 'react', placeholder: 'e.g. react', help: 'Enter an npm package name available through jsDelivr.' }],
+    request: { declarative: false, reason: 'Trims the package path then substitutes react when blank; the closed transforms cannot apply a conditional default.' },
     buildUrl: ({ packageName = 'react' }) => `https://data.jsdelivr.com/v1/packages/npm/${encode(packageName.trim() || 'react')}`,
   },
   {
@@ -2875,7 +3125,10 @@ ORDER BY ?publ ?authorName`
       queryField({ label: 'Catalogue search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search Canadian datasets and publications by keyword.' }),
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 catalogue records.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '6' }) => `https://open.canada.ca/data/api/3/action/package_search?${new URLSearchParams({ q: query.trim(), rows: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://open.canada.ca/data/api/3/action/package_search?q={query}&rows={limit}', hosts: ['open.canada.ca'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gbif-occurrence-search', name: 'GBIF Occurrence Search', provider: 'GBIF', category: 'Biodiversity',
@@ -2886,7 +3139,10 @@ ORDER BY ?publ ?authorName`
       { id: 'scientificName', label: 'Scientific name', type: 'text', defaultValue: 'Panthera leo', placeholder: 'e.g. Panthera leo', minLength: 1, help: 'Use a scientific species or taxon name.' },
       limitField({ label: 'Records', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 occurrence records.' }),
     ],
-    buildUrl: ({ scientificName = 'Panthera leo', limit = '6' }) => `https://api.gbif.org/v1/occurrence/search?${new URLSearchParams({ scientificName: scientificName.trim(), limit: limit.trim(), hasCoordinate: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.gbif.org/v1/occurrence/search?scientificName={scientificName}&limit={limit}&hasCoordinate=true', hosts: ['api.gbif.org'],
+      transforms: { scientificName: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
 
   {
@@ -2901,7 +3157,10 @@ ORDER BY ?publ ?authorName`
       ] },
       { id: 'forecastDays', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, step: 1, help: 'Request between 1 and 7 whole forecast days.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', variable = 'temperature_2m', forecastDays = '3' }) => `https://ensemble-api.open-meteo.com/v1/ensemble?${new URLSearchParams({ latitude, longitude, models: 'icon_seamless_eps', hourly: variable, forecast_days: forecastDays.trim(), timezone: 'Asia/Singapore' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ensemble-api.open-meteo.com/v1/ensemble?latitude={latitude}&longitude={longitude}&models=icon_seamless_eps&hourly={variable}&forecast_days={forecastDays}&timezone=Asia%2FSingapore', hosts: ['ensemble-api.open-meteo.com'],
+      transforms: { forecastDays: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'world-bank-indicator-explorer', name: 'World Bank Indicator Explorer', provider: 'World Bank', category: 'Economy',
@@ -2915,11 +3174,10 @@ ORDER BY ?publ ?authorName`
       { id: 'startYear', label: 'Start year', type: 'number', defaultValue: '2015', min: 1960, max: 2100, step: 1, help: 'Beginning of the requested time series.' },
       { id: 'endYear', label: 'End year', type: 'number', defaultValue: '2025', min: 1960, max: 2100, step: 1, minimumFromField: 'startYear', help: 'End of the requested time series; choose a year greater than or equal to the start year.' },
     ],
-    buildUrl: ({ country = 'SGP', indicator = 'SP.DYN.LE00.IN', startYear = '2015', endYear = '2025' }) => {
-      const requestedStart = startYear.trim()
-      const requestedEnd = endYear.trim()
-      return `https://api.worldbank.org/v2/country/${encode(country || 'SGP').toUpperCase()}/indicator/${encode(indicator || 'SP.DYN.LE00.IN')}?${new URLSearchParams({ format: 'json', date: `${requestedStart}:${requestedEnd}`, per_page: '141' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.worldbank.org/v2/country/{country}/indicator/{indicator}?format=json&date={startYear}%3A{endYear}&per_page=141', hosts: ['api.worldbank.org'],
+      transforms: { country: 'uppercase', startYear: 'trim', endYear: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'exchange-rate-current', name: 'Current FX Rates', provider: 'ExchangeRate-API', category: 'Finance',
@@ -2936,7 +3194,10 @@ ORDER BY ?publ ?authorName`
     fields: [{ id: 'base', label: 'Base currency', type: 'select', defaultValue: 'SGD', help: 'Choose the currency whose current cross-rates should be displayed.', options: [
       { label: 'SGD · Singapore Dollar', value: 'SGD' }, { label: 'MYR · Malaysian Ringgit', value: 'MYR' }, { label: 'USD · US Dollar', value: 'USD' }, { label: 'EUR · Euro', value: 'EUR' }, { label: 'GBP · Pound Sterling', value: 'GBP' }, { label: 'JPY · Japanese Yen', value: 'JPY' }, { label: 'AUD · Australian Dollar', value: 'AUD' },
     ] }],
-    buildUrl: ({ base = 'SGD' }) => `https://open.er-api.com/v6/latest/${encode(base || 'SGD').toUpperCase()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://open.er-api.com/v6/latest/{base}', hosts: ['open.er-api.com'],
+      transforms: { base: 'uppercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'circl-vulnerability', name: 'CIRCL Vulnerability Lookup', provider: 'CIRCL', category: 'Security',
@@ -2949,6 +3210,7 @@ ORDER BY ?publ ?authorName`
       policyUrl: 'https://vulnerability.circl.lu/.well-known/api-policy.json',
     },
     fields: [cveField('CVE ID')],
+    request: { declarative: false, reason: 'Trims/uppercases the CVE and substitutes CVE-2021-44228 when empty; the closed transforms cannot uppercase or express fallback.' },
     buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://vulnerability.circl.lu/api/vulnerability/${encode(cve.trim().toUpperCase() || 'CVE-2021-44228')}`,
   },
 ]
@@ -2965,7 +3227,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       ...latLongFields(),
       numberField('forecastDays', { label: 'Forecast horizon (days)', defaultValue: '42', min: 1, max: 46, step: 1, help: 'Request 1–46 whole forecast days of EC46 weekly products. Calendar-aligned weekly buckets can include partial boundary weeks, so their count may differ from forecast days divided by seven.' }),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', forecastDays = '42' }) => `https://seasonal-api.open-meteo.com/v1/seasonal?${new URLSearchParams({ latitude, longitude, weekly: 'temperature_2m_mean,temperature_2m_anomaly,precipitation_mean,precipitation_anomaly', forecast_days: forecastDays.trim(), timezone: 'Asia/Singapore' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://seasonal-api.open-meteo.com/v1/seasonal?latitude={latitude}&longitude={longitude}&weekly=temperature_2m_mean%2Ctemperature_2m_anomaly%2Cprecipitation_mean%2Cprecipitation_anomaly&forecast_days={forecastDays}&timezone=Asia%2FSingapore', hosts: ['seasonal-api.open-meteo.com'],
+      transforms: { forecastDays: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nhtsa-safety-ratings', name: 'NHTSA Safety Ratings', provider: 'NHTSA', category: 'Vehicle',
@@ -2979,7 +3244,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       patternDescription: 'must be a canonical positive decimal ID from 1 to 999999.',
       help: 'Enter a canonical VehicleId returned by the NHTSA Safety Ratings API, for example 19426 for a 2024 Toyota Camry FWD. This demo supports IDs from 1 to 999999; that workbench bound is not a provider-wide maximum.',
     })],
-    buildUrl: ({ vehicleId = '19426' }) => `https://api.nhtsa.gov/SafetyRatings/VehicleId/${encode(vehicleId.trim())}?format=json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nhtsa.gov/SafetyRatings/VehicleId/{vehicleId}?format=json', hosts: ['api.nhtsa.gov'],
+      transforms: { vehicleId: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'singstat-cpi-monthly', name: 'Singapore CPI Monthly', provider: 'Singapore Department of Statistics', category: 'Singapore',
@@ -2988,7 +3256,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://tablebuilder.singstat.gov.sg/view-api/for-developers', accent: '#dc2626', monogram: 'CPI',
     usageNote: 'SingStat Developer APIs are rate-limited to 100 calls per minute per IP. This demo asks the provider for the latest 12 All Items observations using the documented limit and key-descending sort parameters instead of downloading the full history. Values may be revised; preserve the provider update date and 2024-base-year index context.',
     fields: [],
-    buildUrl: () => `https://tablebuilder.singstat.gov.sg/api/table/tabledata/M213752?${new URLSearchParams({ seriesNoORrowNo: '1', limit: '12', sortBy: 'key desc' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://tablebuilder.singstat.gov.sg/api/table/tabledata/M213752?seriesNoORrowNo=1&limit=12&sortBy=key+desc', hosts: ['tablebuilder.singstat.gov.sg'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'openalex-works-search', name: 'OpenAlex Works Search', provider: 'OpenAlex', category: 'Research',
@@ -3006,7 +3277,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       queryField({ label: 'Works search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search OpenAlex indexed works by text.' }),
       limitField({ label: 'Works', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 research works.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => `https://api.openalex.org/works?${new URLSearchParams({ search: query.trim(), per_page: limit.trim(), select: 'id,title,publication_year,cited_by_count,doi,authorships,open_access' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.openalex.org/works?search={query}&per_page={limit}&select=id,title,publication_year,cited_by_count,doi,authorships,open_access', hosts: ['api.openalex.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'oecd-cli', name: 'OECD Composite Leading Indicator', provider: 'OECD', category: 'Economy',
@@ -3020,6 +3294,7 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       ] },
       numberField('startYear', { label: 'Start year', defaultValue: '2025', min: 2000, max: 2100, help: 'Beginning year for the monthly CLI series.' }),
     ],
+    request: { declarative: false, reason: 'Clamps startYear to 2000–2100 and formats it as YYYY-01 in startPeriod; the closed transforms cannot clamp integers or append a derived suffix.' },
     buildUrl: ({ area = 'USA', startYear = '2025' }) => `https://sdmx.oecd.org/public/rest/v1/data/OECD.SDD.STES,DSD_STES@DF_CLI/${encode(area || 'USA').toUpperCase()}.M.LI...AA...H?${new URLSearchParams({ startPeriod: `${clampInt(startYear, 2000, 2100, 2025)}-01`, dimensionAtObservation: 'AllDimensions', format: 'jsondata' }).toString()}`,
   },
 ]
@@ -3037,6 +3312,16 @@ export const apiCatalog: ApiDemo[] = [
   ...publicApi200MilestoneApis,
   ...curatedFiveApiExpansionApis,
 ]
+
+for (const api of apiCatalog) {
+  if (api.request?.declarative !== true) continue
+  const buildUrl = api.buildUrl
+  const defaults = Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))
+  api.buildUrl = (parameters) => {
+    if (api.fields.every((field) => parameters[field.id] !== undefined)) return buildUrl(parameters)
+    return buildUrl({ ...defaults, ...parameters })
+  }
+}
 
 export const getAgentExecutionPolicy = (api: ApiDemo): AgentExecutionPolicy =>
   api.agentExecution ?? { mode: 'enabled' }
