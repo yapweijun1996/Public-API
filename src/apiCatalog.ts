@@ -367,6 +367,7 @@ const coreApis: ApiDemo[] = [
       countField({ label: 'Photos', defaultValue: '4', min: 1, max: 10, step: 1, help: 'Request between 1 and 10 image URLs.' }),
     ],
     usageNote: 'Keep request frequency bounded and respect Dog CEO hosting. Dog CEO identifies the Stanford Dogs Dataset as the original source and describes the collection as open source, but the API or repository code licence does not establish reuse rights for each photo; verify image rights before reuse.',
+    request: { declarative: false, reason: 'Trims the count, uses its numeric path form only for safe integers from 1–10, and otherwise preserves the trimmed string; the closed spec has no conditional numeric normalization.' },
     buildUrl: ({ count = '4' }) => {
       const trimmed = count.trim()
       const numeric = Number(trimmed)
@@ -395,6 +396,7 @@ const coreApis: ApiDemo[] = [
         help: 'Choose a post from 1 to 100.',
       },
     ],
+    request: { declarative: false, reason: 'Uses canonical numeric path IDs only for safe integers from 1–100 and otherwise preserves the trimmed input; the closed spec cannot express the conditional normalization.' },
     buildUrl: ({ postId = '7' }) => {
       const trimmed = postId.trim()
       const numeric = Number(trimmed)
@@ -848,6 +850,7 @@ const importedRecommendedApis: ApiDemo[] = [
       options: NVD_RECENT_LOOKBACK_OPTIONS,
       help: 'Choose a bounded NVD last-modified window. NVD requires paired lastModStartDate/lastModEndDate values and limits one window to 120 consecutive days.',
     }],
+    request: { declarative: false, reason: 'Computes paired last-modified ISO timestamps by subtracting a selected day window from the current runtime date; the spec cannot perform date arithmetic.' },
     buildUrl: ({ lookbackDays = '7' }) => {
       const normalized = lookbackDays.trim()
       if (!NVD_RECENT_LOOKBACK_VALUES.has(normalized)) throw new Error('Unsupported NVD modified-window lookback.')
@@ -1155,6 +1158,7 @@ const importedRecommendedApis: ApiDemo[] = [
     fields: [
       { id: 'username', label: 'Lichess username', type: 'text', defaultValue: 'thibault', placeholder: 'e.g. thibault', minLength: 1, help: 'Enter one public Lichess username. The request reads only public user data.' },
     ],
+    request: { declarative: false, reason: 'Trims and lowercases a user-supplied account slug before path encoding; the closed transforms do not include lowercase normalization.' },
     buildUrl: ({ username = 'thibault' }) => `https://lichess.org/api/user/${encode(username.trim().toLowerCase())}`,
   },
   {
@@ -1413,6 +1417,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'page', label: 'Page', type: 'number', defaultValue: '1', min: 1, max: 10, help: 'Return page 1 to 10.' },
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, help: 'Return between 1 and 20 records.' }),
     ],
+    request: { declarative: false, reason: 'POST JSON embeds a static multiline GraphQL document and computes variables with query fallback, numeric clamping, and media-type mapping; the closed body spec cannot express those transformations.' },
     buildUrl: () => 'https://graphql.anilist.co',
     buildBody: ({ query = 'Fullmetal Alchemist', mediaType = 'ANIME', page = '1', limit = '6' }) => ({
       query: `query ($search: String, $page: Int, $perPage: Int, $type: MediaType) {
@@ -1473,6 +1478,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'country', label: 'Country', type: 'text', defaultValue: 'sg', placeholder: 'e.g. sg', minLength: 2, maxLength: 2, pattern: '[A-Za-z]{2}', patternDescription: 'must contain exactly two letters for an ISO 3166-1 alpha-2 country code.', help: 'Use a two-letter ISO 3166-1 alpha-2 country code for the iTunes Store storefront, such as SG or US.' },
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 results.' }),
     ],
+    request: { declarative: false, reason: 'Derives the media query value from membership in the podcast-entity set, then serializes four query fields; the closed spec cannot derive one field conditionally from another.' },
     buildUrl: ({ query = 'Beatles', entity = 'song', country = 'sg', limit = '8' }) => {
       const media = appleItunesPodcastEntities.has(entity) ? 'podcast' : 'music'
       return `https://itunes.apple.com/search?${new URLSearchParams({
@@ -1500,10 +1506,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'year', label: 'Hebrew year', type: 'number', defaultValue: '5787', min: 5700, max: 5800, step: 1, help: 'Use a four-digit Hebrew year. Public-API sends yt=H so the provider interprets the year as Hebrew, not Gregorian.' },
       { id: 'israel', label: 'Holiday schedule', type: 'select', defaultValue: 'off', help: 'Choose the Diaspora or Israel holiday schedule for the full Hebrew year.', options: [{ label: 'Diaspora', value: 'off' }, { label: 'Israel', value: 'on' }] },
     ],
-    buildUrl: ({ year = '5787', israel = 'off' }) => `https://www.hebcal.com/hebcal?${new URLSearchParams({
-      v: '1', cfg: 'json', year: year.trim(), yt: 'H', month: 'x',
-      maj: 'on', min: 'on', mod: 'on', nx: 'on', mf: 'on', ss: 'on', s: 'on', leyning: 'off', i: israel,
-    }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.hebcal.com/hebcal?v=1&cfg=json&year={year}&yt=H&month=x&maj=on&min=on&mod=on&nx=on&mf=on&ss=on&s=on&leyning=off&i={israel}', hosts: ['www.hebcal.com'],
+      transforms: { year: 'trim', israel: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'aladhan-prayer-times', name: 'AlAdhan Prayer Times', provider: 'Al-Adhan', category: 'Calendar',
@@ -1518,6 +1524,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'method', label: 'Calculation method', type: 'select', defaultValue: '11', help: 'Choose one built-in method advertised by AlAdhan. Method 11 is the Singapore preset.', options: aladhanMethodOptions },
       { id: 'date', label: 'Date', type: 'date', defaultValue: today, help: 'Use a Gregorian date in YYYY-MM-DD format. Public-API converts it to AlAdhan’s DD-MM-YYYY path format.' },
     ],
+    request: { declarative: false, reason: 'Converts a Gregorian YYYY-MM-DD date to DD-MM-YYYY, validates the calculation method against a provider allowlist, and falls back for empty coordinates; these transformations are unavailable in the closed spec.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', method = '11', date = today }) => {
       const safeMethod = aladhanMethodOptions.some((option) => option.value === method) ? method : '11'
       return `https://api.aladhan.com/v1/timings/${toDmyDate(date || today)}?${new URLSearchParams({
@@ -1537,6 +1544,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'dataset', label: 'Dataset', type: 'select', defaultValue: 'drivers', help: 'Pick a public F1 data table.', options: [{ label: 'Drivers', value: 'drivers' }, { label: 'Constructors', value: 'constructors' }, { label: 'Races', value: 'races' }] },
       limitField({ label: 'Rows', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 rows.' }),
     ],
+    request: { declarative: false, reason: 'Clamps the result limit, validates the dataset against an allowlist, and substitutes a default season; the closed spec has no numeric clamp or conditional fallback.' },
     buildUrl: ({ season = '2025', dataset = 'drivers', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 30, 8)
       const safeDataset = ['drivers', 'constructors', 'races'].includes(dataset) ? dataset : 'drivers'
@@ -1597,6 +1605,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'startDate', help: 'Choose an ISO date in YYYY-MM-DD format on or after the start date. Public-API converts it to NASA POWER’s YYYYMMDD wire format.' },
       { id: 'parameters', label: 'Parameters', type: 'text', defaultValue: 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN', minLength: 1, help: 'Comma-separated POWER parameter codes.' },
     ],
+    request: { declarative: false, reason: 'Validates calendar dates and converts YYYY-MM-DD to YYYYMMDD before URL serialization; the closed spec cannot validate or reformat dates.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = isoDate(daysAgo(30)), endDate = today, parameters = 'T2M,PRECTOTCORR,WS10M,RH2M,ALLSKY_SFC_SW_DWN' }) => {
       const start = startDate.trim()
       const end = endDate.trim()
@@ -1634,6 +1643,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'country', label: 'Country code', type: 'text', defaultValue: 'us', placeholder: 'e.g. us', minLength: 2, maxLength: 2, pattern: '[A-Za-z]{2}', patternDescription: 'must contain exactly two letters for an ISO 3166-1 alpha-2 country code.', help: 'Use a supported ISO 3166-1 alpha-2 country code such as US, GB, or MY.' },
       { id: 'postalCode', label: 'Postcode', type: 'text', defaultValue: '10001', placeholder: 'e.g. 10001', help: 'Provide a supported country-specific postcode.' },
     ],
+    request: { declarative: false, reason: 'Lowercases the country path component and substitutes fallback country/postcode values before path encoding; the closed spec cannot lowercase or express these fallbacks.' },
     buildUrl: ({ country = 'us', postalCode = '10001' }) =>
       `https://api.zippopotam.us/${encode((country || 'us').toLowerCase())}/${encode(postalCode || '10001')}`,
   },
@@ -1646,6 +1656,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'station', label: 'Station', type: 'select', defaultValue: 'Brussels-South', help: 'Choose a Belgian railway station.', options: [{ label: 'Brussels-South', value: 'Brussels-South' }, { label: 'Gent-Sint-Pieters', value: 'Gent-Sint-Pieters' }, { label: 'Antwerpen-Centraal', value: 'Antwerpen-Centraal' }, { label: 'Brugge', value: 'Brugge' }] },
       { id: 'direction', label: 'Board direction', type: 'select', defaultValue: 'departure', help: 'Show departing or arriving services.', options: [{ label: 'Departures', value: 'departure' }, { label: 'Arrivals', value: 'arrival' }] },
     ],
+    request: { declarative: false, reason: 'Substitutes fallback station and direction values and adds fixed query fields; the closed spec cannot express conditional fallbacks.' },
     buildUrl: ({ station = 'Brussels-South', direction = 'departure' }) => `https://api.irail.be/liveboard/?${new URLSearchParams({ station: station || 'Brussels-South', format: 'json', lang: 'en', arrdep: direction || 'departure', alerts: 'false' }).toString()}`,
   },
   {
@@ -1677,7 +1688,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Launch search', defaultValue: 'SpaceX', placeholder: 'e.g. SpaceX', minLength: 1, maxLength: 120, help: 'Filter upcoming launches by the provider\'s documented mission, launch, pad, rocket, spacecraft, or launch-service-provider search fields.' }),
       limitField({ label: 'Launches', defaultValue: '4', min: 1, max: 6, step: 1, help: 'Return between 1 and 6 upcoming launches.' }),
     ],
-    buildUrl: ({ query = 'SpaceX', limit = '4' }) => `https://ll.thespacedevs.com/2.3.0/launches/upcoming/?${new URLSearchParams({ search: query.trim(), limit, ordering: 'net' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search={query}&limit={limit}&ordering=net', hosts: ['ll.thespacedevs.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wiktionary-entry', name: 'Wiktionary Definitions', provider: 'Wikimedia Foundation', category: 'Language',
@@ -1743,6 +1757,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       patternDescription: 'must contain exactly eight digits, optionally formatted as 12345-678.',
       help: 'Enter exactly eight digits, with or without a hyphen.',
     }],
+    request: { declarative: false, reason: 'Trims the postcode and removes an optional hyphen before path encoding; the closed transforms cannot remove that formatting character.' },
     buildUrl: ({ postcode = '01310930' }) => `https://brasilapi.com.br/api/cep/v2/${encode(postcode.trim().replace('-', ''))}`,
   },
   {
@@ -1753,6 +1768,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'author', label: 'Poet', type: 'select', defaultValue: 'Emily Dickinson', help: 'Choose a poet represented in PoetryDB.', options: [{ label: 'Emily Dickinson', value: 'Emily Dickinson' }, { label: 'William Shakespeare', value: 'William Shakespeare' }, { label: 'William Blake', value: 'William Blake' }, { label: 'Edgar Allan Poe', value: 'Edgar Allan Poe' }] },
       countField({ label: 'Poems', defaultValue: '3', min: 1, max: 4, help: 'Return between 1 and 4 randomly selected poems.' }),
     ],
+    request: { declarative: false, reason: 'Clamps poem count to 1–4 and falls back to a default author before path encoding; the closed spec cannot clamp or conditionally substitute.' },
     buildUrl: ({ author = 'Emily Dickinson', count = '3' }) => {
       const safeCount = clampInt(count, 1, 4, 3)
       return `https://poetrydb.org/author,random/${encode(author || 'Emily Dickinson')};${safeCount}/title,author,lines,linecount`
@@ -1891,6 +1907,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'adminLevel', label: 'Admin level', type: 'select', defaultValue: 'ADM0', help: 'geoBoundaries accepts ADM0 through ADM5, but available levels vary by country.',
         options: [{ label: 'ADM0', value: 'ADM0' }, { label: 'ADM1', value: 'ADM1' }, { label: 'ADM2', value: 'ADM2' }, { label: 'ADM3', value: 'ADM3' }, { label: 'ADM4', value: 'ADM4' }, { label: 'ADM5', value: 'ADM5' }] },
     ],
+    request: { declarative: false, reason: 'Uppercases the country code and substitutes default country/admin-level path components; the closed spec cannot uppercase or express fallbacks.' },
     buildUrl: ({ countryIso = 'SGP', adminLevel = 'ADM0' }) =>
       `https://www.geoboundaries.org/api/current/gbOpen/${encode((countryIso || 'SGP').toUpperCase())}/${encode(adminLevel || 'ADM0')}/`,
   },
@@ -1913,6 +1930,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'endLongitude', label: 'End longitude', type: 'number', defaultValue: '103.851959', min: -180, max: 180, help: 'Destination longitude in degrees.' },
       numberField('alternatives', { label: 'Alternatives', defaultValue: '1', min: 1, max: 3, step: 1, help: 'Request up to one to three alternative routes; OSRM does not guarantee that every requested alternative exists.' }),
     ],
+    request: { declarative: false, reason: 'Parses each coordinate as a finite number and composes four normalized coordinate values into one ordered path segment; the closed spec cannot parse or compose fields.' },
     buildUrl: ({ startLatitude = '1.3521', startLongitude = '103.8198', endLatitude = '1.290270', endLongitude = '103.851959', alternatives = '1' }) => {
       const coordinate = (value: string) => {
         const trimmed = value.trim()
@@ -1934,7 +1952,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://docs.opendota.com/', accent: '#16a34a', monogram: 'ODT',
     usageNote: 'OpenDota /proMatches does not expose a result-count limit; it currently returns a provider-sized recent batch and supports less_than_match_id only for older-match pagination. The Request Lab therefore does not claim a non-existent limit control.',
     fields: [],
-    buildUrl: () => 'https://api.opendota.com/api/proMatches',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.opendota.com/api/proMatches', hosts: ['api.opendota.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'openligadb-matches', name: 'OpenLigaDB', provider: 'OpenLigaDB', category: 'Sports',
@@ -1946,6 +1967,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'season', label: 'Season year', type: 'number', defaultValue: '2025', min: 2000, max: localNow.getFullYear(), help: 'Use a published season start year.' },
       { id: 'matchday', label: 'Matchday', type: 'number', defaultValue: '1', min: 1, max: 50, help: 'Load one matchday to keep the browser response small and reliable.' },
     ],
+    request: { declarative: false, reason: 'Clamps season and matchday independently to integer ranges and falls back to season 2025/matchday 1; the closed spec cannot clamp or substitute.' },
     buildUrl: ({ league = 'bl1', season = '2025', matchday = '1' }) => {
       const safeSeason = clampInt(season, 2000, localNow.getFullYear(), 2025)
       const safeMatchday = clampInt(matchday, 1, 50, 1)
@@ -2270,7 +2292,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://wheretheiss.at/w/developer', accent: '#0ea5e9', monogram: 'ISS',
     usageNote: 'The provider limits requests to roughly one per second. This demo makes one current-position request per user run and reports provider orbital position data in kilometers.',
     fields: [],
-    buildUrl: () => 'https://api.wheretheiss.at/v1/satellites/25544',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.wheretheiss.at/v1/satellites/25544', hosts: ['api.wheretheiss.at'],
+      responseTransform: 'json',
+    }),
   },
 ]
 

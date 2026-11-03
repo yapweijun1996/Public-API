@@ -241,6 +241,12 @@ describe('declarative request interpreter', () => {
       ['vam-collections', { query: 'Renaissance art', count: '12' }, 'https://api.vam.ac.uk/v2/objects/search?q=Renaissance+art&page_size=12'],
       ['citybikes-network', {}, 'https://api.citybik.es/v2/networks/youbike-taipei'],
       ['citybikes-network', { network: 'velib' }, 'https://api.citybik.es/v2/networks/velib'],
+      ['hebcal-calendar', {}, 'https://www.hebcal.com/hebcal?v=1&cfg=json&year=5787&yt=H&month=x&maj=on&min=on&mod=on&nx=on&mf=on&ss=on&s=on&leyning=off&i=off'],
+      ['hebcal-calendar', { year: '5786', israel: 'on' }, 'https://www.hebcal.com/hebcal?v=1&cfg=json&year=5786&yt=H&month=x&maj=on&min=on&mod=on&nx=on&mf=on&ss=on&s=on&leyning=off&i=on'],
+      ['launch-library-upcoming', {}, 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search=SpaceX&limit=4&ordering=net'],
+      ['launch-library-upcoming', { query: 'Artemis II', limit: '6' }, 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search=Artemis+II&limit=6&ordering=net'],
+      ['opendota-pro-matches', {}, 'https://api.opendota.com/api/proMatches'],
+      ['where-the-iss-at', {}, 'https://api.wheretheiss.at/v1/satellites/25544'],
       ['countries', { code: 'us' }, 'https://api.worldbank.org/v2/country/US?format=json'],
     ] as const
     for (const [id, params, captured] of cases) {
