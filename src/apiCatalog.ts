@@ -317,15 +317,10 @@ const coreApis: ApiDemo[] = [
     accent: '#4da3ff',
     monogram: 'OM',
     fields: [...latLongFields()],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
-      const query = new URLSearchParams({
-        latitude,
-        longitude,
-        current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code',
-        timezone: 'auto',
-      })
-      return `https://api.open-meteo.com/v1/forecast?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m%2Crelative_humidity_2m%2Cwind_speed_10m%2Cweather_code&timezone=auto', hosts: ['api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'people',
@@ -506,10 +501,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'name', label: 'Location', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', minLength: 2, help: 'Enter a place name or postal code. Two characters use exact-name matching; three or more use prefix matching.' },
       countField({ label: 'Results', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 matching locations.' }),
     ],
-    buildUrl: ({ name = 'Singapore', count = '6' }) => {
-      const query = new URLSearchParams({ name: name.trim(), count: count.trim(), language: 'en', format: 'json' })
-      return `https://geocoding-api.open-meteo.com/v1/search?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://geocoding-api.open-meteo.com/v1/search?name={name}&count={count}&language=en&format=json', hosts: ['geocoding-api.open-meteo.com'],
+      transforms: { name: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-air-quality', name: 'Global Air Quality', provider: 'Open-Meteo', category: 'Environment',
@@ -518,10 +513,10 @@ const additionalInteractiveApis: ApiDemo[] = [
     fields: [
       ...latLongFields(),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) => {
-      const query = new URLSearchParams({ latitude, longitude, current: 'us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone', timezone: 'auto' })
-      return `https://air-quality-api.open-meteo.com/v1/air-quality?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude={latitude}&longitude={longitude}&current=us_aqi%2Cpm2_5%2Cpm10%2Cnitrogen_dioxide%2Cozone&timezone=auto', hosts: ['air-quality-api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'Air-quality data requires attribution to Open-Meteo and the Copernicus Atmosphere Monitoring Service (CAMS).',
   },
   {
@@ -533,10 +528,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'date', label: 'Date', type: 'text', defaultValue: today, placeholder: 'YYYY-MM-DD', help: 'Use YYYY-MM-DD, today, or tomorrow.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', date = today }) => {
-      const query = new URLSearchParams({ lat: latitude, lng: longitude, date: date.trim() || 'today' })
-      return `https://api.sunrise-sunset.org/v2?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.sunrise-sunset.org/v2?lat={latitude}&lng={longitude}&date={date}', hosts: ['api.sunrise-sunset.org'],
+      transforms: { date: 'trim' }, responseTransform: 'json',
+    }),
     usageNote: 'Free and keyless. Display visible attribution to sunrise-sunset.org when using the data.',
   },
   {
@@ -566,10 +561,10 @@ const additionalInteractiveApis: ApiDemo[] = [
         { label: 'Subway & light rail', value: '0,1' }, { label: 'Commuter rail', value: '2' }, { label: 'Bus', value: '3' }, { label: 'Ferry', value: '4' },
       ] },
     ],
-    buildUrl: ({ routeType = '0,1' }) => {
-      const query = new URLSearchParams({ 'filter[type]': routeType })
-      return `https://api-v3.mbta.com/routes?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api-v3.mbta.com/routes?filter%5Btype%5D={routeType}', hosts: ['api-v3.mbta.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'The MBTA allows keyless experimentation with a lower request allowance; production apps should request a free API key.',
   },
   {
@@ -586,10 +581,10 @@ const additionalInteractiveApis: ApiDemo[] = [
         { label: 'Easy', value: 'easy' }, { label: 'Medium', value: 'medium' }, { label: 'Hard', value: 'hard' },
       ] },
     ],
-    buildUrl: ({ amount = '6', category = '9', difficulty = 'medium' }) => {
-      const query = new URLSearchParams({ amount: amount.trim(), category, difficulty, type: 'multiple' })
-      return `https://opentdb.com/api.php?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://opentdb.com/api.php?amount={amount}&category={category}&difficulty={difficulty}&type=multiple', hosts: ['opentdb.com'],
+      transforms: { amount: 'trim' }, responseTransform: 'json',
+    }),
     usageNote: 'Free and keyless. Open Trivia DB data is licensed CC BY-SA 4.0. The provider limits each IP to one API request every 5 seconds and allows at most 50 questions per call; this browser demo caps a request at 10 questions.',
     automatedVerification: {
       mode: 'cadence-limited',
@@ -711,7 +706,10 @@ const importedRecommendedApis: ApiDemo[] = [
       limitField({ label: 'Articles', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 published articles from page 1.' }),
     ],
     headers: { Accept: 'application/vnd.forem.api-v1+json' },
-    buildUrl: ({ tag = 'javascript', limit = '8' }) => `https://dev.to/api/articles?${new URLSearchParams({ tag: tag.trim(), per_page: limit.trim(), page: '1' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dev.to/api/articles?tag={tag}&per_page={limit}&page=1', hosts: ['dev.to'],
+      headers: { Accept: 'application/vnd.forem.api-v1+json' }, transforms: { tag: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   fixedApi({
     id: 'fiscal-data-treasury', name: 'U.S. Treasury Agency Overview', provider: 'USAspending.gov', category: 'Finance',
@@ -745,7 +743,10 @@ const importedRecommendedApis: ApiDemo[] = [
       pattern: '[1-9][0-9]*', patternDescription: 'must be a positive decimal Hacker News item ID.',
       help: 'Enter the positive integer ID of a Hacker News story, comment, job, poll, or poll option.',
     })],
-    buildUrl: ({ itemId = '8863' }) => `https://hacker-news.firebaseio.com/v0/item/${encode(itemId)}.json?print=pretty`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://hacker-news.firebaseio.com/v0/item/{itemId}.json?print=pretty', hosts: ['hacker-news.firebaseio.com'],
+      responseTransform: 'json',
+    }),
     usageNote: 'The official Hacker News v0 API currently has no rate limit. Item lookup returns JSON null for an unknown ID; clients should tolerate additional provider fields.',
   },
   fixedApi({
@@ -782,8 +783,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Package search', defaultValue: 'react', placeholder: 'e.g. react', minLength: 1, help: 'Search npm packages using the registry text query.' }),
       limitField({ label: 'Packages', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 npm registry search results.' }),
     ],
-    buildUrl: ({ query = 'react', limit = '8' }) =>
-      `https://registry.npmjs.org/-/v1/search?${new URLSearchParams({ text: query.trim(), size: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://registry.npmjs.org/-/v1/search?text={query}&size={limit}', hosts: ['registry.npmjs.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cpe-search', name: 'NVD CPE Search', provider: 'NIST NVD', category: 'Developer',
@@ -796,8 +799,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'CPE keyword', defaultValue: 'openssl', placeholder: 'e.g. openssl', minLength: 1, help: 'Search across components of NVD CPE product names.' }),
       limitField({ label: 'Products', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return a bounded first page of 1 to 20 whole CPE product identities.' }),
     ],
-    buildUrl: ({ query = 'openssl', limit = '8' }) =>
-      `https://services.nvd.nist.gov/rest/json/cpes/2.0?${new URLSearchParams({ keywordSearch: query.trim(), resultsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cpes/2.0?keywordSearch={query}&resultsPerPage={limit}', hosts: ['services.nvd.nist.gov'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cve-detail', name: 'NVD CVE Detail', provider: 'NIST NVD', category: 'Developer',
@@ -808,7 +813,10 @@ const importedRecommendedApis: ApiDemo[] = [
     usageNote: NVD_USAGE_NOTE,
     automatedVerification: NVD_AUTOMATED_VERIFICATION,
     fields: [cveField('CVE identifier', 'CVE-2024-3094')],
-    buildUrl: ({ cve = 'CVE-2024-3094' }) => `https://services.nvd.nist.gov/rest/json/cves/2.0?${new URLSearchParams({ cveId: cve.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve}', hosts: ['services.nvd.nist.gov'],
+      transforms: { cve: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-cves', name: 'NVD CVE Search', provider: 'NIST NVD', category: 'Developer',
@@ -822,8 +830,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'CVE description keywords', defaultValue: 'postgresql', placeholder: 'e.g. postgresql', minLength: 1, maxLength: 100, help: 'Search current CVE descriptions. NVD requires every space-separated term to match and applies a trailing wildcard to each term.' }),
       limitField({ label: 'CVEs', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return a bounded first page of 1 to 20 whole matching CVE records.' }),
     ],
-    buildUrl: ({ query = 'postgresql', limit = '8' }) =>
-      `https://services.nvd.nist.gov/rest/json/cves/2.0?${new URLSearchParams({ keywordSearch: query.trim(), resultsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={query}&resultsPerPage={limit}', hosts: ['services.nvd.nist.gov'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nvd-recent-cves', name: 'NVD Recently Modified CVEs', provider: 'NIST NVD', category: 'Developer',
@@ -874,10 +884,10 @@ const importedRecommendedApis: ApiDemo[] = [
       textField('tags', { label: 'Required tags', defaultValue: 'javascript', placeholder: 'e.g. javascript;reactjs', minLength: 1, maxLength: 200, pattern: '[^;]+(?:;[^;]+){0,4}', patternDescription: 'Enter one to five semicolon-delimited Stack Overflow tags.', help: 'Every returned question must contain all requested tags. Separate up to five tags with semicolons.' }),
       limitField({ label: 'Questions', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 recently active questions.' }),
     ],
-    buildUrl: ({ tags = 'javascript', limit = '8' }) => {
-      const params = new URLSearchParams({ order: 'desc', sort: 'activity', tagged: tags.trim(), site: 'stackoverflow', pagesize: limit.trim() })
-      return `https://api.stackexchange.com/2.3/questions?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.stackexchange.com/2.3/questions?order=desc&sort=activity&tagged={tags}&site=stackoverflow&pagesize={limit}', hosts: ['api.stackexchange.com'],
+      transforms: { tags: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   fixedApi({
     id: 'uk-bank-holidays', name: 'UK Bank Holidays', provider: 'GOV.UK', category: 'Calendar',
@@ -984,10 +994,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Book search', defaultValue: 'artificial intelligence', minLength: 1, help: 'Search by title, author, subject, or keyword.' }),
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 books.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ q: query.trim(), limit, fields: 'key,title,author_name,first_publish_year,cover_i' })
-      return `https://openlibrary.org/search.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://openlibrary.org/search.json?q={query}&limit={limit}&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year%2Ccover_i', hosts: ['openlibrary.org'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-food-facts', name: 'Open Food Facts', provider: 'Open Food Facts', category: 'Food',
@@ -1003,7 +1013,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://freedictionaryapi.com/', accent: '#7c3aed', monogram: 'DI',
     usageNote: 'FreeDictionaryAPI.com allows 1,000 requests/hour/IP, serves Wiktionary-derived CC BY-SA 4.0 content, and requires visible FreeDictionaryAPI.com attribution plus a link back to the original Wiktionary page supplied in the response.',
     fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', minLength: 1, help: 'Enter one English word or headword.' }],
-    buildUrl: ({ word = 'hello' }) => `https://freedictionaryapi.com/api/v1/entries/en/${encode(word || 'hello')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://freedictionaryapi.com/api/v1/entries/en/{word}', hosts: ['freedictionaryapi.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'pokeapi', name: 'PokéAPI Explorer', provider: 'PokéAPI', category: 'Games',
@@ -1011,6 +1024,7 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://pokeapi.co/docs', accent: '#eab308', monogram: 'PK',
     usageNote: 'PokéAPI is keyless and consumption-only. Its current fair-use policy asks clients to limit request frequency even though static hosting has no fixed rate limit; avoid bulk or abusive traffic.',
     fields: [{ id: 'pokemon', label: 'Pokémon', type: 'text', defaultValue: 'pikachu', minLength: 1, help: 'Use an exact Pokémon resource name or positive Pokédex/resource ID.' }],
+    request: { declarative: false, reason: 'Trims and lowercases the Pokémon resource slug before path encoding; no combined case-and-trim transform is supported.' },
     buildUrl: ({ pokemon = 'pikachu' }) => `https://pokeapi.co/api/v2/pokemon/${encode(pokemon.trim()).toLowerCase()}`,
   },
   {
@@ -1038,13 +1052,17 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://www.tvmaze.com/api', accent: '#ec4899', monogram: 'TV',
     usageNote: 'TVmaze public API data is CC BY-SA and requires source attribution and ShareAlike. The free service promises at least 20 calls per 10 seconds per IP; back off after HTTP 429. Show images may be null, and this demo makes no separate image-reuse-rights claim.',
     fields: [{ id: 'show', label: 'Show title', type: 'text', defaultValue: 'severance', minLength: 1, help: 'Search for a television series.' }],
-    buildUrl: ({ show = 'severance' }) => `https://api.tvmaze.com/search/shows?q=${encode(show.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.tvmaze.com/search/shows?q={show}', hosts: ['api.tvmaze.com'],
+      transforms: { show: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'gbif-species-search', name: 'GBIF Species Search', provider: 'GBIF', category: 'Biodiversity',
     description: 'Search scientific names, taxonomy, vernacular names, and species records.',
     documentationUrl: 'https://techdocs.gbif.org/en/openapi/v1/species', accent: '#16a34a', monogram: 'GB',
     fields: [queryField({ label: 'Species search', defaultValue: 'panthera', help: 'Search by scientific or common name.' })],
+    request: { declarative: false, reason: 'Falls back to the panthera query when the supplied query is empty; declarative transforms cannot express a conditional default.' },
     buildUrl: ({ query = 'panthera' }) => `https://api.gbif.org/v1/species/search?q=${encode(query || 'panthera')}&limit=8`,
   },
   {
@@ -1053,10 +1071,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://clinicaltrials.gov/data-about-studies/learn-about-api', accent: '#0284c7', monogram: 'CT', risk: 'Review',
     usageNote: 'For research demonstrations only. Do not use API results as medical advice or a substitute for professional care.',
     fields: [{ id: 'condition', label: 'Condition', type: 'text', defaultValue: 'Diabetes', minLength: 1, help: 'Search the ClinicalTrials.gov condition/disease search area, which may match condition terms, titles, MeSH terms, keywords, and provider synonyms.' }],
-    buildUrl: ({ condition = 'Diabetes' }) => {
-      const params = new URLSearchParams({ 'query.cond': condition.trim(), pageSize: '8', format: 'json' })
-      return `https://clinicaltrials.gov/api/v2/studies?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://clinicaltrials.gov/api/v2/studies?query.cond={condition}&pageSize=8&format=json', hosts: ['clinicaltrials.gov'],
+      transforms: { condition: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'openfda-drug-labels', name: 'openFDA Drug Labels', provider: 'U.S. Food and Drug Administration', category: 'Health',
