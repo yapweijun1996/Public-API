@@ -349,10 +349,10 @@ const coreApis: ApiDemo[] = [
       },
     ],
     usageNote: 'Synthetic test data for prototypes and demos. The primary semantic card intentionally avoids generated contact, credential, street-address, and national-ID-like fields; review Random User copyright/UI Faces guidance before redistributing portraits.',
-    buildUrl: ({ count = '3', nationality = 'au' }) => {
-      const query = new URLSearchParams({ results: count.trim(), nat: nationality.trim() })
-      return `https://randomuser.me/api/1.4/?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://randomuser.me/api/1.4/?results={count}&nat={nationality}', hosts: ['randomuser.me'],
+      transforms: { count: 'trim', nationality: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dogs',
@@ -546,6 +546,7 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'days', label: 'Recent days', type: 'number', defaultValue: '30', min: 1, max: 365, step: 1, help: 'Look back between 1 and 365 days.' },
       limitField({ label: 'Events', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 active events.' }),
     ],
+    request: { declarative: false, reason: "Omits the category query parameter when category is 'all'; the closed template cannot conditionally remove one query key based on an enum value." },
     buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
       const query = new URLSearchParams({ status: 'open', days: days.trim(), limit: limit.trim() })
       if (category !== 'all') query.set('category', category)
@@ -1005,7 +1006,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://openfoodfacts.github.io/documentation/docs/Product-Opener/v3/products/get-api-v3-product-code/', accent: '#65a30d', monogram: 'OF',
     usageNote: 'Open Food Facts limits product reads to 15 product reads/minute/IP and asks API clients to identify their app with a custom User-Agent. Its official JavaScript SDK also documents browser window.fetch usage. Keep this browser demo low-volume and human-triggered; product data is community-contributed and may be incomplete or incorrect.',
     fields: [{ id: 'barcode', label: 'Barcode', type: 'text', defaultValue: '3017620422003', minLength: 1, maxLength: 32, pattern: '[0-9]+', patternDescription: 'must contain digits only.', help: 'Enter an EAN, UPC, or GTIN barcode as digits. Open Food Facts may normalize leading zeros on the server.' }],
-    buildUrl: ({ barcode = '3017620422003' }) => buildOpenFoodFactsProductUrl(barcode),
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://world.openfoodfacts.org/api/v3/product/{barcode}?fields=code%2Cproduct_name%2Cquantity%2Cnutriscore_grade%2Cnova_group%2Cnutriments%2Cimage_front_url%2Cingredients_text%2Callergens_tags%2Ccategories_tags', hosts: ['world.openfoodfacts.org'],
+      transforms: { barcode: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'free-dictionary', name: 'Free Dictionary', provider: 'FreeDictionaryAPI.com', category: 'Language',
@@ -1036,15 +1040,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Artwork search', defaultValue: 'monet', minLength: 1, help: 'Search artwork titles, artists, or subjects.' }),
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: ART_INSTITUTE_SEARCH_CONTRACT.maxLimit, step: 1, help: 'Return between 1 and 20 public-domain search results; image-less rows are withheld from the semantic gallery.' }),
     ],
-    buildUrl: ({ query = 'monet', limit = '8' }) => {
-      const params = new URLSearchParams({
-        q: query.trim(),
-        limit: limit.trim(),
-        fields: ART_INSTITUTE_SEARCH_CONTRACT.fields,
-        'query[term][is_public_domain]': ART_INSTITUTE_SEARCH_CONTRACT.publicDomainFilter,
-      })
-      return `https://api.artic.edu/api/v1/artworks/search?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.artic.edu/api/v1/artworks/search?q={query}&limit={limit}&fields=id%2Ctitle%2Cartist_title%2Cdate_display%2Cimage_id%2Cis_public_domain&query%5Bterm%5D%5Bis_public_domain%5D=true', hosts: ['api.artic.edu'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'tvmaze-search', name: 'TVmaze Show Search', provider: 'TVmaze', category: 'Entertainment',
@@ -1121,16 +1120,10 @@ const importedRecommendedApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, step: 1, help: 'Return between 1 and 7 whole forecast days.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '3' }) => {
-      const query = new URLSearchParams({
-        latitude,
-        longitude,
-        hourly: 'wave_height,wave_direction,wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction',
-        timezone: 'auto',
-        forecast_days: days.trim(),
-      })
-      return `https://marine-api.open-meteo.com/v1/marine?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://marine-api.open-meteo.com/v1/marine?latitude={latitude}&longitude={longitude}&hourly=wave_height%2Cwave_direction%2Cwave_period%2Csea_surface_temperature%2Cocean_current_velocity%2Cocean_current_direction&timezone=auto&forecast_days={days}', hosts: ['marine-api.open-meteo.com'],
+      transforms: { days: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nobel-prizes', name: 'Nobel Prize Explorer', provider: 'Nobel Prize Outreach', category: 'Research',
@@ -1193,6 +1186,7 @@ const nextKeylessApis: ApiDemo[] = [
     description: 'Inspect an open-source vulnerability, affected packages, ecosystem ranges, aliases, and references.',
     documentationUrl: 'https://google.github.io/osv.dev/api/', accent: '#b42318', monogram: 'OS',
     fields: [{ id: 'vulnerabilityId', label: 'OSV or GHSA ID', type: 'text', defaultValue: 'GHSA-jfh8-c2jp-5v3q', placeholder: 'e.g. GHSA-jfh8-c2jp-5v3q', help: 'Enter the exact case-sensitive OSV, CVE, or GitHub Security Advisory identifier. OSV API request values are case-sensitive.' }],
+    request: { declarative: false, reason: 'Falls back to the default vulnerability ID when the supplied value is blank; closed template transforms cannot conditionally substitute a value.' },
     buildUrl: ({ vulnerabilityId = 'GHSA-jfh8-c2jp-5v3q' }) => `https://api.osv.dev/v1/vulns/${encode(vulnerabilityId.trim() || 'GHSA-jfh8-c2jp-5v3q')}`,
   },
   {
@@ -1219,10 +1213,10 @@ const nextKeylessApis: ApiDemo[] = [
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 matching pages.' }),
     ],
     headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' },
-    buildUrl: ({ query = 'Singapore', limit = '8' }) => {
-      const params = new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim(), gsrlimit: limit.trim(), prop: 'pageimages|extracts', exintro: '1', explaintext: '1', piprop: 'thumbnail', pithumbsize: '480', format: 'json', origin: '*' })
-      return `https://en.wikipedia.org/w/api.php?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrlimit={limit}&prop=pageimages%7Cextracts&exintro=1&explaintext=1&piprop=thumbnail&pithumbsize=480&format=json&origin=%2A', hosts: ['en.wikipedia.org'],
+      headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' }, transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-flood', name: 'Global Flood Forecast', provider: 'Open-Meteo', category: 'Environment',
@@ -1233,10 +1227,10 @@ const nextKeylessApis: ApiDemo[] = [
       ...latLongFields(),
       { id: 'days', label: 'Forecast days', type: 'number', defaultValue: '7', min: 1, max: 30, step: 1, help: 'Return between 1 and 30 daily discharge values.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', days = '7' }) => {
-      const params = new URLSearchParams({ latitude, longitude, daily: 'river_discharge,river_discharge_mean,river_discharge_max', forecast_days: days.trim() })
-      return `https://flood-api.open-meteo.com/v1/flood?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://flood-api.open-meteo.com/v1/flood?latitude={latitude}&longitude={longitude}&daily=river_discharge%2Criver_discharge_mean%2Criver_discharge_max&forecast_days={days}', hosts: ['flood-api.open-meteo.com'],
+      transforms: { days: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-history', name: 'Historical Weather', provider: 'Open-Meteo', category: 'Weather',
@@ -1247,10 +1241,10 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'startDate', label: 'Start date', type: 'date', defaultValue: '2025-01-01', help: 'Open-Meteo requires an ISO date in YYYY-MM-DD format.' },
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: '2025-01-14', minimumFromField: 'startDate', help: 'Open-Meteo requires YYYY-MM-DD; choose an end date on or after the start date.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startDate = '2025-01-01', endDate = '2025-01-14' }) => {
-      const params = new URLSearchParams({ latitude, longitude, start_date: startDate.trim(), end_date: endDate.trim(), daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum', timezone: 'auto' })
-      return `https://archive-api.open-meteo.com/v1/archive?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://archive-api.open-meteo.com/v1/archive?latitude={latitude}&longitude={longitude}&start_date={startDate}&end_date={endDate}&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum&timezone=auto', hosts: ['archive-api.open-meteo.com'],
+      transforms: { startDate: 'trim', endDate: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'kraken-public-ticker', name: 'Kraken Market Ticker', provider: 'Kraken', category: 'Finance',
@@ -1274,10 +1268,10 @@ const nextKeylessApis: ApiDemo[] = [
       queryField({ label: 'Project search', defaultValue: 'artificial intelligence', placeholder: 'e.g. artificial intelligence', minLength: 1, help: 'Search public project names, paths, and descriptions.' }),
       limitField({ label: 'Projects', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 public projects.' }),
     ],
-    buildUrl: ({ query = 'artificial intelligence', limit = '8' }) => {
-      const params = new URLSearchParams({ visibility: 'public', search: query.trim(), order_by: 'star_count', sort: 'desc', per_page: limit.trim() })
-      return `https://gitlab.com/api/v4/projects?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://gitlab.com/api/v4/projects?visibility=public&search={query}&order_by=star_count&sort=desc&per_page={limit}', hosts: ['gitlab.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'uk-police-street-crime', name: 'UK Street Crime', provider: 'UK Home Office', category: 'Government',
@@ -1380,8 +1374,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Package search', defaultValue: 'react', placeholder: 'e.g. react', minLength: 1, help: 'Search package names and descriptions.' }),
       limitField({ label: 'Packages', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 package records.' }),
     ],
-    buildUrl: ({ query = 'react', limit = '8' }) =>
-      `https://packagist.org/search.json?${new URLSearchParams({ q: query.trim(), per_page: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://packagist.org/search.json?q={query}&per_page={limit}', hosts: ['packagist.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nhtsa-vehicle-recalls', name: 'NHTSA Vehicle Recalls', provider: 'NHTSA', category: 'Vehicle',
@@ -1392,10 +1388,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'model', label: 'Vehicle model', type: 'text', defaultValue: 'accord', help: 'Use a model name supported by the selected manufacturer.' },
       numberField('year', { label: 'Model year', defaultValue: '2020', min: 1949, max: localNow.getFullYear() + 1, step: 1, help: 'Narrow by model year to reduce response size.' }),
     ],
-    buildUrl: ({ make = 'honda', model = 'accord', year = '2020' }) => {
-      const query = new URLSearchParams({ make: make.trim(), model: model.trim(), modelYear: year.trim() })
-      return `https://api.nhtsa.gov/recalls/recallsByVehicle?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nhtsa.gov/recalls/recallsByVehicle?make={make}&model={model}&modelYear={year}', hosts: ['api.nhtsa.gov'],
+      transforms: { make: 'trim', model: 'trim', year: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'anilist-graphql', name: 'AniList Media Search', provider: 'AniList', category: 'Entertainment',
@@ -1553,8 +1549,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'tag', label: 'Content type', type: 'select', defaultValue: 'story', help: 'Choose stories or comments.', options: [{ label: 'Stories', value: 'story' }, { label: 'Comments', value: 'comment' }, { label: 'Stories and comments', value: '(story,comment)' }] },
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 search hits.' }),
     ],
-    buildUrl: ({ query = 'OpenAI', tag = 'story', limit = '6' }) =>
-      `https://hn.algolia.com/api/v1/search?${new URLSearchParams({ query: query.trim(), tags: tag, hitsPerPage: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://hn.algolia.com/api/v1/search?query={query}&tags={tag}&hitsPerPage={limit}', hosts: ['hn.algolia.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'bank-of-canada-valet', name: 'Bank of Canada Valet', provider: 'Bank of Canada', category: 'Finance',
@@ -1580,8 +1578,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'to', label: 'Destination', type: 'text', defaultValue: 'Geneva', placeholder: 'e.g. Geneva', minLength: 1, help: 'Enter a destination station or place name.' },
       limitField({ label: 'Connections', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 connections.' }),
     ],
-    buildUrl: ({ from = 'Zurich', to = 'Geneva', limit = '6' }) =>
-      `https://transport.opendata.ch/v1/connections?${new URLSearchParams({ from: from.trim(), to: to.trim(), limit: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://transport.opendata.ch/v1/connections?from={from}&to={to}&limit={limit}', hosts: ['transport.opendata.ch'],
+      transforms: { from: 'form', to: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nasa-power-climate', name: 'NASA POWER Climate', provider: 'NASA POWER', category: 'Environment',
@@ -1617,11 +1617,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     fields: [
       ...latLongFields(),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198' }) =>
-      `https://api.open-meteo.com/v1/elevation?${new URLSearchParams({
-        latitude: latitude || '1.3521',
-        longitude: longitude || '103.8198',
-      }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.open-meteo.com/v1/elevation?latitude={latitude}&longitude={longitude}', hosts: ['api.open-meteo.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'zippopotam-postcode', name: 'Zippopotam Postcode', provider: 'Zippopotam', category: 'Geo',
@@ -1654,6 +1653,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'News search', defaultValue: 'NASA', minLength: 1, placeholder: 'e.g. NASA', help: 'Search titles and summaries from indexed spaceflight publishers.' }),
       limitField({ label: 'Articles', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 articles.' }),
     ],
+    request: { declarative: false, reason: 'Passes the search value through URLSearchParams without trimming it; the closed form encoder trims surrounding whitespace and the plain component encoder uses different space encoding.' },
     buildUrl: ({ query = 'NASA', limit = '6' }) => {
       return `https://api.spaceflightnewsapi.net/v4/articles/?${new URLSearchParams({ search: query, limit, ordering: '-published_at' }).toString()}`
     },
@@ -1681,7 +1681,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     description: 'Look up structured English definitions, parts of speech, examples, related words, and language information.',
     documentationUrl: 'https://en.wiktionary.org/api/rest_v1/', accent: '#7c3aed', monogram: 'WK',
     fields: [{ id: 'word', label: 'English word', type: 'text', defaultValue: 'hello', placeholder: 'e.g. serendipity', minLength: 1, help: 'Enter one English Wiktionary headword.' }],
-    buildUrl: ({ word = 'hello' }) => `https://en.wiktionary.org/api/rest_v1/page/definition/${encode(word)}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://en.wiktionary.org/api/rest_v1/page/definition/{word}', hosts: ['en.wiktionary.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'animechan-random-quote', name: 'Anime Quote Generator', provider: 'AnimeChan', category: 'Entertainment',
@@ -1689,7 +1692,10 @@ const verifiedKeylessApis: ApiDemo[] = [
     documentationUrl: 'https://animechan.io/docs', accent: '#2e51a2', monogram: 'AC',
     usageNote: 'The keyless free tier allows 100 requests per day per IP address. Exceeding that limit returns HTTP 429, and the free-tier window refills 24 hours after its first request. Keep requests user-driven and avoid high-frequency refreshes.',
     fields: [],
-    buildUrl: () => 'https://api.animechan.io/v1/quotes/random',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.animechan.io/v1/quotes/random', hosts: ['api.animechan.io'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'jokeapi-safe', name: 'Safe Joke Generator', provider: 'JokeAPI', category: 'Games',
@@ -1700,7 +1706,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'category', label: 'Category', type: 'select', defaultValue: 'Programming', help: 'Choose a safe joke category.', options: [{ label: 'Programming', value: 'Programming' }, { label: 'Pun', value: 'Pun' }, { label: 'Miscellaneous', value: 'Misc' }, { label: 'Christmas', value: 'Christmas' }] },
       { id: 'type', label: 'Joke format', type: 'select', defaultValue: 'twopart', help: 'Return a one-line or setup-and-delivery joke.', options: [{ label: 'Setup and delivery', value: 'twopart' }, { label: 'Single line', value: 'single' }] },
     ],
-    buildUrl: ({ category = 'Programming', type = 'twopart' }) => `https://v2.jokeapi.dev/joke/${encode(category || 'Programming')}?${new URLSearchParams({ safe_mode: '', type: type || 'twopart', amount: '1' }).toString().replace('safe_mode=', 'safe-mode')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://v2.jokeapi.dev/joke/{category}?safe-mode&type={type}&amount=1', hosts: ['v2.jokeapi.dev'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'dummyjson-recipes', name: 'Recipe Explorer', provider: 'DummyJSON', category: 'Food',
@@ -1711,9 +1720,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Recipe search', defaultValue: 'pasta', minLength: 1, placeholder: 'e.g. pasta', help: 'Search recipe names and indexed recipe text.' }),
       limitField({ label: 'Recipes', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 recipes.' }),
     ],
-    buildUrl: ({ query = 'pasta', limit = '6' }) => {
-      return `https://dummyjson.com/recipes/search?${new URLSearchParams({ q: query.trim(), limit: limit.trim() }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dummyjson.com/recipes/search?q={query}&limit={limit}', hosts: ['dummyjson.com'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'brasilapi-postcode', name: 'Brazil Postcode Explorer', provider: 'BrasilAPI', category: 'Geo',
@@ -2004,7 +2014,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Search term', type: 'text', defaultValue: 'moon', placeholder: 'e.g. moon', minLength: 1, help: 'Search NASA media titles and descriptions.' },
       { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Filter by media type.', options: [{ label: 'Image', value: 'image' }, { label: 'Video', value: 'video' }, { label: 'Audio', value: 'audio' }] },
     ],
-    buildUrl: ({ query = 'moon', mediaType = 'image' }) => `https://images-api.nasa.gov/search?${new URLSearchParams({ q: query.trim(), media_type: mediaType, page_size: '8' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://images-api.nasa.gov/search?q={query}&media_type={mediaType}&page_size=8', hosts: ['images-api.nasa.gov'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'lichess-top-players', name: 'Lichess Top Players', provider: 'Lichess', category: 'Games',
@@ -2289,7 +2302,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [{ id: 'station', label: 'CO-OPS station', type: 'select', defaultValue: '8518750', help: 'Choose a NOAA coastal water-level station.', options: [
       { label: 'The Battery, NY', value: '8518750' }, { label: 'San Francisco, CA', value: '9414290' }, { label: 'Key West, FL', value: '8724580' },
     ] }],
-    buildUrl: ({ station = '8518750' }) => `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?${new URLSearchParams({ station: station || '8518750', product: 'water_level', date: 'latest', datum: 'MLLW', units: 'metric', time_zone: 'gmt', application: 'Public_API_Workbench', format: 'json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station={station}&product=water_level&date=latest&datum=MLLW&units=metric&time_zone=gmt&application=Public_API_Workbench&format=json', hosts: ['api.tidesandcurrents.noaa.gov'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'rdap-domain-lookup', name: 'RDAP Domain Lookup', provider: 'RDAP.org', category: 'Developer',
