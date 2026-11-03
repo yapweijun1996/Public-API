@@ -100,6 +100,20 @@ describe('declarative request interpreter', () => {
       ['pubmed-search', { term: 'covid', retmax: '5' }, 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=covid&retmode=json&retmax=5'],
       ['eurostat-population', { country: 'DE', year: '2025' }, 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/demo_pjan?format=JSON&geo=DE&sex=T&age=TOTAL&time=2025'],
       ['canada-open-data-search', { query: 'artificial intelligence', limit: '6' }, 'https://open.canada.ca/data/api/3/action/package_search?q=artificial+intelligence&rows=6'],
+      ['gleif-lei', { query: 'Royal Bank of Canada', count: '8' }, 'https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=Royal+Bank+of+Canada&page%5Bsize%5D=8'],
+      ['gleif-lei', { query: 'Bank of America', count: '10' }, 'https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=Bank+of+America&page%5Bsize%5D=10'],
+      ['mempool-space-btc', {}, 'https://mempool.space/api/v1/fees/recommended'],
+      ['hdx-humanitarian-datasets', {}, 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-disaster_start_date'],
+      ['bls-timeseries', { seriesId: 'LNS14000000' }, 'https://api.bls.gov/publicAPI/v1/timeseries/data/LNS14000000'],
+      ['bls-timeseries', { seriesId: 'CUUR0000SA0' }, 'https://api.bls.gov/publicAPI/v1/timeseries/data/CUUR0000SA0'],
+      ['world-bank-indicator-explorer', { country: 'SGP', indicator: 'SP.DYN.LE00.IN', startYear: '2015', endYear: '2025' }, 'https://api.worldbank.org/v2/country/SGP/indicator/SP.DYN.LE00.IN?format=json&date=2015%3A2025&per_page=141'],
+      ['world-bank-indicator-explorer', { country: 'us', indicator: 'NY.GDP.MKTP.CD', startYear: '2010', endYear: '2020' }, 'https://api.worldbank.org/v2/country/US/indicator/NY.GDP.MKTP.CD?format=json&date=2010%3A2020&per_page=141'],
+      ['pubchem-compound', { name: 'aspirin' }, 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/aspirin/property/MolecularFormula,MolecularWeight,IUPACName/JSON'],
+      ['pubchem-compound', { name: 'caffeine' }, 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/caffeine/property/MolecularFormula,MolecularWeight,IUPACName/JSON'],
+      ['uniprot-protein', { accession: 'P05067' }, 'https://rest.uniprot.org/uniprotkb/P05067.json'],
+      ['uniprot-protein', { accession: 'A0A023GPI8' }, 'https://rest.uniprot.org/uniprotkb/A0A023GPI8.json'],
+      ['ensembl-gene-lookup', { geneId: 'ENSG00000157764' }, 'https://rest.ensembl.org/lookup/id/ENSG00000157764?content-type=application%2Fjson'],
+      ['ensembl-gene-lookup', { geneId: 'ENSG00000139618' }, 'https://rest.ensembl.org/lookup/id/ENSG00000139618?content-type=application%2Fjson'],
     ] as const
     for (const [id, params, captured] of cases) {
       const api = getApiById(id)
@@ -109,6 +123,17 @@ describe('declarative request interpreter', () => {
       expect(request.url).toBe(captured)
       expect(api.request.hosts).toContain(new URL(captured).host)
     }
+  })
+  it('preserves captured Bank of Canada default and date-range request outputs', () => {
+    const api = getApiById('bank-of-canada-valet')
+    if (!api || api.request?.declarative !== true) throw new Error('Bank of Canada API must use a declarative request.')
+    const defaults = getDefaultParameters(api)
+    const defaultUrl = `https://www.bankofcanada.ca/valet/observations/${defaults.series}/json?start_date=${defaults.startDate}&end_date=${defaults.endDate}`
+    expect(api.buildUrl(defaults)).toBe(defaultUrl)
+    const sample = { series: 'FXUSDCAD', startDate: '2024-01-01', endDate: '2024-01-31' }
+    const captured = 'https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json?start_date=2024-01-01&end_date=2024-01-31'
+    expect(api.buildUrl(sample)).toBe(captured)
+    expect(buildRequestFromSpec(api.request, sample).url).toBe(captured)
   })
   it('keeps every declarative API URL HTTPS and within its declared host set', () => {
     const declarativeApis = apiCatalog.filter((api) => api.request?.declarative === true)

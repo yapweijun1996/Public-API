@@ -1238,6 +1238,7 @@ const nextKeylessApis: ApiDemo[] = [
     fields: [{ id: 'pair', label: 'Market pair', type: 'select', defaultValue: 'XBTUSD', help: 'Choose a public Kraken spot market.', options: [
       { label: 'BTC / USD', value: 'XBTUSD' }, { label: 'ETH / USD', value: 'ETHUSD' }, { label: 'SOL / USD', value: 'SOLUSD' }, { label: 'BTC / EUR', value: 'XBTEUR' },
     ] }],
+    request: { declarative: false, reason: 'Unsupported market pairs fall back to XBTUSD; the closed declarative map cannot express that fallback.' },
     buildUrl: ({ pair = 'XBTUSD' }) => {
       const supportedPair = ['XBTUSD', 'ETHUSD', 'SOLUSD', 'XBTEUR'].includes(pair) ? pair : 'XBTUSD'
       return `https://api.kraken.com/0/public/Ticker?${new URLSearchParams({ pair: supportedPair, assetVersion: '1' }).toString()}`
@@ -1542,8 +1543,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'startDate', label: 'Start date', type: 'date', defaultValue: isoDate(daysAgo(30)), help: 'Bank of Canada Valet requires YYYY-MM-DD.' },
       { id: 'endDate', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'startDate', help: 'Bank of Canada Valet requires YYYY-MM-DD on or after the start date.' },
     ],
-    buildUrl: ({ series = 'FXUSDCAD', startDate = isoDate(daysAgo(30)), endDate = today }) =>
-      `https://www.bankofcanada.ca/valet/observations/${encode(series.trim())}/json?${new URLSearchParams({ start_date: startDate.trim(), end_date: endDate.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.bankofcanada.ca/valet/observations/{series}/json?start_date={startDate}&end_date={endDate}', hosts: ['www.bankofcanada.ca'],
+      transforms: { series: 'trim', startDate: 'trim', endDate: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'swiss-transit-connections', name: 'Swiss Transit Connections', provider: 'Swiss Mobility', category: 'Utility',
@@ -2235,7 +2238,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [{ id: 'seriesId', label: 'Series', type: 'select', defaultValue: 'LNS14000000', help: 'Choose a tracked BLS time series.', options: [
       { label: 'Unemployment rate', value: 'LNS14000000' }, { label: 'CPI — all items', value: 'CUUR0000SA0' }, { label: 'CPI — food', value: 'CUUR0000SAF1' },
     ] }],
-    buildUrl: ({ seriesId = 'LNS14000000' }) => `https://api.bls.gov/publicAPI/v1/timeseries/data/${encode(seriesId || 'LNS14000000')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.bls.gov/publicAPI/v1/timeseries/data/{seriesId}', hosts: ['api.bls.gov'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'fema-disasters', name: 'FEMA Disaster Declarations', provider: 'FEMA OpenFEMA', category: 'Government',
@@ -2300,7 +2306,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Look up a chemical compound\'s molecular formula, weight, and IUPAC name by common name.',
     documentationUrl: 'https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest-tutorial', accent: '#2e6da4', monogram: 'PCH',
     fields: [{ id: 'name', label: 'Compound name', type: 'text', defaultValue: 'aspirin', placeholder: 'e.g. aspirin', minLength: 1, help: 'Enter a common chemical or drug name.' }],
-    buildUrl: ({ name = 'aspirin' }) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encode(name.trim() || 'aspirin')}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name}/property/MolecularFormula,MolecularWeight,IUPACName/JSON', hosts: ['pubchem.ncbi.nlm.nih.gov'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'chembl-molecule', name: 'ChEMBL Molecule Profile', provider: 'ChEMBL', category: 'Health', risk: 'Review',
@@ -2315,7 +2324,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Look up a protein\'s function, organism, gene, and annotation score by accession number.',
     documentationUrl: 'https://www.uniprot.org/help/accession_numbers', accent: '#00639c', monogram: 'UNI',
     fields: [{ id: 'accession', label: 'UniProt accession', type: 'text', defaultValue: 'P05067', placeholder: 'e.g. P05067', pattern: '[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2}', patternDescription: 'must be a valid 6- or 10-character UniProtKB accession.', help: 'Use the official 6- or 10-character UniProtKB accession format, such as P05067 or A0A023GPI8.' }],
-    buildUrl: ({ accession = 'P05067' }) => `https://rest.uniprot.org/uniprotkb/${encode(accession.trim() || 'P05067')}.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rest.uniprot.org/uniprotkb/{accession}.json', hosts: ['rest.uniprot.org'],
+      transforms: { accession: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'rcsb-pdb-entry', name: 'RCSB Protein Data Bank Entry', provider: 'RCSB PDB', category: 'Research',
@@ -2340,7 +2352,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       pattern: 'ENS[A-Z]*G[0-9]{11}', patternDescription: 'must be an unversioned Ensembl gene stable ID such as ENSG00000157764.',
       help: 'Enter an unversioned Ensembl gene stable ID (default is human BRAF). Transcript, protein, and version-suffixed IDs are rejected before the provider request.',
     }],
-    buildUrl: ({ geneId = 'ENSG00000157764' }) => `https://rest.ensembl.org/lookup/id/${encode(geneId.trim() || 'ENSG00000157764')}?${new URLSearchParams({ 'content-type': 'application/json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rest.ensembl.org/lookup/id/{geneId}?content-type=application%2Fjson', hosts: ['rest.ensembl.org'],
+      transforms: { geneId: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'obis-marine-occurrences', name: 'OBIS Marine Occurrences', provider: 'Ocean Biodiversity Information System', category: 'Biodiversity',
@@ -2510,10 +2525,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Legal name', type: 'text', defaultValue: 'Royal Bank of Canada', minLength: 1, placeholder: 'e.g. Royal Bank', help: 'Enter a legal name fragment to search public LEI records.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 50, step: 1, help: 'Return between 1 and 50 records.' },
     ],
-    buildUrl: ({ query = 'Royal Bank of Canada', count = '8' }) => `https://api.gleif.org/api/v1/lei-records?${new URLSearchParams({
-      'filter[entity.legalName]': query.trim(),
-      'page[size]': count.trim(),
-    }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D={query}&page%5Bsize%5D={count}', hosts: ['api.gleif.org'],
+      transforms: { query: 'form', count: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'fdic-bankfind',
@@ -2604,7 +2619,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://goadmin.ifrc.org/api-docs/swagger-ui/', accent: '#d9232e', monogram: 'IFR', risk: 'Review',
     usageNote: 'IFRC GO exposes event-level and field-report impact figures from different sources. Keep IFRC, government, and other-source figures separate and verify source reports before operational decisions.',
     fields: [],
-    buildUrl: () => 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-disaster_start_date',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://goadmin.ifrc.org/api/v2/event/?limit=6&ordering=-disaster_start_date', hosts: ['goadmin.ifrc.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'open-meteo-climate',
@@ -2685,7 +2703,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#f59e0b',
     monogram: 'MPB',
     fields: [],
-    buildUrl: () => 'https://mempool.space/api/v1/fees/recommended',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://mempool.space/api/v1/fees/recommended', hosts: ['mempool.space'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'metacpan',
@@ -2985,11 +3006,10 @@ ORDER BY ?publ ?authorName`
       { id: 'startYear', label: 'Start year', type: 'number', defaultValue: '2015', min: 1960, max: 2100, step: 1, help: 'Beginning of the requested time series.' },
       { id: 'endYear', label: 'End year', type: 'number', defaultValue: '2025', min: 1960, max: 2100, step: 1, minimumFromField: 'startYear', help: 'End of the requested time series; choose a year greater than or equal to the start year.' },
     ],
-    buildUrl: ({ country = 'SGP', indicator = 'SP.DYN.LE00.IN', startYear = '2015', endYear = '2025' }) => {
-      const requestedStart = startYear.trim()
-      const requestedEnd = endYear.trim()
-      return `https://api.worldbank.org/v2/country/${encode(country || 'SGP').toUpperCase()}/indicator/${encode(indicator || 'SP.DYN.LE00.IN')}?${new URLSearchParams({ format: 'json', date: `${requestedStart}:${requestedEnd}`, per_page: '141' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.worldbank.org/v2/country/{country}/indicator/{indicator}?format=json&date={startYear}%3A{endYear}&per_page=141', hosts: ['api.worldbank.org'],
+      transforms: { country: 'uppercase', startYear: 'trim', endYear: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'exchange-rate-current', name: 'Current FX Rates', provider: 'ExchangeRate-API', category: 'Finance',
