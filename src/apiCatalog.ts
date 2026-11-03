@@ -2282,6 +2282,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'size', label: 'Image size', type: 'select', defaultValue: '200x200', help: 'Choose the output image dimensions.', options: [{ label: '150 × 150', value: '150x150' }, { label: '200 × 200', value: '200x200' }, { label: '300 × 300', value: '300x300' }] },
     ],
     headers: { Accept: 'image/png' },
+    request: { declarative: false, reason: 'Returns binary PNG content and declares an image response plus Accept: image/png; the closed response-transform set does not model binary image responses.' },
     buildUrl: ({ data = 'https://example.com', size = '200x200' }) => `https://api.qrserver.com/v1/create-qr-code/?${new URLSearchParams({ data: data.trim() || 'https://example.com', size: size || '200x200' }).toString()}`,
     responseType: 'image',
     responseContentTypes: ['image/png'],
@@ -2382,6 +2383,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     },
     fields: [{ id: 'text', label: 'Text to check', type: 'text', defaultValue: 'This are a test.', placeholder: 'e.g. This are a test.', help: 'Enter a short English sentence to check.' }],
     method: 'POST', bodyEncoding: 'form',
+    request: { declarative: false, reason: 'POSTs form fields with a constant language and trims text with an empty-text fallback; the closed body spec cannot express conditional fallback.' },
     buildUrl: () => 'https://api.languagetool.org/v2/check',
     buildBody: ({ text = 'This are a test.' }) => ({ text: text.trim() || 'This are a test.', language: 'en-US' }),
   },
@@ -2415,6 +2417,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.ebi.ac.uk/chembl/api/data/docs', accent: '#6a1b9a', monogram: 'CHM',
     usageNote: 'For research and education demonstrations only. Not a substitute for clinical or regulatory drug information.',
     fields: [{ id: 'chemblId', label: 'ChEMBL ID', type: 'text', defaultValue: 'CHEMBL25', placeholder: 'e.g. CHEMBL25', help: 'Enter a ChEMBL molecule identifier (CHEMBL25 is aspirin).' }],
+    request: { declarative: false, reason: 'Substitutes CHEMBL25 when the path identifier is empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ chemblId = 'CHEMBL25' }) => `https://www.ebi.ac.uk/chembl/api/data/molecule/${encode(chemblId || 'CHEMBL25')}.json`,
   },
   {
@@ -2433,6 +2436,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.rcsb.org/docs/programmatic-access/web-apis-overview', accent: '#4a4a4a', monogram: 'PDB',
     usageNote: 'RCSB and wwPDB are transitioning to 12-character extended PDB IDs. This direct core-entry demo accepts a current four-character PDB ID or its official transitional pdb_0000XXXX alias; because the live Data API does not currently resolve that alias directly, the browser normalizes the one-to-one transitional form back to its four-character ID at the provider boundary. Extended-only IDs issued after the July 21, 2027 archive transition are not yet claimed as supported and this contract must be re-evaluated before that cutover.',
     fields: [{ id: 'entryId', label: 'PDB entry ID', type: 'text', defaultValue: '4HHB', placeholder: 'e.g. 4HHB or pdb_00004hhb', minLength: 4, maxLength: 12, pattern: '(?:[A-Za-z0-9]{4}|[Pp][Dd][Bb]_0000[A-Za-z0-9]{4})', patternDescription: 'must be a four-character PDB ID or a transitional pdb_0000XXXX extended alias for an entry that still has a legacy ID.', help: 'Enter 4HHB or its transitional extended alias pdb_00004hhb. Extended-only IDs issued after the 2027 transition are not yet supported by this direct core-entry demo.' }],
+    request: { declarative: false, reason: 'Trims and uppercases the identifier, then strips the official pdb_0000 transitional prefix to recover the four-character provider ID; the closed transforms cannot perform this conditional normalization.' },
     buildUrl: ({ entryId = '4HHB' }) => {
       const normalized = (entryId.trim() || '4HHB').toUpperCase()
       const transitionalAlias = normalized.match(/^PDB_0000([A-Z0-9]{4})$/)
@@ -2487,6 +2491,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://paleobiodb.org/data1.2/', accent: '#7a5230', monogram: 'PBDB',
     usageNote: 'PBDB defines n_occs as fossil occurrences identified as the named taxon or any of its subtaxa. It is not a direct-only count for the exact name.',
     fields: [{ id: 'name', label: 'Taxon name', type: 'text', defaultValue: 'Tyrannosaurus', placeholder: 'e.g. Tyrannosaurus', help: 'Enter a genus or species name.' }],
+    request: { declarative: false, reason: 'Trims the taxon name, substitutes Tyrannosaurus when empty, and adds the fixed provider vocabulary query; the closed spec cannot express the fallback.' },
     buildUrl: ({ name = 'Tyrannosaurus' }) => `https://paleobiodb.org/data1.2/taxa/list.json?${new URLSearchParams({ name: name.trim() || 'Tyrannosaurus', vocab: 'pbdb' }).toString()}`,
   },
   {
@@ -2501,6 +2506,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
         { label: 'Gage height (00065)', value: '00065' },
       ] },
     ],
+    request: { declarative: false, reason: 'Strips an optional USGS- prefix, restores that prefix in the query, and maps the measurement to one allowlisted code; the closed spec cannot compose or conditionally map these values.' },
     buildUrl: ({ site = '01646500', parameter = '00060' }) => {
       const siteNumber = site.trim().replace(/^USGS-/i, '') || '01646500'
       const parameterCode = parameter === '00065' ? '00065' : '00060'
@@ -2547,6 +2553,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Search term', type: 'text', defaultValue: 'singapore', placeholder: 'e.g. singapore', minLength: 1, help: 'Search titles and descriptions across the archive.' },
       { id: 'mediaType', label: 'Media type', type: 'select', defaultValue: 'texts', help: 'Filter by archived media type.', options: [{ label: 'Texts & books', value: 'texts' }, { label: 'Audio', value: 'audio' }, { label: 'Movies', value: 'movies' }, { label: 'Software', value: 'software' }] },
     ],
+    request: { declarative: false, reason: 'Builds a compound query from text and media type and appends seven repeated fl[] parameters; the closed query spec cannot compose the expression or emit repeated fields.' },
     buildUrl: (parameters) => {
       const query = parameters.query === undefined ? 'singapore' : parameters.query.trim()
       const mediaType = parameters.mediaType === undefined ? 'texts' : parameters.mediaType
@@ -2561,6 +2568,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://ipwhois.io/documentation', accent: '#0f766e', monogram: 'GEO',
     usageNote: 'IP geolocation is approximate network-derived data, not device GPS or a precise personal address. The free endpoint allows 1,000 requests/day; browser CORS requests are counted per domain, so the quota is shared across Public-API traffic from this origin.',
     fields: [{ id: 'ip', label: 'IP address', type: 'text', defaultValue: '8.8.8.8', placeholder: 'e.g. 8.8.8.8', help: 'Enter one public IPv4 or IPv6 address. Reserved or invalid addresses can return HTTP 200 with success=false.' }],
+    request: { declarative: false, reason: 'Trims the IP path and substitutes 8.8.8.8 for an empty value; the closed spec has no empty-value fallback.' },
     buildUrl: ({ ip = '8.8.8.8' }) => `https://ipwho.is/${encode(ip.trim() || '8.8.8.8')}`,
   },
   {
@@ -2575,6 +2583,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       ] },
       { id: 'expression', label: 'Expression', type: 'text', defaultValue: '2x+2x', placeholder: 'e.g. 2x+2x', minLength: 1, help: 'Use ^ for powers and avoid spaces.' },
     ],
+    request: { declarative: false, reason: 'Substitutes defaults for empty operation/expression path segments; the closed spec cannot express conditional empty-value fallback.' },
     buildUrl: ({ operation = 'simplify', expression = '2x+2x' }) => `https://newton.vercel.app/api/v2/${encode(operation || 'simplify')}/${encode(expression || '2x+2x')}`,
   },
   {
@@ -2584,6 +2593,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.datamuse.com/api/', accent: '#be185d', monogram: 'DTM',
     usageNote: 'The stable catalog ID is retained for deep-link compatibility, but the live request now uses the documented sl=sounds-like contract rather than the older undocumented rel_rhy parameter. Datamuse says result score values are useful only for ordering, asks public apps to acknowledge Datamuse, and allows keyless use up to 100,000 requests/day only through 2026-12-31; starting 2027-01-01 every request will require an API key, so this browser-native demo must be re-evaluated before then.',
     fields: [{ id: 'word', label: 'Sounds like', type: 'text', defaultValue: 'orange', placeholder: 'e.g. orange', minLength: 1, maxLength: 80, help: 'Enter an English word or phrase. Datamuse will rank vocabulary entries with similar pronunciation.' }],
+    request: { declarative: false, reason: 'Trims the search word and substitutes orange when empty while adding fixed query fields; the closed spec cannot express the fallback.' },
     buildUrl: ({ word = 'orange' }) => `https://api.datamuse.com/words?${new URLSearchParams({ sl: word.trim() || 'orange', max: '8', md: 'psr', ipa: '1' }).toString()}`,
   },
   {
@@ -2592,6 +2602,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://open5e.com/api-docs', accent: '#166534', monogram: 'O5E',
     usageNote: 'Uses the current Open5e V2 creatures endpoint with case-insensitive name matching. The live demo caps results at 8 and requests only the source, identity, combat, movement, and perception fields used by the semantic card; familiar monster names can appear more than once when different source documents or game systems provide distinct versions.',
     fields: [{ id: 'search', label: 'Monster name contains', type: 'text', defaultValue: 'dragon', placeholder: 'e.g. dragon', help: 'Case-insensitive partial-name search across Open5e V2 creatures.' }],
+    request: { declarative: false, reason: 'Trims the partial-name query and substitutes dragon when empty while adding fixed projection and limit fields; the closed spec cannot express the fallback.' },
     buildUrl: ({ search = 'dragon' }) => `https://api.open5e.com/v2/creatures/?${new URLSearchParams({
       name__icontains: search.trim() || 'dragon',
       limit: '8',
@@ -2610,6 +2621,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'seed', label: 'Seed text', type: 'text', defaultValue: 'test', placeholder: 'e.g. test', help: 'Any text seed deterministically generates the same avatar.' },
     ],
     headers: { Accept: 'image/svg+xml' },
+    request: { declarative: false, reason: 'Returns binary SVG image content and declares image response handling plus Accept: image/svg+xml; the closed response-transform set does not model binary images.' },
     buildUrl: ({ style = 'identicon', seed = 'test' }) => `https://api.dicebear.com/9.x/${encode(style || 'identicon')}/svg?${new URLSearchParams({ seed: seed.trim() || 'test' }).toString()}`,
     responseType: 'image',
     responseContentTypes: ['image/svg+xml'],
@@ -2681,6 +2693,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'count', label: 'Results', type: 'number', defaultValue: '5', min: 1, max: 50, help: 'Return between 1 and 50 establishments from the first result page.' },
     ],
     headers: { 'x-api-version': '2' },
+    request: { declarative: false, reason: 'Clamps parsed result count to 1–50 and substitutes Cafe for an empty establishment name; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ name = 'Cafe', count = '5' }) => {
       const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 5))
       return `https://api.ratings.food.gov.uk/Establishments?${new URLSearchParams({
@@ -2705,6 +2718,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'riverName', label: 'Exact river name', type: 'text', defaultValue: 'River Severn', placeholder: 'e.g. River Severn', minLength: 1, help: 'Use the Environment Agency river name exactly; the provider does not treat this field as a contains search.' },
       { id: 'count', label: 'Stations', type: 'number', defaultValue: '8', min: 1, max: 50, help: 'Return between 1 and 50 matching station records.' },
     ],
+    request: { declarative: false, reason: 'Clamps parsed station count to 1–50 and substitutes River Severn for an empty exact-match filter; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ riverName = 'River Severn', count = '8' }) => {
       const safeCount = Math.min(50, Math.max(1, Number.parseInt(count, 10) || 8))
       return `https://environment.data.gov.uk/flood-monitoring/id/stations?${new URLSearchParams({
@@ -2763,6 +2777,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
           { label: 'NICAM16 8S', value: 'NICAM16_8S' },
         ] },
     ],
+    request: { declarative: false, reason: 'Clamps start/end years, constructs January 1/December 31 date bounds, and falls back for coordinates; the closed spec cannot clamp numbers, compose dates, or substitute empty coordinates.' },
     buildUrl: ({ latitude = '1.3521', longitude = '103.8198', startYear = '2020', endYear = '2026', model = 'CMCC_CM2_VHR4' }) => {
       const safeStartYear = Math.min(2050, Math.max(1950, Number.parseInt(startYear, 10) || 2020))
       const safeEndYear = Math.min(2050, Math.max(1950, Number.parseInt(endYear, 10) || 2026))
@@ -2786,6 +2801,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Model search', type: 'text', defaultValue: 'gpt', placeholder: 'e.g. gpt', minLength: 1, help: 'Search public model IDs. Hugging Face documents this search string as being contained in returned model IDs.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 25, step: 1, help: 'Return between 1 and 25 models.' },
     ],
+    request: { declarative: false, reason: 'Clamps the result limit to 1–25 and substitutes gpt for an empty query; the closed spec has no numeric clamp or empty-value fallback.' },
     buildUrl: ({ query = 'gpt', count = '8' }) => `https://huggingface.co/api/models?${new URLSearchParams({ search: query.trim() || 'gpt', limit: String(Math.min(25, Math.max(1, Number.parseInt(count, 10) || 8))), full: 'true' }).toString()}`,
   },
   {
@@ -2837,6 +2853,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Module name', type: 'text', defaultValue: 'Mojolicious', placeholder: 'e.g. DBIx::Class', minLength: 1, help: 'Enter an exact Perl module name. MetaCPAN searches module.name and keeps only the latest indexed release.' },
       { id: 'count', label: 'Maximum matches', type: 'number', defaultValue: '6', min: 1, max: 20, help: 'Limit the exact-name result set to between 1 and 20 records.' },
     ],
+    request: { declarative: false, reason: 'JSON-quotes the exact module name inside a compound search expression and clamps result size to 1–20; the closed spec cannot JSON-escape or clamp.' },
     buildUrl: ({ query = 'Mojolicious', count = '6' }) => {
       const safeCount = Math.min(20, Math.max(1, Number.parseInt(count, 10) || 6))
       return `https://fastapi.metacpan.org/v1/module/_search?${new URLSearchParams({ q: `module.name:${JSON.stringify(query.trim())} AND status:latest`, size: String(safeCount) }).toString()}`
@@ -2852,6 +2869,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     accent: '#0d9488',
     monogram: 'HXP',
     fields: [{ id: 'package', label: 'Package', type: 'text', defaultValue: 'ecto', placeholder: 'e.g. ecto', help: 'Enter an official Hex package name.' }],
+    request: { declarative: false, reason: 'Trims the package path and substitutes ecto when empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ package: packageName = 'ecto' }) => `https://hex.pm/api/packages/${encode(packageName.trim() || 'ecto')}`,
   },
   {
@@ -2861,6 +2879,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     usageNote: 'Uses the Hosted Pub Repository Specification v2 package endpoint and its recommended v2 media type. Direct package misses are provider HTTP 404 responses, not semantic empty package objects.',
     fields: [{ id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'riverpod', placeholder: 'e.g. riverpod', help: 'Enter an exact package name from pub.dev.' }],
     headers: { Accept: 'application/vnd.pub.v2+json' },
+    request: { declarative: false, reason: 'Trims the package path and substitutes riverpod when empty; the closed spec does not support empty-value fallback.' },
     buildUrl: ({ packageName = 'riverpod' }) => `https://pub.dev/api/packages/${encode(packageName.trim() || 'riverpod')}`,
   },
   {
@@ -2875,6 +2894,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [
       { id: 'module', label: 'Module path', type: 'text', defaultValue: 'github.com/gin-gonic/gin', placeholder: 'e.g. github.com/gin-gonic/gin', help: 'Enter a fully-qualified module path.' },
     ],
+    request: { declarative: false, reason: 'Escapes uppercase letters in every Go module path segment to !lowercase while preserving slash separators, then parses the text version list; the closed transforms cannot escape Go proxy paths or implement the custom response parser.' },
     buildUrl: ({ module = 'github.com/gin-gonic/gin' }) => {
       const requestedModule = module.trim() || 'github.com/gin-gonic/gin'
       const modulePath = encode(escapeGoProxyModulePath(requestedModule)).replace(/%2F/g, '/')
@@ -2924,6 +2944,7 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
         help: 'Enter owner/repo or a full github.com/owner/repo path.',
       },
     ],
+    request: { declarative: false, reason: 'Trims repository input, strips optional scheme/www prefixes, and conditionally prepends github.com; the closed spec cannot parse or conditionally normalize repository URLs.' },
     buildUrl: ({ repository = 'github.com/ossf/scorecard' }) => {
       const rawRepository = repository.trim() || 'github.com/ossf/scorecard'
       const normalizedRepository = rawRepository.replace(/^https?:\/\//, '').replace(/^www\./, '')
@@ -3179,6 +3200,7 @@ ORDER BY ?publ ?authorName`
       policyUrl: 'https://vulnerability.circl.lu/.well-known/api-policy.json',
     },
     fields: [cveField('CVE ID')],
+    request: { declarative: false, reason: 'Trims/uppercases the CVE and substitutes CVE-2021-44228 when empty; the closed transforms cannot uppercase or express fallback.' },
     buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://vulnerability.circl.lu/api/vulnerability/${encode(cve.trim().toUpperCase() || 'CVE-2021-44228')}`,
   },
 ]
