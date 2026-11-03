@@ -3302,6 +3302,16 @@ export const apiCatalog: ApiDemo[] = [
   ...curatedFiveApiExpansionApis,
 ]
 
+for (const api of apiCatalog) {
+  if (api.request?.declarative !== true) continue
+  const buildUrl = api.buildUrl
+  const defaults = Object.fromEntries(api.fields.map((field) => [field.id, field.defaultValue]))
+  api.buildUrl = (parameters) => {
+    if (api.fields.every((field) => parameters[field.id] !== undefined)) return buildUrl(parameters)
+    return buildUrl({ ...defaults, ...parameters })
+  }
+}
+
 export const getAgentExecutionPolicy = (api: ApiDemo): AgentExecutionPolicy =>
   api.agentExecution ?? { mode: 'enabled' }
 

@@ -269,6 +269,16 @@ describe('declarative request interpreter', () => {
     expect(api.buildUrl(sample)).toBe(captured)
     expect(buildRequestFromSpec(api.request, sample).url).toBe(captured)
   })
+
+  it('preserves original destructured defaults for declarative Open-Meteo builders', () => {
+    const marine = getApiById('open-meteo-marine')
+    const history = getApiById('open-meteo-history')
+    const ensemble = getApiById('open-meteo-ensemble')
+    expect(marine?.buildUrl({})).toBe('https://marine-api.open-meteo.com/v1/marine?latitude=1.3521&longitude=103.8198&hourly=wave_height%2Cwave_direction%2Cwave_period%2Csea_surface_temperature%2Cocean_current_velocity%2Cocean_current_direction&timezone=auto&forecast_days=3')
+    expect(history?.buildUrl({})).toBe('https://archive-api.open-meteo.com/v1/archive?latitude=1.3521&longitude=103.8198&start_date=2025-01-01&end_date=2025-01-14&daily=temperature_2m_max%2Ctemperature_2m_min%2Cprecipitation_sum&timezone=auto')
+    expect(ensemble?.buildUrl({})).toBe('https://ensemble-api.open-meteo.com/v1/ensemble?latitude=1.3521&longitude=103.8198&models=icon_seamless_eps&hourly=temperature_2m&forecast_days=3&timezone=Asia%2FSingapore')
+    expect(marine?.buildUrl({ days: '4' })).toContain('latitude=1.3521&longitude=103.8198')
+  })
   it('keeps every declarative API URL HTTPS and within its declared host set', () => {
     const declarativeApis = apiCatalog.filter((api) => api.request?.declarative === true)
     expect(declarativeApis.length).toBeGreaterThan(1)
