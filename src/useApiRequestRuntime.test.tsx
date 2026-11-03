@@ -260,7 +260,7 @@ describe('useApiRequestRuntime', () => {
     const qr = api('qr-code-generator')
     const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:public-api-qr-1').mockReturnValueOnce('blob:public-api-qr-2')
     const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(new Blob(['png-bytes'], { type: 'image/png' }), {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(new Uint8Array([112, 110, 103, 45, 98, 121, 116, 101, 115]), {
       status: 200,
       headers: { 'Content-Type': 'image/png' },
     })))
