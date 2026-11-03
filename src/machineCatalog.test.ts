@@ -5,7 +5,8 @@ import { buildMachineCatalog } from './machineCatalog'
 describe('machine-readable API catalog', () => {
   it('exports the catalog from the API SSOT without live-health claims', () => {
     const catalog = buildMachineCatalog(apiCatalog, '/Public-API/')
-    expect(catalog.schemaVersion).toBe(1)
+    expect(catalog.schemaVersion).toBe(2)
+    expect(catalog.contentHash).toMatch(/^[0-9a-f]{8}$/)
     expect(catalog.catalogCount).toBe(196)
     expect(catalog.catalogPath).toBe('/Public-API/')
     expect(catalog.requestLabPattern).toBe('/Public-API/#/request-lab?api={api-id}')
@@ -16,6 +17,15 @@ describe('machine-readable API catalog', () => {
     expect(JSON.stringify(catalog)).not.toContain('buildUrl')
     expect(JSON.stringify(catalog)).not.toContain('lastReviewed')
     expect(JSON.stringify(catalog)).not.toContain('healthy')
+    expect(catalog.apis.find((api) => api.id === 'holidays')?.request).toMatchObject({
+      declarative: true,
+      method: 'GET',
+      hosts: ['nagerholidays.com'],
+    })
+    expect(catalog.apis.find((api) => api.id === 'countries')?.request).toMatchObject({
+      declarative: false,
+      reason: expect.any(String),
+    })
   })
 
   it('carries provider execution policy and deterministic Request Lab paths', () => {

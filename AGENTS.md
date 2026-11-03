@@ -50,6 +50,7 @@
 - 有顺序关系的 date/year range 也属于 SSOT constraint：结束字段用 `minimumFromField` 指向开始字段，Human native `min`、shared validation、machine catalog 与 WebMCP discovery 必须从同一 metadata 派生。不要在 `buildUrl` 静默排序、夹紧或改写反向区间；无效 range 应在 provider network 前 fail closed。
 - Numeric request normalization must distinguish a legitimate `0` from parse failure. Do not use falsy fallback patterns such as `parseInt(value) || fallback` when the field contract permits zero; validate discrete provider IDs with `select` options when the provider publishes an explicit finite method/code list.
 - 日期字段优先使用 native `date` control；Human/agent SSOT 使用 `YYYY-MM-DD`，若 provider 要求其他日期格式，只在 `buildUrl` 边界转换，并用 provider echo 的 Gregorian/reporting date 做 browser E2E，避免 HTTP 200 掩盖日期误解析。
+- New API checklist: prefer a declarative `request` spec in `apiCatalog.ts` when the URL, headers, body, and fixed parameter transforms fit the closed set documented in `docs/declarative-request-spec.md`. Derive `buildUrl`/`buildBody`/headers from that spec; do not duplicate request logic. Keep genuinely custom builders explicit with `{ declarative: false, reason }`, and preserve captured request-output parity plus HTTPS host allowlist tests.
 - 示例新增 API：
   1. 先在 `apiCatalog.ts` 增加定义。
   2. 在 `previewProfiles.ts` 加一条布局入口。
