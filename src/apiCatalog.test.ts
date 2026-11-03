@@ -406,7 +406,7 @@ describe('API catalog', () => {
   })
 
   it('includes the expanded recommendations without duplicating the five original providers', () => {
-    expect(apiCatalog).toHaveLength(196)
+    expect(apiCatalog).toHaveLength(200)
     expect(apiCatalog.filter((api) => api.id.startsWith('data-gov-'))).toHaveLength(14)
     expect(getApiById('ipify-public-ip')?.provider).toBe('ipify')
     expect(getApiById('usaspending')?.method).toBe('POST')
@@ -1977,9 +1977,9 @@ describe('API catalog', () => {
     const cadenceLimited = runnable.filter((api) => getAutomatedVerificationPolicy(api).mode === 'cadence-limited').map((api) => api.id).sort()
     const automatedVerificationEligible = runnable.filter((api) => getAutomatedVerificationPolicy(api).mode === 'enabled')
 
-    expect(apiCatalog).toHaveLength(196)
-    expect(runnable).toHaveLength(193)
-    expect(automatedVerificationEligible).toHaveLength(184)
+    expect(apiCatalog).toHaveLength(200)
+    expect(runnable).toHaveLength(197)
+    expect(automatedVerificationEligible).toHaveLength(188)
     expect(manualOnly).toEqual(['circl-vulnerability', 'internet-archive-search', 'languagetool-grammar-check'])
     expect(cadenceLimited).toEqual(['celestrak-satellites', 'launch-library-upcoming', 'nvd-cpe-search', 'nvd-cve-detail', 'nvd-cves', 'nvd-recent-cves', 'open-trivia', 'osrm-route', 'stack-exchange'])
 

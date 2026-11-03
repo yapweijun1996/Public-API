@@ -7,7 +7,7 @@ describe('machine-readable API catalog', () => {
     const catalog = buildMachineCatalog(apiCatalog, '/Public-API/')
     expect(catalog.schemaVersion).toBe(2)
     expect(catalog.contentHash).toMatch(/^[0-9a-f]{8}$/)
-    expect(catalog.catalogCount).toBe(196)
+    expect(catalog.catalogCount).toBe(200)
     expect(catalog.catalogPath).toBe('/Public-API/')
     expect(catalog.requestLabPattern).toBe('/Public-API/#/request-lab?api={api-id}')
     expect(catalog.health).toBe('not-included')

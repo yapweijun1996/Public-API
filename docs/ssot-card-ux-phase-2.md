@@ -2,7 +2,7 @@
 
 Status: **PR #10 production baseline plus local-only follow-up**. PR #10 was owner-merged on 2026-09-10 and the resulting `main` build was successfully deployed to GitHub Pages. Changes made after that merge remain local until a later explicit publication request. Builds on the Health-honesty and result-card-v2 changes from base `b85fcbaa17a5261989818ad3cd72fde852a1215a`.
 
-Current local candidate snapshot (2026-09-22): **196 catalog APIs / 193 structured-agent runnable / 184 automated-verification-eligible / 0 generic `DataTablePreview` routes / 0 active generic `MediaGalleryPreview` routes / 5 native WebMCP tools**. The latest deterministic product gate is recorded in the newest milestone below. Earlier entries preserve historical gate counts and blockers at the milestone where they were recorded. Use `npm run test:publish-readiness` for the bounded pre-publication gate. Live-provider verification remains scope-selected and policy-aware rather than one unconditional release command.
+Current local candidate snapshot (2026-11-03): **200 catalog APIs / 197 structured-agent runnable / 188 automated-verification-eligible / 0 generic `DataTablePreview` routes / 0 active generic `MediaGalleryPreview` routes / 5 native WebMCP tools**. Four keyless declarative macro-rate sources were added from live-verified Treasury Fiscal Data and ECB endpoints. The latest deterministic product gate is recorded in the newest milestone below. Earlier entries preserve historical gate counts and blockers at the milestone where they were recorded. Use `npm run test:publish-readiness` for the bounded pre-publication gate. Live-provider verification remains scope-selected and policy-aware rather than one unconditional release command.
 
 ## Goal and scope
 

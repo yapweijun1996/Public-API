@@ -3298,6 +3298,74 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
     buildUrl: ({ area = 'USA', startYear = '2025' }) => `https://sdmx.oecd.org/public/rest/v1/data/OECD.SDD.STES,DSD_STES@DF_CLI/${encode(area || 'USA').toUpperCase()}.M.LI...AA...H?${new URLSearchParams({ startPeriod: `${clampInt(startYear, 2000, 2100, 2025)}-01`, dimensionAtObservation: 'AllDimensions', format: 'jsondata' }).toString()}`,
   },
 ]
+const macroRateApis: ApiDemo[] = [
+  {
+    id: 'treasury-average-interest-rates', name: 'U.S. Treasury Average Interest Rates', provider: 'U.S. Treasury Fiscal Data', category: 'Finance',
+    description: 'Explore average interest rates on marketable and non-marketable U.S. Treasury securities.',
+    keywords: ['Treasury interest rates', 'federal borrowing cost', 'average debt rate'],
+    documentationUrl: 'https://fiscaldata.treasury.gov/datasets/average-interest-rates-treasury-securities/',
+    accent: '#1d4ed8', monogram: 'UST',
+    usageNote: 'Official Treasury Fiscal Data is public domain and available without authentication. Records are reported monthly; preserve record_date and security descriptions when comparing categories.',
+    fields: [{ id: 'count', label: 'Records', type: 'number', defaultValue: '12', min: 1, max: 100, step: 1, help: 'Return 1–100 most recently reported security-category observations.' }],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page%5Bsize%5D={count}&fields=record_date,security_type_desc,security_desc,avg_interest_rate_amt',
+      hosts: ['api.fiscaldata.treasury.gov'], headers: { Accept: 'application/json' },
+      transforms: { count: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'treasury-rates-of-exchange', name: 'U.S. Treasury Rates of Exchange', provider: 'U.S. Treasury Fiscal Data', category: 'Finance',
+    description: 'Compare Treasury-reported foreign-currency exchange rates by country and effective date.',
+    keywords: ['Treasury exchange rates', 'foreign exchange', 'fiscal rates'],
+    documentationUrl: 'https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-of-exchange/',
+    accent: '#0f766e', monogram: 'TFR',
+    usageNote: 'Official Treasury Fiscal Data is public domain and available without authentication. Reporting rates are published quarterly; they are not intraday market quotes.',
+    fields: [{ id: 'count', label: 'Records', type: 'number', defaultValue: '10', min: 1, max: 100, step: 1, help: 'Return 1–100 most recently reported country/currency observations.' }],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/rates_of_exchange?sort=-record_date&page%5Bsize%5D={count}&fields=record_date,country,currency,exchange_rate,effective_date',
+      hosts: ['api.fiscaldata.treasury.gov'], headers: { Accept: 'application/json' },
+      transforms: { count: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'treasury-debt-to-penny', name: 'U.S. Debt to the Penny', provider: 'U.S. Treasury Fiscal Data', category: 'Finance',
+    description: 'Track daily total public debt outstanding, debt held by the public, and intragovernmental holdings.',
+    keywords: ['U.S. national debt', 'public debt', 'debt ceiling', 'federal debt'],
+    documentationUrl: 'https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/',
+    accent: '#7c2d12', monogram: 'DEBT',
+    usageNote: 'Official Treasury Fiscal Data is public domain and available without authentication. Daily figures are point-in-time accounting totals, not forecasts or a measure of debt affordability.',
+    fields: [{ id: 'count', label: 'Daily records', type: 'number', defaultValue: '10', min: 1, max: 100, step: 1, help: 'Return 1–100 most recently reported daily debt observations.' }],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page%5Bsize%5D={count}&fields=record_date,debt_held_public_amt,intragov_hold_amt,tot_pub_debt_out_amt',
+      hosts: ['api.fiscaldata.treasury.gov'], headers: { Accept: 'application/json' },
+      transforms: { count: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'ecb-euro-reference-rates', name: 'ECB Euro Reference Rates', provider: 'European Central Bank', category: 'Finance',
+    description: 'Read recent daily ECB euro foreign-exchange reference rates for a selected currency.',
+    keywords: ['ECB exchange rate', 'euro reference rate', 'EUR FX', 'European Central Bank'],
+    documentationUrl: 'https://data.ecb.europa.eu/help/api/overview',
+    accent: '#003399', monogram: 'ECB',
+    usageNote: 'ECB Data Portal SDMX API is keyless and provides indicative reference rates, not transaction prices. The observation unit is foreign-currency units per euro; rates are normally published on working days.',
+    fields: [
+      { id: 'currency', label: 'Currency', type: 'select', defaultValue: 'USD', help: 'Choose an ECB daily euro reference-rate currency.', options: [
+        { label: 'U.S. dollar (USD)', value: 'USD' }, { label: 'British pound (GBP)', value: 'GBP' }, { label: 'Japanese yen (JPY)', value: 'JPY' }, { label: 'Singapore dollar (SGD)', value: 'SGD' },
+      ] },
+      { id: 'count', label: 'Observations', type: 'number', defaultValue: '10', min: 1, max: 100, step: 1, help: 'Return 1–100 of the latest daily observations.' },
+    ],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://data-api.ecb.europa.eu/service/data/EXR/D.{currency}.EUR.SP00.A?lastNObservations={count}&format=jsondata',
+      hosts: ['data-api.ecb.europa.eu'], headers: { Accept: 'application/vnd.sdmx.data+json;version=1.0.0-wd' },
+      transforms: { currency: 'uppercase', count: 'trim' }, responseTransform: 'json',
+    }),
+  },
+]
+
 
 export const apiCatalog: ApiDemo[] = [
   ...coreApis,
@@ -3311,6 +3379,7 @@ export const apiCatalog: ApiDemo[] = [
   ...verifiedFourthExpansionApis,
   ...publicApi200MilestoneApis,
   ...curatedFiveApiExpansionApis,
+  ...macroRateApis,
 ]
 
 for (const api of apiCatalog) {

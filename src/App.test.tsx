@@ -284,10 +284,10 @@ describe('catalog live API flow', () => {
       expect(screen.getByLabelText(`Page ${page} of 4`)).toBeInTheDocument()
       collectPage()
     }
-    expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(46)
+    expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(50)
     expect(screen.getByRole('button', { name: 'Next catalog page' })).toBeDisabled()
-    expect(seen.size).toBe(196)
-    expect(labels.size).toBe(196)
+    expect(seen.size).toBe(200)
+    expect(labels.size).toBe(200)
     fireEvent.change(screen.getByRole('textbox', { name: 'Search catalog' }), { target: { value: 'place name to coordinates' } })
     expect(screen.getByLabelText('Page 1 of 1')).toBeInTheDocument()
     expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(1)
@@ -694,7 +694,7 @@ describe('WebMCP discovery contract', () => {
       demos: Array<{ category: string; responseType: string; requestLabUrl: string; parameters: Array<{ id: string; min?: number; max?: number; options?: Array<{ label: string; value: string }> }> }>
     }
 
-    expect(result.total).toBe(196)
+    expect(result.total).toBe(200)
     expect(result.count).toBe(1)
     expect(result.category).toBe('People')
     expect(result.demos[0]?.category).toBe('People')
@@ -1017,7 +1017,7 @@ describe('demo preview mapping', () => {
   it('registers every catalog API in the fail-closed SSOT card registry', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     expect([...apiSsotCardIds].sort()).toEqual(catalogIds)
-    expect(apiSsotCardIds).toHaveLength(196)
+    expect(apiSsotCardIds).toHaveLength(200)
     for (const id of catalogIds) {
       const definition = apiSsotCardRegistry[id]
       expect(definition, `Missing SSOT card ${id}`).toBeDefined()
@@ -1034,9 +1034,9 @@ describe('demo preview mapping', () => {
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(196)
-    expect(new Set(components).size).toBe(196)
-    expect(new Set(components.map((component) => component.name)).size).toBe(196)
+    expect(components).toHaveLength(200)
+    expect(new Set(components).size).toBe(200)
+    expect(new Set(components.map((component) => component.name)).size).toBe(200)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -1057,7 +1057,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(196)
+    expect(new Set(visualSignatures).size).toBe(200)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 

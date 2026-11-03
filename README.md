@@ -6,7 +6,7 @@ A reusable Vite + React + TypeScript admin console for demonstrating public APIs
 
 ## What is included
 
-- A curated catalog of 196 keyless public API demos
+- A curated catalog of 200 keyless public API demos
 - Generated parameter forms with validation
 - Preview-first Request Lab with one live-response SSOT card for every catalog API
 - JSON APIs retain Raw JSON as a secondary developer view; non-JSON APIs expose accurately labelled response details, and generated fetch code is available where provider policy permits reusable integration code

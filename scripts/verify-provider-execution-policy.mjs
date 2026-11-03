@@ -32,7 +32,7 @@ try {
   assert(nativeRunTool);
   const nativeRunSchema = typeof nativeRunTool.inputSchema === 'string' ? JSON.parse(nativeRunTool.inputSchema) : nativeRunTool.inputSchema;
   const nativeRunIds = nativeRunSchema?.properties?.id?.enum ?? [];
-  assert.equal(nativeRunIds.length, 193);
+  assert.equal(nativeRunIds.length, 197);
   assert(!nativeRunIds.includes('languagetool-grammar-check'));
   assert(!nativeRunIds.includes('nominatim-search'));
   assert(!nativeRunIds.includes('circl-vulnerability'));
@@ -90,12 +90,12 @@ try {
       await b.wait(`document.querySelector('.table-footer')?.dataset.catalogPage === ${JSON.stringify(String(page + 1))}`);
     }
   }
-  assert.equal(catalogDocumentationLinks.length, 196);
-  assert.equal(new Set(catalogDocumentationLinks.map((link) => link.id)).size, 196);
-  assert.equal(new Set(catalogDocumentationLinks.map((link) => link.label)).size, 196);
+  assert.equal(catalogDocumentationLinks.length, 200);
+  assert.equal(new Set(catalogDocumentationLinks.map((link) => link.id)).size, 200);
+  assert.equal(new Set(catalogDocumentationLinks.map((link) => link.label)).size, 200);
   assert.deepEqual(catalogDocumentationLinks.find((link) => link.id === 'countries'), { id: 'countries', label: 'Open Country Explorer documentation' });
   assert.equal(await b.ev(`document.querySelectorAll('tbody tr[data-api-id]').length`), catalogDocumentationLinks.length % 50 || 50);
-  report.checks.push({ catalogPagination: 'PASS', pageSize: 50, pages: 4, exactCoverage: 196, catalogDocumentationAccessibleNames: 'PASS', uniqueNames: 196 });
+  report.checks.push({ catalogPagination: 'PASS', pageSize: 50, pages: 4, exactCoverage: 200, catalogDocumentationAccessibleNames: 'PASS', uniqueNames: 200 });
 
   const discoveryResult = await executeNativeTool('list_public_api_demos', { query: 'LanguageTool', category: 'Language' });
   assert.equal(discoveryResult.ok, true, discoveryResult.message);
@@ -168,9 +168,9 @@ try {
   assert.match(machineResponse.contentType, /application\/json/i);
   assert.equal(machineResponse.body.schemaVersion, 2);
   assert.match(machineResponse.body.contentHash, /^[0-9a-f]{8}$/);
-  assert.equal(machineResponse.body.catalogCount, 196);
+  assert.equal(machineResponse.body.catalogCount, 200);
   assert.equal(machineResponse.body.health, 'not-included');
-  assert.equal(machineResponse.body.apis.length, 196);
+  assert.equal(machineResponse.body.apis.length, 200);
   assert(!machineResponse.body.apis.some((api) => api.id === 'musicbrainz-artist-search'));
   assert(!machineResponse.body.apis.some((api) => api.id === 'yahoo-finance-sgx-history'));
   assert(!machineResponse.body.apis.some((api) => api.id === 'gutendex-books'));
@@ -762,7 +762,7 @@ try {
   assert(!runIds.includes('crates-io-search'));
   assert(!runIds.includes('nws-weather'));
   assert(runIds.includes('color-api'));
-  assert.equal(runIds.length, 193);
+  assert.equal(runIds.length, 197);
   const openIds = getNativeToolSchema('open_public_api_demo').properties.id.enum;
   const removedIds = ['musicbrainz-artist-search', 'yahoo-finance-sgx-history', 'gutendex-books', 'crates-io-search', 'nws-weather', 'europe-pmc-search', 'zenodo-search', 'nominatim-search'];
   for (const removedId of removedIds) assert(!openIds.includes(removedId));
@@ -785,7 +785,7 @@ try {
     .map((api) => api.id)
     .sort();
   assert.deepEqual([...runIds].sort(), machineRunnableIds);
-  assert.equal(machineAutomatedVerificationEligibleIds.length, 184);
+  assert.equal(machineAutomatedVerificationEligibleIds.length, 188);
   assert.deepEqual(machineCadenceLimitedIds, ['celestrak-satellites', 'launch-library-upcoming', 'nvd-cpe-search', 'nvd-cve-detail', 'nvd-cves', 'nvd-recent-cves', 'open-trivia', 'osrm-route', 'stack-exchange']);
   report.checks.push({ machineCatalog: 'PASS', count: machineResponse.body.catalogCount, health: machineResponse.body.health, headDiscovery: 'PASS', domDiscovery: 'PASS', runnablePolicyAligned: true, automatedVerificationEligible: machineAutomatedVerificationEligibleIds.length, cadenceLimited: machineCadenceLimitedIds, textLengthContract: 'PASS', dateContract: 'PASS' });
   report.checks.push({ discovery: 'PASS', runnableIds: runIds.length, languageTool: 'manual-only', nominatim: 'removed-policy-admission', geocoding: 'open-meteo-enabled', circl: 'manual-only-contact-bearing-user-agent-required', celestrakVerification: 'cadence-limited', launchLibraryVerification: 'cadence-limited-240-seconds', nvdVerification: 'cadence-limited-6-seconds', openAlexRateLimitRetry: 'deferred', wikidataRateLimitRetry: 'deferred', lichessRateLimitRetry: 'deferred', githubRateLimitStatuses: [403, 429], githubRateLimitRetry: 'deferred', cityBikes: 'enabled-with-usage-note', geoBoundariesTextLength: '3 letters / ISO alpha-3 or ALL', colorHexPattern: '3 or 6 hex digits with optional #', uniprotAccessionPattern: 'official 6/10-character UniProtKB accession syntax', pdbEntryPattern: '4-character ID or transitional pdb_0000XXXX alias; future extended-only IDs blocked pending 2027 cutover', cveIdPattern: 'CVE-YYYY-NNNN with 4+ sequence digits', openMeteoSeasonalContract: 'forecastDays 1..46 with calendar-aligned weekly buckets', openMeteoClimateModels: '7 current documented HighResMIP models', aladhanDateType: 'date', aladhanMethodContract: 'built-in select incl. 0, excluding custom 99', bankOfCanadaDateType: 'date', historicalWeatherDateType: 'date', nasaPowerDateType: 'date', frankfurterDateType: 'date', mlbDateType: 'date', brasilCepPattern: '8 digits with optional standard hyphen', isoCountryCodePatterns: 'World Bank alpha-2/alpha-3; UNHCR alpha-3; Apple/Zippopotam alpha-2', usaspendingParameters: 'fiscalYear+limit' });

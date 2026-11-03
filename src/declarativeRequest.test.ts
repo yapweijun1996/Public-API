@@ -319,8 +319,11 @@ describe('declarative request interpreter', () => {
       ['launch-library-upcoming', { query: 'Artemis II', limit: '6' }, 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search=Artemis+II&limit=6&ordering=net'],
       ['opendota-pro-matches', {}, 'https://api.opendota.com/api/proMatches'],
       ['where-the-iss-at', {}, 'https://api.wheretheiss.at/v1/satellites/25544'],
-      ['countries', { code: 'us' }, 'https://api.worldbank.org/v2/country/US?format=json'],
-    ] as const
+      ['treasury-average-interest-rates', { count: '12' }, 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page%5Bsize%5D=12&fields=record_date,security_type_desc,security_desc,avg_interest_rate_amt'],
+      ['treasury-rates-of-exchange', { count: '10' }, 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/rates_of_exchange?sort=-record_date&page%5Bsize%5D=10&fields=record_date,country,currency,exchange_rate,effective_date'],
+      ['treasury-debt-to-penny', { count: '10' }, 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page%5Bsize%5D=10&fields=record_date,debt_held_public_amt,intragov_hold_amt,tot_pub_debt_out_amt'],
+      ['ecb-euro-reference-rates', { currency: 'USD', count: '10' }, 'https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?lastNObservations=10&format=jsondata'],
+] as const
     for (const [id, params, captured] of cases) {
       const api = getApiById(id)
       if (!api || api.request?.declarative !== true) throw new Error(`${id} must use a declarative request.`)
@@ -329,6 +332,25 @@ describe('declarative request interpreter', () => {
       expect(request.url).toBe(captured)
       expect(api.request.hosts).toContain(new URL(captured).host)
     }
+  })
+  it('declares keyless JSON transport and bounded defaults for macro-rate sources', () => {
+    const ids = [
+      'treasury-average-interest-rates',
+      'treasury-rates-of-exchange',
+      'treasury-debt-to-penny',
+      'ecb-euro-reference-rates',
+    ]
+    for (const id of ids) {
+      const api = getApiById(id)
+      if (!api || api.request?.declarative !== true) throw new Error(`${id} must use a declarative request.`)
+      const request = buildRequestFromSpec(api.request, getDefaultParameters(api))
+      expect(request.method).toBe('GET')
+      expect(request.headers.Accept).toMatch(/json/i)
+      expect(new URL(request.url).protocol).toBe('https:')
+      expect(api.fields.every((field) => field.defaultValue !== '')).toBe(true)
+    }
+    const ecb = getApiById('ecb-euro-reference-rates')
+    expect(ecb?.fields.find(({ id }) => id === 'currency')?.options?.map(({ value }) => value)).toEqual(['USD', 'GBP', 'JPY', 'SGD'])
   })
   it('preserves captured Bank of Canada default and date-range request outputs', () => {
     const api = getApiById('bank-of-canada-valet')
