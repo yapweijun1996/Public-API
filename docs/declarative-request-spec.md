@@ -29,6 +29,10 @@ Body templates are JSON values; string values may contain `{parameterId}` slots.
 - `{ map: { input: output } }`: explicit finite value mapping; unmapped values remain unavailable to a map expression.
 - `omitIfEmpty`: omit an empty query value.
 - `{ join: separator }`: join a comma-delimited parameter with a fixed separator.
+- `omitIfEquals:<value>`: omit the parameter only when its value exactly matches the literal suffix.
+- `default:<value>`: substitute the literal suffix only for an empty input.
+- `clamp:<min>:<max>`: clamp a finite numeric input to inclusive bounds; leave non-numeric input unchanged.
+- `replace:' ':'_'`: replace literal ASCII spaces with underscores, without broader normalization.
 
 Do not add open-ended expression languages, callbacks, arbitrary regular expressions, or API-specific branches to this interpreter. If provider semantics need clamping, conditional endpoint selection, validation-dependent fallback, computed date windows, non-JSON request encoding, or another operation outside this set, retain a custom builder and explain why it is non-declarative.
 

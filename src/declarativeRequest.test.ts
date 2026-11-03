@@ -44,6 +44,42 @@ describe('declarative request interpreter', () => {
     }
     expect(buildRequestFromSpec(spec, { query: '  climate change  ' }).url).toBe('https://example.test/search?query=climate%20change')
   })
+  it('applies literal defaults, equality omission, bounded numeric clamps, and space replacement', () => {
+    const spec: DeclarativeRequestSpec = {
+      declarative: true,
+      method: 'GET',
+      urlTemplate: 'https://example.test/items{?category,count,query}',
+      hosts: ['example.test'],
+      transforms: {
+        category: 'omitIfEquals:all',
+        count: 'clamp:1:10',
+        query: "replace:' ':'_'",
+      },
+      responseTransform: 'json',
+    }
+    expect(buildRequestFromSpec(spec, { category: 'all', count: '99', query: 'Singapore skyline' }).url)
+      .toBe('https://example.test/items?count=10&query=Singapore_skyline')
+    expect(buildRequestFromSpec(spec, { category: 'science', count: '-4', query: '' }).url)
+      .toBe('https://example.test/items?category=science&count=1&query=')
+    const defaultSpec: DeclarativeRequestSpec = {
+      ...spec,
+      urlTemplate: 'https://example.test/items{?query}',
+      transforms: { query: 'default:Singapore' },
+    }
+    expect(buildRequestFromSpec(defaultSpec, { query: '' }).url).toBe('https://example.test/items?query=Singapore')
+  })
+  it('preserves captured NASA EONET defaults, category omission, trimming, and selected categories', () => {
+    const api = getApiById('nasa-eonet-events')
+    if (!api || api.request?.declarative !== true) throw new Error('NASA EONET must use a declarative request.')
+    const cases = [
+      [{}, 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=30&limit=6'],
+      [{ category: 'wildfires', days: ' 90 ', limit: ' 10 ' }, 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=90&limit=10&category=wildfires'],
+    ] as const
+    for (const [params, expected] of cases) {
+      expect(api.buildUrl(params)).toBe(expected)
+      expect(buildRequestFromSpec(api.request, { status: 'open', days: '30', limit: '6', category: 'all', ...params }).url).toBe(expected)
+    }
+  })
 
   it('preserves captured Nager request outputs for default, enum, and representative inputs', () => {
     const api = getApiById('holidays')

@@ -491,6 +491,14 @@ const daysAgo = (days: number) => {
   return date
 }
 
+const eonetRequest: DeclarativeRequestSpec = {
+  declarative: true, method: 'GET',
+  urlTemplate: 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open{&days,limit,category}',
+  hosts: ['eonet.gsfc.nasa.gov'],
+  transforms: { category: 'omitIfEquals:all', days: 'trim', limit: 'trim' },
+  responseTransform: 'json',
+}
+
 const additionalInteractiveApis: ApiDemo[] = [
   {
     id: 'geocoding-search', name: 'Global Geocoding', provider: 'Open-Meteo', category: 'Geo',
@@ -547,12 +555,10 @@ const additionalInteractiveApis: ApiDemo[] = [
       { id: 'days', label: 'Recent days', type: 'number', defaultValue: '30', min: 1, max: 365, step: 1, help: 'Look back between 1 and 365 days.' },
       limitField({ label: 'Events', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 active events.' }),
     ],
-    request: { declarative: false, reason: "Omits the category query parameter when category is 'all'; the closed template cannot conditionally remove one query key based on an enum value." },
-    buildUrl: ({ category = 'all', days = '30', limit = '6' }) => {
-      const query = new URLSearchParams({ status: 'open', days: days.trim(), limit: limit.trim() })
-      if (category !== 'all') query.set('category', category)
-      return `https://eonet.gsfc.nasa.gov/api/v3/events?${query.toString()}`
-    },
+    request: eonetRequest,
+    buildUrl: (parameters) => buildRequestFromSpec(eonetRequest, {
+      status: 'open', days: '30', limit: '6', category: 'all', ...parameters,
+    }).url,
   },
   {
     id: 'mbta-transit-routes', name: 'MBTA Transit Routes', provider: 'MBTA', category: 'Utility',

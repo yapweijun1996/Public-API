@@ -5,10 +5,13 @@ export type RequestTransform =
   | 'form'
   | 'date:YYYYMMDD'
   | 'date:YYYY-MM'
+  | `omitIfEquals:${string}`
+  | `default:${string}`
+  | `clamp:${number}:${number}`
+  | `replace:' ':'_'`
   | { map: Record<string, string> }
   | 'omitIfEmpty'
   | { join: string }
-
 export type DeclarativeRequestSpec = {
   declarative: true
   method: 'GET' | 'POST'
@@ -23,15 +26,25 @@ export type DeclarativeRequestSpec = {
 export type NonDeclarativeRequest = { declarative: false; reason: string }
 export type BuiltRequest = { method: 'GET' | 'POST'; url: string; headers: Record<string, string>; body?: unknown }
 const transformValue = (value: string, transform: RequestTransform): string | undefined => {
+  if (typeof transform !== 'string') {
+    if ('map' in transform) return transform.map[value]
+    return value.split(',').join(transform.join)
+  }
   if (transform === 'omitIfEmpty') return value === '' ? undefined : value
+  if (transform.startsWith('omitIfEquals:')) return value === transform.slice('omitIfEquals:'.length) ? undefined : value
+  if (transform.startsWith('default:')) return value === '' ? transform.slice('default:'.length) : value
+  if (transform.startsWith('clamp:')) {
+    const [, minimum, maximum] = transform.split(':')
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return value
+    return String(Math.min(Number(maximum), Math.max(Number(minimum), numeric)))
+  }
+  if (transform === "replace:' ':'_'") return value.replaceAll(' ', '_')
   if (transform === 'uppercase') return value.toUpperCase()
   if (transform === 'lowercase') return value.toLowerCase()
-  if (transform === 'trim') return value.trim()
-  if (transform === 'form') return value.trim()
+  if (transform === 'trim' || transform === 'form') return value.trim()
   if (transform === 'date:YYYYMMDD') return value.replaceAll('-', '')
   if (transform === 'date:YYYY-MM') return value.slice(0, 7)
-  if (typeof transform === 'object' && 'map' in transform) return transform.map[value]
-  if (typeof transform === 'object' && 'join' in transform) return value.split(',').join(transform.join)
   return value
 }
 
