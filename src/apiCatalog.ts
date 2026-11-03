@@ -274,6 +274,10 @@ const holidayRequestSpec: DeclarativeRequestSpec = {
   transforms: { country: 'uppercase' },
   responseTransform: 'json',
 }
+const declarativeRequest = (request: DeclarativeRequestSpec) => ({
+  request,
+  buildUrl: (parameters: Record<string, string>) => buildRequestFromSpec(request, parameters).url,
+})
 const coreApis: ApiDemo[] = [
   {
     id: 'countries',
@@ -298,8 +302,10 @@ const coreApis: ApiDemo[] = [
         help: 'Use an ISO 3166-1 alpha-2 or alpha-3 country code such as SG or SGP.',
       },
     ],
-    buildUrl: ({ code = 'SGP' }) =>
-      `https://api.worldbank.org/v2/country/${encode((code || 'SGP').toUpperCase())}?format=json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.worldbank.org/v2/country/{code}?format=json', hosts: ['api.worldbank.org'],
+      transforms: { code: 'uppercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'weather',
@@ -470,10 +476,6 @@ const fixedApi = ({ endpoint, ...api }: FixedApi): ApiDemo => {
   }
 }
 
-const declarativeRequest = (request: DeclarativeRequestSpec) => ({
-  request,
-  buildUrl: (parameters: Record<string, string>) => buildRequestFromSpec(request, parameters).url,
-})
 
 const localNow = new Date()
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -893,6 +895,7 @@ const importedRecommendedApis: ApiDemo[] = [
       numberField('fiscalYear', { label: 'Federal fiscal year', defaultValue: String(defaultFederalFiscalYear), min: 2008, max: currentFederalFiscalYear, step: 1, help: 'Choose FY2008 through the current federal fiscal year. The request uses new_awards_only, so the award’s base transaction date must fall between October 1 and September 30.' }),
       limitField({ label: 'Awards', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 new prime contract awards for the selected federal fiscal year.' }),
     ],
+    request: { declarative: false, reason: 'POST body validates fiscalYear and limit, then derives the October–September award date period from fiscalYear; the closed JSON template cannot compute that two-field date window.' },
     buildUrl: () => 'https://api.usaspending.gov/api/v2/search/spending_by_award/',
     buildBody: ({ fiscalYear = String(defaultFederalFiscalYear), limit = '8' }) => {
       const safeFiscalYear = strictBoundedInteger(fiscalYear, 2008, currentFederalFiscalYear, 'Federal fiscal year')
@@ -964,6 +967,7 @@ const importedRecommendedApis: ApiDemo[] = [
       { id: 'to', label: 'End date', type: 'date', defaultValue: today, minimumFromField: 'from', help: 'Use an ISO date in YYYY-MM-DD format on or after the start date, up to today.' },
       { id: 'group', label: 'Grouping', type: 'select', defaultValue: 'month', help: 'Monthly grouping keeps the long history compact.', options: [{ label: 'Monthly', value: 'month' }, { label: 'Weekly', value: 'week' }] },
     ],
+    request: { declarative: false, reason: 'Validates calendar dates and falls back to 1999-01-04 or the current date when either date is invalid; the closed transforms cannot validate dates or compute the current-date fallback.' },
     buildUrl: ({ from = '1999-01-04', to = today, group = 'month' }) => {
       const safeFrom = isIsoCalendarDate(from.trim()) ? from.trim() : '1999-01-04'
       const safeTo = isIsoCalendarDate(to.trim()) ? to.trim() : today
@@ -1738,7 +1742,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'coin', label: 'Cryptocurrency', type: 'select', defaultValue: 'bitcoin', help: 'Choose one CoinGecko asset identifier.', options: [{ label: 'Bitcoin', value: 'bitcoin' }, { label: 'Ethereum', value: 'ethereum' }, { label: 'Solana', value: 'solana' }, { label: 'Dogecoin', value: 'dogecoin' }] },
       { id: 'currency', label: 'Quote currency', type: 'select', defaultValue: 'usd', help: 'Choose a supported quote currency.', options: [{ label: 'USD', value: 'usd' }, { label: 'SGD', value: 'sgd' }, { label: 'EUR', value: 'eur' }] },
     ],
-    buildUrl: ({ coin = 'bitcoin', currency = 'usd' }) => `https://api.coingecko.com/api/v3/simple/price?${new URLSearchParams({ ids: coin || 'bitcoin', vs_currencies: currency || 'usd', include_market_cap: 'true', include_24hr_vol: 'true', include_24hr_change: 'true', include_last_updated_at: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies={currency}&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true', hosts: ['api.coingecko.com'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'swapi-people', name: 'Star Wars People', provider: 'SWAPI', category: 'Entertainment',
@@ -1920,6 +1927,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Member name', defaultValue: 'Rishi', placeholder: 'e.g. Rishi', help: 'Match current Commons or Lords members whose name contains this text.' }),
       limitField({ label: 'Members', defaultValue: '10', min: 1, max: 20, help: 'Return between 1 and 20 members. The provider calls this parameter take and caps it at 20.' }),
     ],
+    request: { declarative: false, reason: 'Clamps limit to an integer from 1–20 and falls back to Rishi for an empty query; the closed transforms cannot clamp or conditionally substitute.' },
     buildUrl: ({ query = 'Rishi', limit = '10' }) => {
       const safeLimit = clampInt(limit, 1, 20, 10)
       return `https://members-api.parliament.uk/api/Members/Search?${new URLSearchParams({
@@ -2249,6 +2257,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.fema.gov/about/openfema/disaster-declarations-summaries', accent: '#1a4480', monogram: 'FEMA',
     usageNote: 'DisasterDeclarationsSummaries is area-level: one federal declaration can appear in many rows, one per designated geographic area. OpenFEMA describes the source as raw NEMIS data that may contain a small percentage of human error.',
     fields: [{ id: 'limit', label: 'Declared-area rows', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 recent designated-area records; repeated disaster IDs are expected.' }],
+    request: { declarative: false, reason: 'Clamps the requested limit to 1–10 and uses 5 for invalid or zero input; the closed transforms cannot clamp integers or apply numeric fallbacks.' },
     buildUrl: ({ limit = '5' }) => {
       const safeLimit = Math.min(10, Math.max(1, Number.parseInt(limit, 10) || 5))
       return `https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?${new URLSearchParams({ '$top': String(safeLimit), '$orderby': 'declarationDate desc' }).toString()}`
@@ -2543,6 +2552,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'bankName', label: 'Bank name', type: 'text', defaultValue: 'Wells Fargo', placeholder: 'e.g. Wells Fargo', minLength: 1, help: 'Search FDIC bank metadata by public institution name.' },
       { id: 'count', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 institutions.' },
     ],
+    request: { declarative: false, reason: 'Builds the provider search expression by prefixing NAME: and uppercasing the bank name before query encoding; the closed transforms cannot compose a prefix with casing.' },
     buildUrl: ({ bankName = 'Wells Fargo', count = '6' }) => {
       const normalizedBankName = bankName.trim().toUpperCase()
       return `https://api.fdic.gov/banks/institutions?${new URLSearchParams({
@@ -2608,6 +2618,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'origin', label: 'Origin country ISO3', type: 'text', defaultValue: 'SYR', placeholder: 'e.g. SYR', minLength: 3, maxLength: 3, pattern: '[A-Za-z]{3}', patternDescription: 'must contain exactly three letters for an ISO 3166-1 alpha-3 country code.', help: 'Use exactly three ISO 3166-1 alpha-3 letters such as SYR; cf_type=ISO makes UNHCR interpret this field as ISO3.' },
       { id: 'year', label: 'Year', type: 'number', defaultValue: '2025', min: 2010, max: 2025, help: 'Choose a published annual end-of-year snapshot from 2010 through 2025.' },
     ],
+    request: { declarative: false, reason: 'Clamps year to 2010–2025, duplicates it into yearFrom/yearTo, and uppercases the ISO3 origin; the closed transforms cannot clamp or reuse one transformed value across distinct query keys.' },
     buildUrl: ({ origin = 'SYR', year = '2025' }) => {
       const safeYear = Math.min(2025, Math.max(2010, Number.parseInt(year, 10) || 2025))
       return `https://api.unhcr.org/population/v1/population/?${new URLSearchParams({ yearFrom: String(safeYear), yearTo: String(safeYear), coo: (origin.trim() || 'SYR').toUpperCase(), cf_type: 'ISO', limit: '1' }).toString()}`
@@ -2687,6 +2698,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'base', label: 'Base currency', type: 'text', defaultValue: 'EUR', placeholder: 'e.g. EUR', minLength: 3, maxLength: 3, pattern: '[A-Za-z]{3}', patternDescription: 'must be a three-letter currency code.', help: 'Use a supported three-letter currency code such as EUR, USD, or SGD.' },
       { id: 'symbols', label: 'Target currencies', type: 'text', defaultValue: 'USD,SGD,GBP', placeholder: 'e.g. USD,SGD,GBP', minLength: 3, pattern: '[A-Za-z]{3}(?:\\s*,\\s*[A-Za-z]{3})*', patternDescription: 'must be a comma-separated list of three-letter currency codes.', help: 'Comma-separate supported three-letter currency codes. VATComply filters the response to those currencies.' },
     ],
+    request: { declarative: false, reason: 'Splits the comma-delimited symbols, trims and uppercases each symbol independently, then rejoins them; the closed transforms cannot compose per-token casing and trimming.' },
     buildUrl: ({ base = 'EUR', symbols = 'USD,SGD,GBP' }) => {
       const normalizedBase = base.trim().toUpperCase() || 'EUR'
       const normalizedSymbols = symbols.split(',').map((symbol) => symbol.trim().toUpperCase()).join(',') || 'USD,SGD,GBP'
@@ -2906,6 +2918,7 @@ const publicApi200MilestoneApis: ApiDemo[] = [
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 matching publications.' }),
     ],
     headers: { Accept: 'application/sparql-results+json' },
+    request: { declarative: false, reason: 'Constructs SPARQL with a safely escaped query literal and interpolated row limit, then URL-encodes the complete query; this is structured query generation, not a closed template substitution.' },
     buildUrl: ({ query = 'large language models', limit = '6' }) => {
       const queryText = query.trim()
       const requestedLimit = limit.trim()
@@ -3122,6 +3135,7 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       ] },
       numberField('startYear', { label: 'Start year', defaultValue: '2025', min: 2000, max: 2100, help: 'Beginning year for the monthly CLI series.' }),
     ],
+    request: { declarative: false, reason: 'Clamps startYear to 2000–2100 and formats it as YYYY-01 in startPeriod; the closed transforms cannot clamp integers or append a derived suffix.' },
     buildUrl: ({ area = 'USA', startYear = '2025' }) => `https://sdmx.oecd.org/public/rest/v1/data/OECD.SDD.STES,DSD_STES@DF_CLI/${encode(area || 'USA').toUpperCase()}.M.LI...AA...H?${new URLSearchParams({ startPeriod: `${clampInt(startYear, 2000, 2100, 2025)}-01`, dimensionAtObservation: 'AllDimensions', format: 'jsondata' }).toString()}`,
   },
 ]

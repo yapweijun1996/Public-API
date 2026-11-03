@@ -23,8 +23,9 @@ describe('machine-readable API catalog', () => {
       hosts: ['nagerholidays.com'],
     })
     expect(catalog.apis.find((api) => api.id === 'countries')?.request).toMatchObject({
-      declarative: false,
-      reason: expect.any(String),
+      declarative: true,
+      method: 'GET',
+      hosts: ['api.worldbank.org'],
     })
   })
 

@@ -120,6 +120,10 @@ describe('declarative request interpreter', () => {
       ['crossref-works', { query: 'climate adaptation', rows: '12' }, 'https://api.crossref.org/v1/works?query=climate+adaptation&rows=12&select=DOI%2Ctitle%2Cauthor%2Cpublished%2Cpublisher%2Cis-referenced-by-count%2Ctype%2CURL'],
       ['opencitations-index', { doi: '10.1109/5.771073' }, 'https://api.opencitations.net/index/v2/citation-count/doi:10.1109%2F5.771073'],
       ['opencitations-index', { doi: '10.1000/xyz123' }, 'https://api.opencitations.net/index/v2/citation-count/doi:10.1000%2Fxyz123'],
+      ['coingecko-keyless-market', { coin: 'bitcoin', currency: 'usd' }, 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true'],
+      ['coingecko-keyless-market', { coin: 'dogecoin', currency: 'eur' }, 'https://api.coingecko.com/api/v3/simple/price?ids=dogecoin&vs_currencies=eur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true'],
+      ['countries', { code: 'SGP' }, 'https://api.worldbank.org/v2/country/SGP?format=json'],
+      ['countries', { code: 'us' }, 'https://api.worldbank.org/v2/country/US?format=json'],
     ] as const
     for (const [id, params, captured] of cases) {
       const api = getApiById(id)
