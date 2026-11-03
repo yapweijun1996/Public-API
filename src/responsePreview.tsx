@@ -471,6 +471,10 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'treasury-rates-of-exchange': defineApiPreview('treasury-rates-of-exchange', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
   'treasury-debt-to-penny': defineApiPreview('treasury-debt-to-penny', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
   'ecb-euro-reference-rates': defineApiPreview('ecb-euro-reference-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-overnight-policy-rate': defineApiPreview('bnm-overnight-policy-rate', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-exchange-rates': defineApiPreview('bnm-exchange-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-interbank-interest-rates': defineApiPreview('bnm-interbank-interest-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'treasury-daily-yield-curve': defineApiPreview('treasury-daily-yield-curve', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)

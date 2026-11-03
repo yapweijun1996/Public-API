@@ -3364,7 +3364,77 @@ const macroRateApis: ApiDemo[] = [
       transforms: { currency: 'uppercase', count: 'trim' }, responseTransform: 'json',
     }),
   },
+  {
+    id: 'treasury-daily-yield-curve', name: 'U.S. Treasury Daily Par Yield Curve', provider: 'U.S. Treasury', category: 'Finance',
+    description: 'Read official daily par yields for U.S. Treasury securities across standard maturities.',
+    keywords: ['Treasury yield curve', 'U.S. bond yields', 'par rates', 'interest rate curve'],
+    documentationUrl: 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates',
+    accent: '#1e40af', monogram: 'YLD',
+    usageNote: 'Keyless Treasury XML feed. The response is provider XML exposed as text; preserve its report date and maturity labels. Par yields are not executable bond prices or forecasts.',
+    responseType: 'text',
+    responseContentTypes: ['application/xml', 'text/xml'],
+    parseResponse: (text) => ({ xml: text }),
+    fields: [{ id: 'year', label: 'Reporting year', type: 'number', defaultValue: '2026', min: 1990, max: 2100, step: 1, help: 'Select a year from 1990 through 2100.' }],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value={year}',
+      hosts: ['home.treasury.gov'], headers: { Accept: 'application/xml' }, transforms: { year: 'trim' }, responseTransform: 'text',
+    }),
+  },
 ]
+const bnmMacroApis: ApiDemo[] = [
+  {
+    id: 'bnm-overnight-policy-rate', name: 'Malaysia Overnight Policy Rate', provider: 'Bank Negara Malaysia', category: 'Finance',
+    description: 'Read Bank Negara Malaysia’s latest Monetary Policy Committee overnight policy rate decision.',
+    keywords: ['Malaysia OPR', 'Bank Negara policy rate', 'Malaysian central bank rate'],
+    documentationUrl: 'https://apikijangportal.bnm.gov.my/openapi',
+    accent: '#0b6b4f', monogram: 'OPR',
+    usageNote: 'Keyless BNM API requires Accept: application/vnd.BNM.API.v1+json. The provider disclaims the accuracy and timeliness of its data; retain the returned decision date and last-updated timestamp.',
+    fields: [],
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.bnm.gov.my/public/opr',
+      hosts: ['api.bnm.gov.my'], headers: { Accept: 'application/vnd.BNM.API.v1+json' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'bnm-exchange-rates', name: 'Malaysia Daily Exchange Rates', provider: 'Bank Negara Malaysia', category: 'Finance',
+    description: 'Compare BNM daily interbank foreign-exchange reference rates across selected currency quote and snapshot.',
+    keywords: ['Malaysia exchange rates', 'MYR FX', 'ringgit currency rates'],
+    documentationUrl: 'https://apikijangportal.bnm.gov.my/openapi',
+    accent: '#0f766e', monogram: 'BNX',
+    usageNote: 'Keyless BNM API requires Accept: application/vnd.BNM.API.v1+json. Rates are provider snapshots (09:00, 11:30, 12:00, or 17:00), not executable trade quotes; retain the date, quote basis, session, and update time.',
+    fields: [
+      { id: 'session', label: 'Snapshot time', type: 'select', defaultValue: '1130', help: 'Select one of the provider’s daily publication snapshots.', options: [
+        { label: '09:00', value: '0900' }, { label: '11:30', value: '1130' }, { label: '12:00', value: '1200' }, { label: '17:00', value: '1700' },
+      ] },
+      { id: 'quote', label: 'Quote basis', type: 'select', defaultValue: 'rm', help: 'Choose ringgit (rm) or foreign currency (fx) as the quote basis.', options: [
+        { label: 'Malaysian ringgit (RM)', value: 'rm' }, { label: 'Foreign currency (FX)', value: 'fx' },
+      ] },
+    ],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://api.bnm.gov.my/public/exchange-rate?session={session}&quote={quote}',
+      hosts: ['api.bnm.gov.my'], headers: { Accept: 'application/vnd.BNM.API.v1+json' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'bnm-interbank-interest-rates', name: 'Malaysia Interbank Interest Rates', provider: 'Bank Negara Malaysia', category: 'Finance',
+    description: 'Read daily Malaysian money-market and interbank interest rates by published product selection.',
+    keywords: ['Malaysia interbank rate', 'KL money market rate', 'Malaysian interest rates'],
+    documentationUrl: 'https://apikijangportal.bnm.gov.my/openapi',
+    accent: '#6d28d9', monogram: 'IBR',
+    usageNote: 'Keyless BNM API requires Accept: application/vnd.BNM.API.v1+json. Rate availability varies by tenor; provider nulls mean no published observation, not zero. Retain the returned date and last-updated timestamp.',
+    fields: [{ id: 'product', label: 'Rate group', type: 'select', defaultValue: 'interbank', help: 'Choose the provider-defined interest-rate product group.', options: [
+      { label: 'Money market operations', value: 'money_market_operations' }, { label: 'Interbank', value: 'interbank' }, { label: 'Overall', value: 'overall' },
+    ] }],
+    ...declarativeRequest({
+      declarative: true, method: 'GET',
+      urlTemplate: 'https://api.bnm.gov.my/public/interest-rate?product={product}',
+      hosts: ['api.bnm.gov.my'], headers: { Accept: 'application/vnd.BNM.API.v1+json' }, responseTransform: 'json',
+    }),
+  },
+]
+
 
 
 export const apiCatalog: ApiDemo[] = [
@@ -3380,6 +3450,7 @@ export const apiCatalog: ApiDemo[] = [
   ...publicApi200MilestoneApis,
   ...curatedFiveApiExpansionApis,
   ...macroRateApis,
+  ...bnmMacroApis,
 ]
 
 for (const api of apiCatalog) {

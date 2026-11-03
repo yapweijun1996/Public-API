@@ -185,7 +185,7 @@ try {
   await wait(`document.querySelector('.catalog-panel')`, 15000)
   const offlineState = await evaluate(`({title:document.title,total:document.querySelector('.table-footer')?.textContent||'',controlled:Boolean(navigator.serviceWorker.controller),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1})`)
   assert.equal(offlineState.controlled, true)
-  assert(offlineState.total.includes('196 total'))
+  assert(offlineState.total.includes('204 total'))
   assert.equal(offlineState.overflow, false)
   await call('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
 
@@ -200,7 +200,7 @@ try {
     fixedPrecacheContentRevisioned: Object.keys(fixedPrecacheRevisions).length,
     crossOriginProviderCached: false,
     offlineReload: 'PASS',
-    catalogTotalVisibleOffline: 196,
+    catalogTotalVisibleOffline: 204,
     providerEvidence: 'synthetic cross-origin fixture only; no live provider health claim',
   }, null, 2))
 } finally {
