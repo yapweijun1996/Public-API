@@ -1081,11 +1081,10 @@ const importedRecommendedApis: ApiDemo[] = [
     documentationUrl: 'https://open.fda.gov/apis/drug/label/', accent: '#0369a1', monogram: 'FD', risk: 'Review',
     usageNote: 'For informational demonstrations only. Labels may be incomplete or outdated; never use this response for medical decisions.',
     fields: [{ id: 'brand', label: 'Brand name', type: 'text', defaultValue: 'Advil', minLength: 1, maxLength: 80, pattern: '[^"\\\\]+', patternDescription: 'must not contain double quotes or backslashes because those characters alter openFDA search syntax.', help: 'Search a drug brand-name phrase indexed by openFDA. Multi-word names are sent as one quoted phrase.' }],
-    buildUrl: ({ brand = 'Advil' }) => {
-      const phrase = brand.trim()
-      const params = new URLSearchParams({ search: `openfda.brand_name:"${phrase}"`, limit: '8' })
-      return `https://api.fda.gov/drug/label.json?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.fda.gov/drug/label.json?search=openfda.brand_name%3A%22{brand}%22&limit=8', hosts: ['api.fda.gov'],
+      transforms: { brand: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'coinpaprika-ticker', name: 'CoinPaprika Ticker', provider: 'CoinPaprika', category: 'Finance',
@@ -1453,10 +1452,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'contentType', label: 'Media type', type: 'select', defaultValue: 'image', help: 'Query images or audio separately.', options: [{ label: 'Images', value: 'image' }, { label: 'Audio', value: 'audio' }] },
       limitField({ label: 'Results', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 media records.' }),
     ],
-    buildUrl: ({ query = 'space', contentType = 'image', limit = '8' }) => {
-      const mediaPath = contentType === 'audio' ? 'audio' : contentType === 'image' ? 'images' : contentType.trim()
-      return `https://api.openverse.org/v1/${mediaPath}/?${new URLSearchParams({ q: query.trim(), page_size: limit.trim(), page: '1' }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.openverse.org/v1/{contentType}/?q={query}&page_size={limit}&page=1', hosts: ['api.openverse.org'],
+      transforms: { contentType: { map: { image: 'images', audio: 'audio' } }, query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'apple-itunes-search', name: 'Apple iTunes Search', provider: 'Apple', category: 'Media',
@@ -1855,12 +1854,10 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'collection', label: 'Collection', type: 'select', defaultValue: 'formula', help: 'Select Formula or Cask metadata source.',
         options: [{ label: 'Formula', value: 'formula' }, { label: 'Cask', value: 'cask' }] },
     ],
-    buildUrl: ({ formula = 'node', collection = 'formula' }) => {
-      const name = encode(formula.trim() || 'node')
-      return collection === 'cask'
-        ? `https://formulae.brew.sh/api/cask/${name}.json`
-        : `https://formulae.brew.sh/api/formula/${name}.json`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://formulae.brew.sh/api/{collection}/{formula}.json', hosts: ['formulae.brew.sh'],
+      transforms: { collection: { map: { formula: 'formula', cask: 'cask' } }, formula: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'npm-download-counts', name: 'npm Download Counts', provider: 'npm', category: 'Developer',
@@ -1996,7 +1993,10 @@ const verifiedExpansionApis: ApiDemo[] = [
         { label: 'TXT', value: 'TXT' }, { label: 'CNAME', value: 'CNAME' }, { label: 'NS', value: 'NS' },
       ] },
     ],
-    buildUrl: ({ name = 'example.com', type = 'A' }) => `https://dns.google/resolve?${new URLSearchParams({ name: name.trim(), type }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://dns.google/resolve?name={name}&type={type}', hosts: ['dns.google'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'color-api', name: 'The Color API', provider: 'TheColorAPI', category: 'Utility',
@@ -2061,7 +2061,10 @@ const verifiedExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html', accent: '#0369a1', monogram: 'RX',
     usageNote: 'Data source: U.S. National Library of Medicine (NLM) RxNorm. For terminology normalization demonstrations only. Never treat this response as medical or prescribing advice.',
     fields: [{ id: 'name', label: 'Drug name', type: 'text', defaultValue: 'ibuprofen', minLength: 1, placeholder: 'e.g. ibuprofen', help: 'Enter a generic or brand drug name.' }],
-    buildUrl: ({ name = 'ibuprofen' }) => `https://rxnav.nlm.nih.gov/REST/drugs.json?${new URLSearchParams({ name: name.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rxnav.nlm.nih.gov/REST/drugs.json?name={name}', hosts: ['rxnav.nlm.nih.gov'],
+      transforms: { name: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'inaturalist-observations', name: 'iNaturalist Observations', provider: 'iNaturalist', category: 'Biodiversity',
@@ -2182,7 +2185,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     fields: [{ id: 'group', label: 'Bounded satellite group', type: 'select', defaultValue: 'stations', help: 'Choose a bounded GP group. Large Active and Starlink sets are intentionally excluded from this browser demo.', options: [
       { label: 'Space stations', value: 'stations' }, { label: 'GPS operational', value: 'gps-ops' },
     ] }],
-    buildUrl: ({ group = 'stations' }) => `https://celestrak.org/NORAD/elements/gp.php?${new URLSearchParams({ GROUP: group || 'stations', FORMAT: 'json' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json', hosts: ['celestrak.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'cleveland-museum-search', name: 'Cleveland Museum Open Access', provider: 'The Cleveland Museum of Art', category: 'Media',
@@ -2193,10 +2199,10 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { id: 'query', label: 'Artwork search', type: 'text', defaultValue: 'monet', minLength: 1, placeholder: 'e.g. monet', help: 'Search artwork titles, artists, or subjects.' },
       { id: 'limit', label: 'Results', type: 'number', defaultValue: '6', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 artworks.' },
     ],
-    buildUrl: ({ query = 'monet', limit = '6' }) => {
-      const params = new URLSearchParams({ q: query.trim(), limit: limit.trim(), has_image: '1', cc0: '' })
-      return `https://openaccess-api.clevelandart.org/api/artworks/?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://openaccess-api.clevelandart.org/api/artworks/?q={query}&limit={limit}&has_image=1&cc0=', hosts: ['openaccess-api.clevelandart.org'],
+      transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'scryfall-card-search', name: 'Scryfall Card Search', provider: 'Scryfall', category: 'Games',
@@ -2212,14 +2218,20 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     },
     fields: [{ id: 'query', label: 'Card search', type: 'text', defaultValue: 'dragon', minLength: 1, placeholder: 'e.g. dragon', help: 'Search card names, types, or rules text.' }],
     headers: { Accept: 'application/json' },
-    buildUrl: ({ query = 'dragon' }) => `https://api.scryfall.com/cards/search?${new URLSearchParams({ q: query.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.scryfall.com/cards/search?q={query}', hosts: ['api.scryfall.com'],
+      headers: { Accept: 'application/json' }, transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dnd5e-spell-lookup', name: 'D&D 5e Spell Lookup', provider: 'D&D 5e API', category: 'Games',
     description: 'Look up a Dungeons & Dragons 5th edition spell with range, components, and effect description.',
     documentationUrl: 'https://www.dnd5eapi.co/docs/', accent: '#7c2d12', monogram: 'DND',
     fields: [{ id: 'spellIndex', label: 'Spell', type: 'text', defaultValue: 'fireball', minLength: 1, maxLength: 80, pattern: '[a-z0-9]+(?:-[a-z0-9]+)*', patternDescription: 'must be a lowercase D&D 5e resource slug using letters, numbers, and single hyphens.', placeholder: 'e.g. fireball', help: 'Enter the exact 2014 spell resource slug, such as magic-missile.' }],
-    buildUrl: ({ spellIndex = 'fireball' }) => `https://www.dnd5eapi.co/api/2014/spells/${encode(spellIndex)}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.dnd5eapi.co/api/2014/spells/{spellIndex}', hosts: ['www.dnd5eapi.co'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'qr-code-generator', name: 'QR Code Generator', provider: 'goQR.me', category: 'Utility',
@@ -2409,7 +2421,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
       { id: 'scientificName', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', minLength: 1, help: 'Enter a marine species scientific name. OBIS may resolve historical or synonym names to a current accepted scientific name.' },
       { id: 'size', label: 'Occurrences', type: 'number', defaultValue: '5', min: 1, max: 10, step: 1, help: 'Return between 1 and 10 occurrence records.' },
     ],
-    buildUrl: ({ scientificName = 'Delphinus delphis', size = '5' }) => `https://api.obis.org/v3/occurrence?${new URLSearchParams({ scientificname: scientificName.trim(), size: size.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.obis.org/v3/occurrence?scientificname={scientificName}&size={size}', hosts: ['api.obis.org'],
+      transforms: { scientificName: 'form', size: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'worms-species-lookup', name: 'WoRMS Marine Species Registry', provider: 'World Register of Marine Species', category: 'Biodiversity',
@@ -2418,7 +2433,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     usageNote: 'WoRMS AphiaRecords preserve the queried name and its taxonomic status. valid_AphiaID identifies the current final accepted name; do not hide synonym or unaccepted-name relationships. AphiaRecordsByName documents HTTP 204 as Nothing found.',
     successNoContent: { statuses: [204], data: [] },
     fields: [{ id: 'name', label: 'Species (scientific name)', type: 'text', defaultValue: 'Delphinus delphis', placeholder: 'e.g. Delphinus delphis', help: 'Enter a marine species scientific name.' }],
-    buildUrl: ({ name = 'Delphinus delphis' }) => `https://www.marinespecies.org/rest/AphiaRecordsByName/${encode(name || 'Delphinus delphis')}?${new URLSearchParams({ like: 'false' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://www.marinespecies.org/rest/AphiaRecordsByName/{name}?like=false', hosts: ['www.marinespecies.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'paleobiodb-taxa', name: 'Paleobiology Database Taxa', provider: 'Paleobiology Database', category: 'Nature',
@@ -2456,7 +2474,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Inspect a Ruby gem\'s latest version, downloads, authors, and license.',
     documentationUrl: 'https://guides.rubygems.org/rubygems-org-api/', accent: '#e9573f', monogram: 'GEM',
     fields: [{ id: 'gemName', label: 'Gem name', type: 'text', defaultValue: 'rails', placeholder: 'e.g. rails', help: 'Enter a published RubyGems package name.' }],
-    buildUrl: ({ gemName = 'rails' }) => `https://rubygems.org/api/v1/gems/${encode(gemName || 'rails')}.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://rubygems.org/api/v1/gems/{gemName}.json', hosts: ['rubygems.org'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'nuget-package-lookup', name: 'NuGet Package Lookup', provider: 'NuGet Gallery', category: 'Developer',
@@ -2464,7 +2485,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://learn.microsoft.com/nuget/api/overview', accent: '#004880', monogram: 'NUG',
     usageNote: 'Uses NuGet.org’s SemVer 2 registration hive. Packages with 128+ versions can omit registration leaves from the index; this one-request demo reports page ranges honestly instead of following extra page requests.',
     fields: [{ id: 'packageId', label: 'Package ID', type: 'text', defaultValue: 'newtonsoft.json', placeholder: 'e.g. newtonsoft.json', help: 'Enter a published NuGet package identifier.' }],
-    buildUrl: ({ packageId = 'newtonsoft.json' }) => `https://api.nuget.org/v3/registration5-gz-semver2/${encode((packageId || 'newtonsoft.json').toLowerCase())}/index.json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nuget.org/v3/registration5-gz-semver2/{packageId}/index.json', hosts: ['api.nuget.org'],
+      transforms: { packageId: 'lowercase' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'internet-archive-search', name: 'Internet Archive Search', provider: 'Internet Archive', category: 'Media',
@@ -2933,7 +2957,10 @@ const publicApi200MilestoneApis: ApiDemo[] = [
       limitField({ label: 'Advisories', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 advisories.' }),
     ],
     headers: { Accept: 'application/vnd.github+json' },
-    buildUrl: ({ ecosystem = 'npm', severity = 'high', limit = '6' }) => `https://api.github.com/advisories?${new URLSearchParams({ ecosystem, severity, per_page: limit.trim() }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.github.com/advisories?ecosystem={ecosystem}&severity={severity}&per_page={limit}', hosts: ['api.github.com'],
+      headers: { Accept: 'application/vnd.github+json' }, transforms: { limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'dblp-search', name: 'DBLP Publication Search', provider: 'DBLP', category: 'Research',
@@ -2995,7 +3022,10 @@ ORDER BY ?publ ?authorName`
       limitField({ label: 'Results', defaultValue: '6', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 media files.' }),
     ],
     headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' },
-    buildUrl: ({ query = 'Singapore skyline', limit = '6' }) => `https://commons.wikimedia.org/w/api.php?${new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: query.trim(), gsrnamespace: '6', gsrlimit: limit.trim(), prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '400', format: 'json', origin: '*' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={query}&gsrnamespace=6&gsrlimit={limit}&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=400&format=json&origin=%2A', hosts: ['commons.wikimedia.org'],
+      headers: { 'Api-User-Agent': 'Public-API/0.1 (https://yapweijun1996.github.io/Public-API/)' }, transforms: { query: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
 
   {
@@ -3003,6 +3033,7 @@ ORDER BY ?publ ?authorName`
     description: 'Inspect npm package tags and published versions from the jsDelivr public package metadata API.',
     documentationUrl: 'https://www.jsdelivr.com/docs/data.jsdelivr.com', accent: '#f97316', monogram: 'JSD',
     fields: [{ id: 'packageName', label: 'npm package', type: 'text', defaultValue: 'react', placeholder: 'e.g. react', help: 'Enter an npm package name available through jsDelivr.' }],
+    request: { declarative: false, reason: 'Trims the package path then substitutes react when blank; the closed transforms cannot apply a conditional default.' },
     buildUrl: ({ packageName = 'react' }) => `https://data.jsdelivr.com/v1/packages/npm/${encode(packageName.trim() || 'react')}`,
   },
   {
@@ -3027,7 +3058,10 @@ ORDER BY ?publ ?authorName`
       { id: 'scientificName', label: 'Scientific name', type: 'text', defaultValue: 'Panthera leo', placeholder: 'e.g. Panthera leo', minLength: 1, help: 'Use a scientific species or taxon name.' },
       limitField({ label: 'Records', defaultValue: '6', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 occurrence records.' }),
     ],
-    buildUrl: ({ scientificName = 'Panthera leo', limit = '6' }) => `https://api.gbif.org/v1/occurrence/search?${new URLSearchParams({ scientificName: scientificName.trim(), limit: limit.trim(), hasCoordinate: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.gbif.org/v1/occurrence/search?scientificName={scientificName}&limit={limit}&hasCoordinate=true', hosts: ['api.gbif.org'],
+      transforms: { scientificName: 'form', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
 
   {
@@ -3042,7 +3076,10 @@ ORDER BY ?publ ?authorName`
       ] },
       { id: 'forecastDays', label: 'Forecast days', type: 'number', defaultValue: '3', min: 1, max: 7, step: 1, help: 'Request between 1 and 7 whole forecast days.' },
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', variable = 'temperature_2m', forecastDays = '3' }) => `https://ensemble-api.open-meteo.com/v1/ensemble?${new URLSearchParams({ latitude, longitude, models: 'icon_seamless_eps', hourly: variable, forecast_days: forecastDays.trim(), timezone: 'Asia/Singapore' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://ensemble-api.open-meteo.com/v1/ensemble?latitude={latitude}&longitude={longitude}&models=icon_seamless_eps&hourly={variable}&forecast_days={forecastDays}&timezone=Asia%2FSingapore', hosts: ['ensemble-api.open-meteo.com'],
+      transforms: { forecastDays: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'world-bank-indicator-explorer', name: 'World Bank Indicator Explorer', provider: 'World Bank', category: 'Economy',
@@ -3108,7 +3145,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       ...latLongFields(),
       numberField('forecastDays', { label: 'Forecast horizon (days)', defaultValue: '42', min: 1, max: 46, step: 1, help: 'Request 1–46 whole forecast days of EC46 weekly products. Calendar-aligned weekly buckets can include partial boundary weeks, so their count may differ from forecast days divided by seven.' }),
     ],
-    buildUrl: ({ latitude = '1.3521', longitude = '103.8198', forecastDays = '42' }) => `https://seasonal-api.open-meteo.com/v1/seasonal?${new URLSearchParams({ latitude, longitude, weekly: 'temperature_2m_mean,temperature_2m_anomaly,precipitation_mean,precipitation_anomaly', forecast_days: forecastDays.trim(), timezone: 'Asia/Singapore' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://seasonal-api.open-meteo.com/v1/seasonal?latitude={latitude}&longitude={longitude}&weekly=temperature_2m_mean%2Ctemperature_2m_anomaly%2Cprecipitation_mean%2Cprecipitation_anomaly&forecast_days={forecastDays}&timezone=Asia%2FSingapore', hosts: ['seasonal-api.open-meteo.com'],
+      transforms: { forecastDays: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'nhtsa-safety-ratings', name: 'NHTSA Safety Ratings', provider: 'NHTSA', category: 'Vehicle',
@@ -3122,7 +3162,10 @@ const curatedFiveApiExpansionApis: ApiDemo[] = [
       patternDescription: 'must be a canonical positive decimal ID from 1 to 999999.',
       help: 'Enter a canonical VehicleId returned by the NHTSA Safety Ratings API, for example 19426 for a 2024 Toyota Camry FWD. This demo supports IDs from 1 to 999999; that workbench bound is not a provider-wide maximum.',
     })],
-    buildUrl: ({ vehicleId = '19426' }) => `https://api.nhtsa.gov/SafetyRatings/VehicleId/${encode(vehicleId.trim())}?format=json`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nhtsa.gov/SafetyRatings/VehicleId/{vehicleId}?format=json', hosts: ['api.nhtsa.gov'],
+      transforms: { vehicleId: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'singstat-cpi-monthly', name: 'Singapore CPI Monthly', provider: 'Singapore Department of Statistics', category: 'Singapore',
