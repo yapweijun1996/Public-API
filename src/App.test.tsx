@@ -274,20 +274,20 @@ describe('catalog live API flow', () => {
     }
 
     expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(50)
-    expect(document.querySelector('.table-footer')).toHaveAttribute('data-page-count', '4')
+    expect(document.querySelector('.table-footer')).toHaveAttribute('data-page-count', '5')
     expect(document.querySelector('.table-footer')).toHaveAttribute('data-page-size', '50')
-    expect(screen.getByLabelText('Page 1 of 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 1 of 5')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous catalog page' })).toBeDisabled()
     collectPage()
-    for (let page = 2; page <= 4; page += 1) {
+    for (let page = 2; page <= 5; page += 1) {
       fireEvent.click(screen.getByRole('button', { name: 'Next catalog page' }))
-      expect(screen.getByLabelText(`Page ${page} of 4`)).toBeInTheDocument()
+      expect(screen.getByLabelText(`Page ${page} of 5`)).toBeInTheDocument()
       collectPage()
     }
-    expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(46)
+    expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(4)
     expect(screen.getByRole('button', { name: 'Next catalog page' })).toBeDisabled()
-    expect(seen.size).toBe(196)
-    expect(labels.size).toBe(196)
+    expect(seen.size).toBe(204)
+    expect(labels.size).toBe(204)
     fireEvent.change(screen.getByRole('textbox', { name: 'Search catalog' }), { target: { value: 'place name to coordinates' } })
     expect(screen.getByLabelText('Page 1 of 1')).toBeInTheDocument()
     expect(document.querySelectorAll('tbody tr[data-api-id]')).toHaveLength(1)
@@ -308,7 +308,7 @@ describe('catalog live API flow', () => {
     const next = screen.getByRole('button', { name: 'Next catalog page' })
     next.focus()
     fireEvent.click(next)
-    expect(screen.getByLabelText('Page 2 of 4')).toBeInTheDocument()
+    expect(screen.getByLabelText('Page 2 of 5')).toBeInTheDocument()
     expect(next).toHaveFocus()
 
     const search = screen.getByRole('textbox', { name: 'Search catalog' })
@@ -694,7 +694,7 @@ describe('WebMCP discovery contract', () => {
       demos: Array<{ category: string; responseType: string; requestLabUrl: string; parameters: Array<{ id: string; min?: number; max?: number; options?: Array<{ label: string; value: string }> }> }>
     }
 
-    expect(result.total).toBe(196)
+    expect(result.total).toBe(204)
     expect(result.count).toBe(1)
     expect(result.category).toBe('People')
     expect(result.demos[0]?.category).toBe('People')
@@ -1017,7 +1017,7 @@ describe('demo preview mapping', () => {
   it('registers every catalog API in the fail-closed SSOT card registry', () => {
     const catalogIds = apiCatalog.map((api) => api.id).sort()
     expect([...apiSsotCardIds].sort()).toEqual(catalogIds)
-    expect(apiSsotCardIds).toHaveLength(196)
+    expect(apiSsotCardIds).toHaveLength(204)
     for (const id of catalogIds) {
       const definition = apiSsotCardRegistry[id]
       expect(definition, `Missing SSOT card ${id}`).toBeDefined()
@@ -1034,9 +1034,9 @@ describe('demo preview mapping', () => {
     const components = Object.values(apiPreviewComponents).filter((component) => component !== undefined)
 
     expect([...apiPreviewComponentIds].sort()).toEqual(catalogIds)
-    expect(components).toHaveLength(196)
-    expect(new Set(components).size).toBe(196)
-    expect(new Set(components.map((component) => component.name)).size).toBe(196)
+    expect(components).toHaveLength(204)
+    expect(new Set(components).size).toBe(204)
+    expect(new Set(components.map((component) => component.name)).size).toBe(204)
   })
 
   it('mounts an API-owned visual component for every catalog response', () => {
@@ -1057,7 +1057,7 @@ describe('demo preview mapping', () => {
       expect(container.querySelector('[data-preview-component="generic-fallback"]')).not.toBeInTheDocument()
       unmount()
     }
-    expect(new Set(visualSignatures).size).toBe(196)
+    expect(new Set(visualSignatures).size).toBe(204)
     expect(visualSignatures.every(Boolean)).toBe(true)
   })
 

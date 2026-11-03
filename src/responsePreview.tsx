@@ -467,6 +467,14 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'world-bank-indicator-explorer': defineApiPreview('world-bank-indicator-explorer', ({ api, data, executedRequest }) => <WorldBankIndicatorPreview api={api} data={data} executedRequest={executedRequest}/>),
   'exchange-rate-current': defineApiPreview('exchange-rate-current', ({ data, requestUrl, executedRequest }) => <ExchangeRateApiPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
   'circl-vulnerability': defineApiPreview('circl-vulnerability', ({ data, requestUrl, executedRequest }) => <CirclVulnerabilityPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
+  'treasury-average-interest-rates': defineApiPreview('treasury-average-interest-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'treasury-rates-of-exchange': defineApiPreview('treasury-rates-of-exchange', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'treasury-debt-to-penny': defineApiPreview('treasury-debt-to-penny', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'ecb-euro-reference-rates': defineApiPreview('ecb-euro-reference-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-overnight-policy-rate': defineApiPreview('bnm-overnight-policy-rate', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-exchange-rates': defineApiPreview('bnm-exchange-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'bnm-interbank-interest-rates': defineApiPreview('bnm-interbank-interest-rates', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
+  'treasury-daily-yield-curve': defineApiPreview('treasury-daily-yield-curve', ({ api, data }) => <ResultListPreview data={data} api={api}/>),
 }
 
 export const apiPreviewComponentIds = Object.keys(apiPreviewComponents)

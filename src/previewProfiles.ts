@@ -368,6 +368,14 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['world-bank-indicator-explorer', 'indicator-series', 'Request-bound World Bank indicator series'],
   ['exchange-rate-current', 'exchange-rates', 'Daily FX rates and conversion'],
   ['circl-vulnerability', 'cve-record', 'CIRCL CVE 5 investigation record'],
+  ['treasury-average-interest-rates', 'market-chart', 'U.S. Treasury average interest-rate observations'],
+  ['treasury-rates-of-exchange', 'market-chart', 'U.S. Treasury currency reporting rates'],
+  ['treasury-debt-to-penny', 'market-chart', 'Daily U.S. public-debt accounting observations'],
+  ['ecb-euro-reference-rates', 'market-chart', 'ECB euro foreign-exchange reference-rate observations'],
+  ['bnm-overnight-policy-rate', 'market-chart', 'Malaysia overnight policy rate and decision'],
+  ['bnm-exchange-rates', 'market-chart', 'Malaysia official daily foreign-exchange reference rates'],
+  ['bnm-interbank-interest-rates', 'market-chart', 'Malaysia interbank market interest-rate observations'],
+  ['treasury-daily-yield-curve', 'market-chart', 'U.S. Treasury daily par-yield curve report'],
 ]
 
 export const previewProfileIds = profileEntries.map(([id]) => id)
