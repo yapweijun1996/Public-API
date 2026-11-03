@@ -114,6 +114,12 @@ describe('declarative request interpreter', () => {
       ['uniprot-protein', { accession: 'A0A023GPI8' }, 'https://rest.uniprot.org/uniprotkb/A0A023GPI8.json'],
       ['ensembl-gene-lookup', { geneId: 'ENSG00000157764' }, 'https://rest.ensembl.org/lookup/id/ENSG00000157764?content-type=application%2Fjson'],
       ['ensembl-gene-lookup', { geneId: 'ENSG00000139618' }, 'https://rest.ensembl.org/lookup/id/ENSG00000139618?content-type=application%2Fjson'],
+      ['nobel-prizes', { category: 'phy', limit: '6' }, 'https://api.nobelprize.org/2.1/nobelPrizes?nobelPrizeCategory=phy&limit=6&sort=desc'],
+      ['nobel-prizes', { category: 'eco', limit: '4' }, 'https://api.nobelprize.org/2.1/nobelPrizes?nobelPrizeCategory=eco&limit=4&sort=desc'],
+      ['crossref-works', { query: 'agentic AI', rows: '8' }, 'https://api.crossref.org/v1/works?query=agentic+AI&rows=8&select=DOI%2Ctitle%2Cauthor%2Cpublished%2Cpublisher%2Cis-referenced-by-count%2Ctype%2CURL'],
+      ['crossref-works', { query: 'climate adaptation', rows: '12' }, 'https://api.crossref.org/v1/works?query=climate+adaptation&rows=12&select=DOI%2Ctitle%2Cauthor%2Cpublished%2Cpublisher%2Cis-referenced-by-count%2Ctype%2CURL'],
+      ['opencitations-index', { doi: '10.1109/5.771073' }, 'https://api.opencitations.net/index/v2/citation-count/doi:10.1109%2F5.771073'],
+      ['opencitations-index', { doi: '10.1000/xyz123' }, 'https://api.opencitations.net/index/v2/citation-count/doi:10.1000%2Fxyz123'],
     ] as const
     for (const [id, params, captured] of cases) {
       const api = getApiById(id)

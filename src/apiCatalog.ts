@@ -1122,10 +1122,10 @@ const importedRecommendedApis: ApiDemo[] = [
       ] },
       limitField({ label: 'Prize years', defaultValue: '6', min: 1, max: 12, step: 1, help: 'Return between 1 and 12 whole recent prize records.' }),
     ],
-    buildUrl: ({ category = 'phy', limit = '6' }) => {
-      const query = new URLSearchParams({ nobelPrizeCategory: category.trim(), limit: limit.trim(), sort: 'desc' })
-      return `https://api.nobelprize.org/2.1/nobelPrizes?${query.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.nobelprize.org/2.1/nobelPrizes?nobelPrizeCategory={category}&limit={limit}&sort=desc', hosts: ['api.nobelprize.org'],
+      transforms: { category: 'trim', limit: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'chess-player-stats', name: 'Lichess Player Ratings', provider: 'Lichess', category: 'Games',
@@ -1152,10 +1152,10 @@ const importedRecommendedApis: ApiDemo[] = [
       queryField({ label: 'Research query', defaultValue: 'agentic AI', placeholder: 'e.g. climate adaptation', minLength: 1, help: 'Search titles, authors, abstracts, and other Crossref metadata.' }),
       { id: 'rows', label: 'Results', type: 'number', defaultValue: '8', min: 1, max: 20, step: 1, help: 'Return between 1 and 20 whole work records.' },
     ],
-    buildUrl: ({ query = 'agentic AI', rows = '8' }) => {
-      const params = new URLSearchParams({ query: query.trim(), rows: rows.trim(), select: 'DOI,title,author,published,publisher,is-referenced-by-count,type,URL' })
-      return `https://api.crossref.org/v1/works?${params.toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.crossref.org/v1/works?query={query}&rows={rows}&select=DOI%2Ctitle%2Cauthor%2Cpublished%2Cpublisher%2Cis-referenced-by-count%2Ctype%2CURL', hosts: ['api.crossref.org'],
+      transforms: { query: 'form', rows: 'trim' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2820,7 +2820,10 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://opencitations.net/index/api/v2', accent: '#0f766e', monogram: 'OCI',
     usageNote: 'OpenCitations citation-count is index-scoped, not a universal citation total. Anonymous REST API calls are rate-limited to 180 requests/minute per IP; OpenCitations recommends data dumps for large-scale retrieval.',
     fields: [{ id: 'doi', label: 'DOI', type: 'text', defaultValue: '10.1109/5.771073', placeholder: 'e.g. 10.1109/5.771073', help: 'Use a valid DOI string.' }],
-    buildUrl: ({ doi = '10.1109/5.771073' }) => `https://api.opencitations.net/index/v2/citation-count/doi:${encodeURIComponent(doi.trim() || '10.1109/5.771073')}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.opencitations.net/index/v2/citation-count/doi:{doi}', hosts: ['api.opencitations.net'],
+      transforms: { doi: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'vam-collections',
