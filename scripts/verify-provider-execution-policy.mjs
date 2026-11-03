@@ -51,7 +51,7 @@ try {
       const tool = tools.find(candidate => candidate.name === ${JSON.stringify(name)});
       if (!tool) return { ok: false, message: 'WEBMCP_TOOL_NOT_FOUND' };
       try {
-        const value = await document.modelContext.executeTool(tool, ${JSON.stringify(inputJson)});
+        const value = await document.modelContext.executeTool(tool, ${inputJson});
         return { ok: true, value };
       } catch (error) {
         return { ok: false, message: String(error?.message || error) };
