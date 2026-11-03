@@ -1,5 +1,4 @@
 import { buildRequestFromSpec, type DeclarativeRequestSpec, type NonDeclarativeRequest } from './declarativeRequest'
-import { buildOpenFoodFactsProductUrl } from './openFoodFactsContract'
 
 export const apiCategories = [
   'Biodiversity',
