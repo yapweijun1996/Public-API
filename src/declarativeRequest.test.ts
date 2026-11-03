@@ -232,6 +232,15 @@ describe('declarative request interpreter', () => {
       ['open-meteo-seasonal', { latitude: '51.5074', longitude: '-0.1278', forecastDays: '30' }, 'https://seasonal-api.open-meteo.com/v1/seasonal?latitude=51.5074&longitude=-0.1278&weekly=temperature_2m_mean%2Ctemperature_2m_anomaly%2Cprecipitation_mean%2Cprecipitation_anomaly&forecast_days=30&timezone=Asia%2FSingapore'],
       ['nhtsa-safety-ratings', {}, 'https://api.nhtsa.gov/SafetyRatings/VehicleId/19426?format=json'],
       ['nhtsa-safety-ratings', { vehicleId: '7520' }, 'https://api.nhtsa.gov/SafetyRatings/VehicleId/7520?format=json'],
+      ['inaturalist-observations', {}, 'https://api.inaturalist.org/v1/observations?taxon_name=Panthera&per_page=6&photos=true'],
+      ['inaturalist-observations', { taxonName: 'Panthera leo', perPage: '10' }, 'https://api.inaturalist.org/v1/observations?taxon_name=Panthera+leo&per_page=10&photos=true'],
+      ['catfacts', {}, 'https://catfact.ninja/fact'],
+      ['flathub-appstream', {}, 'https://flathub.org/api/v2/appstream/org.gnome.Calculator'],
+      ['flathub-appstream', { appId: 'org.kde.dolphin' }, 'https://flathub.org/api/v2/appstream/org.kde.dolphin'],
+      ['vam-collections', {}, 'https://api.vam.ac.uk/v2/objects/search?q=eastern&page_size=6'],
+      ['vam-collections', { query: 'Renaissance art', count: '12' }, 'https://api.vam.ac.uk/v2/objects/search?q=Renaissance+art&page_size=12'],
+      ['citybikes-network', {}, 'https://api.citybik.es/v2/networks/youbike-taipei'],
+      ['citybikes-network', { network: 'velib' }, 'https://api.citybik.es/v2/networks/velib'],
       ['countries', { code: 'us' }, 'https://api.worldbank.org/v2/country/US?format=json'],
     ] as const
     for (const [id, params, captured] of cases) {

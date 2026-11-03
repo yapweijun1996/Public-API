@@ -1311,6 +1311,7 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All types', value: 'all' }, { label: 'Micro', value: 'micro' }, { label: 'Brewpub', value: 'brewpub' }, { label: 'Regional', value: 'regional' }, { label: 'Contract', value: 'contract' },
       ] },
     ],
+    request: { declarative: false, reason: "Omits `by_type` when type is 'all'; closed templates cannot conditionally omit a query parameter for an enum choice." },
     buildUrl: ({ country = 'united_states', type = 'all' }) => {
       const params = new URLSearchParams({ by_country: country.trim(), per_page: '8' })
       if (type.trim() !== 'all') params.set('by_type', type.trim())
@@ -1328,6 +1329,7 @@ const nextKeylessApis: ApiDemo[] = [
         { label: 'All statuses', value: 'all' }, { label: 'Alive', value: 'alive' }, { label: 'Dead', value: 'dead' }, { label: 'Unknown', value: 'unknown' },
       ] },
     ],
+    request: { declarative: false, reason: "Omits `status` when status is 'all'; closed templates cannot conditionally omit a query parameter for an enum choice." },
     buildUrl: ({ name = 'Rick', status = 'all' }) => {
       const params = new URLSearchParams({ name: name.trim() })
       if (status !== 'all') params.set('status', status)
@@ -1342,6 +1344,7 @@ const nextKeylessApis: ApiDemo[] = [
       { id: 'article', label: 'Article title', type: 'text', defaultValue: 'Singapore', placeholder: 'e.g. Singapore', help: 'Use an English Wikipedia article title.' },
       { id: 'days', label: 'History days', type: 'number', defaultValue: '14', min: 7, max: 90, help: 'Chart between 7 and 90 completed days.' },
     ],
+    request: { declarative: false, reason: 'Computes a calendar-relative completed-day window, compacts both dates, replaces article spaces with underscores, and falls back to Singapore for an empty title.' },
     buildUrl: ({ article = 'Singapore', days = '14' }) => {
       const safeDays = clampInt(days, 7, 90, 14)
       const end = daysAgo(1)
@@ -1362,6 +1365,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'season', label: 'Season', type: 'select', defaultValue: '2025', help: 'Choose a completed Formula 1 season.', options: [{ label: '2025', value: '2025' }, { label: '2024', value: '2024' }, { label: '2023', value: '2023' }] },
       { id: 'round', label: 'Race round', type: 'number', defaultValue: '1', min: 1, max: 30, help: 'Choose the Grand Prix round number.' },
     ],
+    request: { declarative: false, reason: 'Clamps the race round to 1–30 and substitutes season 2025 when blank; the closed transforms cannot clamp integers or apply conditional defaults.' },
     buildUrl: ({ season = '2025', round = '1' }) => `https://api.jolpi.ca/ergast/f1/${season || '2025'}/${String(clampInt(round, 1, 30, 1))}/qualifying/`,
   },
   {
@@ -1779,6 +1783,7 @@ const verifiedKeylessApis: ApiDemo[] = [
     description: 'Search Star Wars characters and inspect species-era profile fields including birth year, homeworld, and films.',
     documentationUrl: 'https://swapi.dev/documentation', accent: '#ca8a04', monogram: 'SW',
     fields: [queryField({ label: 'Character search', defaultValue: 'Luke', placeholder: 'e.g. Luke', help: 'Search Star Wars character names.' })],
+    request: { declarative: false, reason: 'Trims the search term and substitutes Luke when blank; the closed transforms cannot conditionally apply that default.' },
     buildUrl: ({ query = 'Luke' }) => `https://swapi.dev/api/people/?${new URLSearchParams({ search: query.trim() || 'Luke' }).toString()}`,
   },
   {
@@ -1822,6 +1827,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Recall search', defaultValue: 'peanut', placeholder: 'e.g. peanut', minLength: 1, maxLength: 80, pattern: '[^"\\\\]+', patternDescription: 'must not contain double quotes or backslashes because those characters alter openFDA search syntax.', help: 'Search one quoted phrase across FDA product descriptions and reasons for recall.' }),
       limitField({ label: 'Records', defaultValue: '8', min: 1, max: 30, help: 'Return between 1 and 30 records.' }),
     ],
+    request: { declarative: false, reason: 'Constructs a two-field quoted OR search expression and clamps result limit to 1–30; this is computed provider syntax, not a closed substitution.' },
     buildUrl: ({ query = 'peanut', limit = '8' }) => {
       const safeLimit = clampInt(limit, 1, 30, 8)
       const phrase = query.trim() || 'peanut'
@@ -1839,6 +1845,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       queryField({ label: 'Icon keyword', defaultValue: 'home', placeholder: 'e.g. home', help: 'Search icon keywords across public sets.' }),
       limitField({ label: 'Icons', defaultValue: '32', min: 32, max: 60, help: 'Iconify accepts 32 to 999 search results; this demo caps the browser payload at 60.' }),
     ],
+    request: { declarative: false, reason: 'Falls back to query home when blank and clamps result limit to 32–60; closed transforms cannot apply either conditional default or numeric clamp.' },
     buildUrl: ({ query = 'home', limit = '32' }) => {
       const safeLimit = clampInt(limit, 32, 60, 32)
       return `https://api.iconify.design/search?${new URLSearchParams({ query: query.trim() || 'home', limit: String(safeLimit) }).toString()}`
@@ -1868,6 +1875,7 @@ const verifiedKeylessApis: ApiDemo[] = [
       { id: 'period', label: 'Window', type: 'select', defaultValue: 'last-week', help: 'Choose a point download period.',
         options: [{ label: 'Last week', value: 'last-week' }, { label: 'Last month', value: 'last-month' }, { label: 'Last day', value: 'last-day' }] },
     ],
+    request: { declarative: false, reason: 'Maps period to one of three supported path segments, defaults invalid periods to last-week, and falls back to package react when blank.' },
     buildUrl: ({ packageName = 'react', period = 'last-week' }) => {
       const safePeriod = ['last-day', 'last-week', 'last-month'].includes(period) ? period : 'last-week'
       return `https://api.npmjs.org/downloads/point/${safePeriod}/${encode(packageName || 'react')}`
@@ -1970,6 +1978,7 @@ const verifiedKeylessApis: ApiDemo[] = [
     fields: [
       { id: 'date', label: 'Schedule date', type: 'date', defaultValue: today, help: 'Use a published game date in YYYY-MM-DD format.' },
     ],
+    request: { declarative: false, reason: 'Validates the supplied calendar date and substitutes today when invalid; closed transforms cannot validate ISO calendar dates or compute the current date.' },
     buildUrl: ({ date = today }) => {
       const targetDate = isIsoCalendarDate(date.trim()) ? date.trim() : today
       const params = new URLSearchParams({
@@ -2003,6 +2012,7 @@ const verifiedExpansionApis: ApiDemo[] = [
     description: 'Convert a hex color into RGB, HSL, HSV, CMYK, a named color match, and a contrast recommendation.',
     documentationUrl: 'https://www.thecolorapi.com/docs', accent: '#24b1e0', monogram: 'HEX',
     fields: [{ id: 'hex', label: 'Hex color', type: 'text', defaultValue: '24B1E0', placeholder: 'e.g. 24B1E0', pattern: '#?(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})', patternDescription: 'must be a 3- or 6-digit hexadecimal color, with an optional leading #.', help: 'Enter 3 or 6 hexadecimal digits, with or without the leading #.' }],
+    request: { declarative: false, reason: 'Removes an optional leading # and falls back to 24B1E0 when blank; the closed transforms cannot remove a leading character conditionally.' },
     buildUrl: ({ hex = '24B1E0' }) => `https://www.thecolorapi.com/id?hex=${encode((hex || '24B1E0').replace(/^#/, ''))}`,
   },
   {
@@ -2036,6 +2046,7 @@ const verifiedExpansionApis: ApiDemo[] = [
       ] },
       { id: 'count', label: 'Players', type: 'number', defaultValue: '5', min: 1, max: 10, help: 'Return between 1 and 10 top players.' },
     ],
+    request: { declarative: false, reason: 'Clamps player count to 1–10 with fallback 5 and substitutes blitz when perfType is blank; closed transforms cannot perform numeric clamping or conditional defaults.' },
     buildUrl: ({ perfType = 'blitz', count = '5' }) => {
       const safeCount = Math.min(10, Math.max(1, Number.parseInt(count, 10) || 5))
       return `https://lichess.org/api/player/top/${safeCount}/${encode(perfType || 'blitz')}`
@@ -2082,7 +2093,10 @@ const verifiedExpansionApis: ApiDemo[] = [
       reason: 'iNaturalist recommends about one API request per second and around 10,000 requests per day, and may throttle excess traffic with HTTP 429. Generic verification records the 429 and defers another provider request instead of immediately retrying.',
       policyUrl: 'https://www.inaturalist.org/pages/api+recommended+practices',
     },
-    buildUrl: ({ taxonName = 'Panthera', perPage = '6' }) => `https://api.inaturalist.org/v1/observations?${new URLSearchParams({ taxon_name: taxonName.trim(), per_page: perPage, photos: 'true' }).toString()}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.inaturalist.org/v1/observations?taxon_name={taxonName}&per_page={perPage}&photos=true', hosts: ['api.inaturalist.org'],
+      transforms: { taxonName: 'form' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2093,6 +2107,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
     documentationUrl: 'https://www.first.org/epss/api', accent: '#b42318', monogram: 'EPS', risk: 'Review',
     usageNote: 'EPSS is a probability estimate, not a guarantee of exploitation. Use alongside CVSS and CISA KEV status.',
     fields: [cveField('CVE identifier')],
+    request: { declarative: false, reason: 'Falls back to CVE-2021-44228 when the trimmed CVE input is blank; closed template transforms cannot conditionally substitute a value.' },
     buildUrl: ({ cve = 'CVE-2021-44228' }) => `https://api.first.org/data/v1/epss?${new URLSearchParams({ cve: cve.trim() || 'CVE-2021-44228' }).toString()}`,
   },
   {
@@ -2103,6 +2118,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       { label: 'Node.js', value: 'nodejs' }, { label: 'Python', value: 'python' }, { label: 'PostgreSQL', value: 'postgresql' },
       { label: 'Ubuntu', value: 'ubuntu' }, { label: 'PHP', value: 'php' }, { label: 'Java (OpenJDK)', value: 'java' },
     ] }],
+    request: { declarative: false, reason: 'Falls back to product nodejs when the selected product is blank; closed templates cannot conditionally substitute a path value.' },
     buildUrl: ({ product = 'nodejs' }) => `https://endoflife.date/api/v1/products/${encode(product || 'nodejs')}`,
   },
   {
@@ -2116,6 +2132,7 @@ const verifiedSecondExpansionApis: ApiDemo[] = [
       ] },
       { id: 'packageName', label: 'Package name', type: 'text', defaultValue: 'react', minLength: 1, placeholder: 'e.g. react', help: 'Enter a package name for the selected ecosystem.' },
     ],
+    request: { declarative: false, reason: 'Substitutes npm for a blank system and react for a blank package name; closed template transforms cannot apply conditional path defaults.' },
     buildUrl: ({ system = 'npm', packageName = 'react' }) => `https://api.deps.dev/v3/systems/${encode(system || 'npm')}/packages/${encode(packageName || 'react')}`,
   },
   {
@@ -2324,6 +2341,7 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Look up a domain\'s registration status, registrar, nameservers, and key events using the modern WHOIS replacement.',
     documentationUrl: 'https://about.rdap.org/', accent: '#111827', monogram: 'RDAP',
     fields: [{ id: 'domain', label: 'Domain name', type: 'text', defaultValue: 'google.com', placeholder: 'e.g. google.com', help: 'Enter a registered domain name.' }],
+    request: { declarative: false, reason: 'Falls back to google.com when the domain is blank; closed templates cannot conditionally substitute a path value.' },
     buildUrl: ({ domain = 'google.com' }) => `https://rdap.org/domain/${encode(domain || 'google.com')}`,
   },
   {
@@ -2576,7 +2594,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     description: 'Generate a random, bite-sized fact about cats for lightweight content demos.',
     documentationUrl: 'https://catfact.ninja/', accent: '#ea580c', monogram: 'CAT',
     fields: [],
-    buildUrl: () => 'https://catfact.ninja/fact',
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://catfact.ninja/fact', hosts: ['catfact.ninja'],
+      responseTransform: 'json',
+    }),
   },
   {
     id: 'gleif-lei',
@@ -2850,7 +2871,10 @@ const verifiedThirdExpansionApis: ApiDemo[] = [
     fields: [
       { id: 'appId', label: 'Flathub app ID', type: 'text', defaultValue: 'org.gnome.Calculator', placeholder: 'e.g. org.gnome.Calculator', minLength: 1, help: 'Enter an exact non-empty Flathub application ID.' },
     ],
-    buildUrl: ({ appId = 'org.gnome.Calculator' }) => `https://flathub.org/api/v2/appstream/${encode(appId.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://flathub.org/api/v2/appstream/{appId}', hosts: ['flathub.org'],
+      transforms: { appId: 'trim' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -2925,12 +2949,10 @@ const verifiedFourthExpansionApis: ApiDemo[] = [
         help: 'Return between 1 and 20 records.',
       },
     ],
-    buildUrl: ({ query = 'eastern', count = '6' }) => {
-      return `https://api.vam.ac.uk/v2/objects/search?${new URLSearchParams({
-        q: query.trim(),
-        page_size: count,
-      }).toString()}`
-    },
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.vam.ac.uk/v2/objects/search?q={query}&page_size={count}', hosts: ['api.vam.ac.uk'],
+      transforms: { query: 'form' }, responseTransform: 'json',
+    }),
   },
 ]
 
@@ -3010,7 +3032,10 @@ ORDER BY ?publ ?authorName`
     fields: [{ id: 'network', label: 'Bike network', type: 'select', defaultValue: 'youbike-taipei', help: 'Choose a public bike-sharing network.', options: [
       { label: 'Taipei · YouBike', value: 'youbike-taipei' }, { label: 'Paris · Vélib', value: 'velib' }, { label: 'London · Santander Cycles', value: 'santander-cycles' }, { label: 'New York · Citi Bike', value: 'citi-bike-nyc' }, { label: 'Barcelona · Bicing', value: 'bicing' },
     ] }],
-    buildUrl: ({ network = 'youbike-taipei' }) => `https://api.citybik.es/v2/networks/${encodeURIComponent(network.trim())}`,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://api.citybik.es/v2/networks/{network}', hosts: ['api.citybik.es'],
+      transforms: { network: 'trim' }, responseTransform: 'json',
+    }),
   },
   {
     id: 'wikimedia-commons-search', name: 'Wikimedia Commons Search', provider: 'Wikimedia Foundation', category: 'Media',
