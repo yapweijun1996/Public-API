@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
 import { browser, root, sleep } from './lib/pages-origin-browser.mjs'
 
 const cases = [
@@ -12,7 +13,7 @@ const cases = [
     body: [{ id: 1, name: 'semantic-demo', full_name: 'octocat/semantic-demo', owner: { login: 'octocat' }, private: false, visibility: 'public', html_url: 'https://github.com/octocat/semantic-demo', description: 'Synthetic code-splitting fixture.', fork: false, archived: false, disabled: false, language: 'TypeScript', default_branch: 'main', stargazers_count: 3, forks_count: 1, open_issues_count: 0, topics: ['semantic'], updated_at: '2026-09-08T12:00:00Z', pushed_at: '2026-09-08T11:00:00Z' }],
   },
   {
-    id: 'ipify-public-ip', bundle: 'SpecializedCatalogPreviews', cssBundles: ['SpecializedCatalogPreviews', 'SemanticCards', 'DateList'], cssBudgetBytes: 24000, url: 'https://api64.ipify.org?format=json',
+    id: 'ipify-public-ip', bundle: 'SpecializedCatalogPreviews', cssBundles: ['SpecializedCatalogPreviews', 'SemanticCards', 'DateList'], cssBudgetBytes: 24000, url: 'https://api64.ipify.org/?format=json',
     body: { ip: '203.0.113.10' },
   },
   {
@@ -127,14 +128,16 @@ for (const entry of cases) {
 
 
 
-// A rejected implementation chunk must be contained inside Request Lab. Raw JSON stays usable,
+// A rejected lazy stylesheet must be contained inside Request Lab. Raw JSON stays usable,
 // and a full reload provides a portable recovery path without relying on same-document import retry behavior.
 {
   const entry = cases[0]
+  const stylesheet = readdirSync(`${root}/dist/assets`).find((file) => /^DiagnosticPreviewBundle-.+\.css$/.test(file))
+  assert(stylesheet, 'Expected a dedicated Diagnostic preview stylesheet')
   const fixtures = new Map([[entry.url, { body: entry.body }]])
   const b = await browser(`${root}/dist`, {
     fixtures,
-    appAssetFailures: [{ includes: '/DiagnosticPreviewBundle-', remaining: 1 }],
+    appAssetFailures: [{ includes: `/assets/${stylesheet}`, remaining: 1 }],
   })
   try {
     await b.nav(entry.id)
@@ -159,7 +162,7 @@ for (const entry of cases) {
     assert(failedState.rawJson.includes('#24B1E0'), 'Raw JSON disappeared after preview chunk failure')
     assert.equal(failedState.overflow, false)
     assert.equal(b.appAssetFailureRequests.length, 1)
-    assert(b.appAssetFailureRequests[0].path.includes('/DiagnosticPreviewBundle-'))
+    assert(b.appAssetFailureRequests[0].path.endsWith(`/assets/${stylesheet}`))
 
     const ax = await b.call('Accessibility.getFullAXTree')
     const reloadButton = ax.nodes.find((node) => !node.ignored && node.role?.value === 'button' && node.name?.value === 'Reload application')
