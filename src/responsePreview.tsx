@@ -90,9 +90,13 @@ const HexPmPackagePreview = packageSemanticPreview('HexPmPackagePreview')
 const JsDelivrPackagePreview = packageSemanticPreview('JsDelivrPackagePreview')
 const NuGetPackagePreview = packageSemanticPreview('NuGetPackagePreview')
 const NpmSearchPreview = packageSemanticPreview('NpmSearchPreview')
+const NpmVersionPreview = packageSemanticPreview('NpmVersionPreview')
+const NpmReleaseHistoryPreview = packageSemanticPreview('NpmReleaseHistoryPreview')
 const StackExchangeQuestionsPreview = developerSemanticPreview('StackExchangeQuestionsPreview')
 const PackagistSearchPreview = packageSemanticPreview('PackagistSearchPreview')
 const PyPiPackagePreview = packageSemanticPreview('PyPiPackagePreview')
+const PyPiExactReleasePreview = packageSemanticPreview('PyPiExactReleasePreview')
+const PyPiSimpleIndexPreview = packageSemanticPreview('PyPiSimpleIndexPreview')
 const PubDevPackagePreview = packageSemanticPreview('PubDevPackagePreview')
 const RubyGemsPackagePreview = packageSemanticPreview('RubyGemsPackagePreview')
 const LaunchSchedulePreview = specializedPreview('LaunchSchedulePreview')
@@ -311,12 +315,16 @@ export const apiPreviewComponents: Partial<Record<string, ApiPreviewComponent>> 
   'nhtsa-vpic': defineApiPreview('nhtsa-vpic', ({ data }) => <NhtsaMakesPreview data={data}/>),
   'nhtsa-vehicle-recalls': defineApiPreview('nhtsa-vehicle-recalls', ({ data, executedRequest }) => <RecallsPreview data={data} executedRequest={executedRequest}/>),
   'npm-search': defineApiPreview('npm-search', ({ data, executedRequest }) => <NpmSearchPreview data={data} executedRequest={executedRequest}/>),
+  'npm-version': defineApiPreview('npm-version', ({ data, requestUrl, executedRequest }) => <NpmVersionPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
+  'npm-packument': defineApiPreview('npm-packument', ({ data, requestUrl, executedRequest }) => <NpmReleaseHistoryPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
   'nvd-cpe-search': defineApiPreview('nvd-cpe-search', ({ data, executedRequest }) => <NvdCpeSearchPreview data={data} executedRequest={executedRequest}/>),
   'nvd-cve-detail': defineApiPreview('nvd-cve-detail', ({ data, executedRequest }) => <NvdCveDetailPreview data={data} executedRequest={executedRequest}/>),
   'nvd-cves': defineApiPreview('nvd-cves', ({ data, executedRequest }) => <NvdCveSearchPreview data={data} executedRequest={executedRequest}/>),
   'nvd-recent-cves': defineApiPreview('nvd-recent-cves', ({ data, executedRequest }) => <NvdRecentCvesPreview data={data} executedRequest={executedRequest}/>),
   'postcodes-io': defineApiPreview('postcodes-io', ({ data, requestUrl, executedRequest }) => <PostcodesIoPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
   'pypi-json': defineApiPreview('pypi-json', ({ data, requestUrl, executedRequest }) => <PyPiPackagePreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
+  'pypi-release': defineApiPreview('pypi-release', ({ data, requestUrl, executedRequest }) => <PyPiExactReleasePreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
+  'pypi-simple-project': defineApiPreview('pypi-simple-project', ({ data, requestUrl, executedRequest }) => <PyPiSimpleIndexPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
   'stack-exchange': defineApiPreview('stack-exchange', ({ data, requestUrl, executedRequest }) => <StackExchangeQuestionsPreview data={data} requestUrl={requestUrl} executedRequest={executedRequest}/>),
   'uk-bank-holidays': defineApiPreview('uk-bank-holidays', ({ data, executedRequest }) => <UkBankHolidaysPreview data={data} executedRequest={executedRequest}/>),
   'hebcal-calendar': defineApiPreview('hebcal-calendar', ({ data, executedRequest }) => <HebcalCalendarPreview data={data} executedRequest={executedRequest}/>),
@@ -1150,6 +1158,30 @@ const previewMeta: Record<PreviewLayout, { icon: string; eyebrow: string; title:
     eyebrow: 'Live response · npm search',
     title: 'npm package search',
     description: 'Request-bound npm registry search results with validated package identity, download metrics, and search metadata.',
+  },
+  'npm-exact-release': {
+    icon: 'npm',
+    eyebrow: 'Live response · npm release',
+    title: 'Exact npm release',
+    description: 'Published version, runtime requirements, dependencies, and distribution integrity for one release.',
+  },
+  'npm-release-history': {
+    icon: 'npm',
+    eyebrow: 'Live response · npm history',
+    title: 'npm package release history',
+    description: 'Distribution tags and release timestamps from the npm registry.',
+  },
+  'pypi-exact-release': {
+    icon: 'PY',
+    eyebrow: 'Live response · PyPI release',
+    title: 'Exact PyPI release',
+    description: 'Published distribution files for one release, with Python requirements and digests.',
+  },
+  'pypi-simple-index': {
+    icon: 'PY',
+    eyebrow: 'Live response · PyPI index',
+    title: 'PyPI Simple index files',
+    description: 'Installer-facing distribution files across releases, with compatibility and yank status.',
   },
   'composer-package-search': {
     icon: 'PKG',

@@ -102,6 +102,10 @@ export type PreviewLayout =
   | 'community-questions'
   | 'package-insights'
   | 'npm-package-search'
+  | 'npm-exact-release'
+  | 'npm-release-history'
+  | 'pypi-exact-release'
+  | 'pypi-simple-index'
   | 'composer-package-search'
   | 'cpan-module-search'
   | 'package-registration'
@@ -212,12 +216,16 @@ const profileEntries: Array<[id: string, layout: PreviewLayout, label: string]> 
   ['nhtsa-vpic', 'manufacturer-directory', 'Vehicle manufacturer registry'],
   ['nhtsa-vehicle-recalls', 'vehicle-recalls', 'Vehicle defect, consequence and remedy'],
   ['npm-search', 'npm-package-search', 'npm registry package search'],
+  ['npm-version', 'npm-exact-release', 'Exact npm release metadata'],
+  ['npm-packument', 'npm-release-history', 'npm distribution tags and release history'],
   ['nvd-cpe-search', 'cpe-product-search', 'Request-bound NVD CPE product dictionary search'],
   ['nvd-cve-detail', 'nvd-vulnerability', 'Request-bound NVD CVE investigation dossier'],
   ['nvd-cves', 'nvd-cve-search', 'Request-bound NVD CVE keyword search'],
   ['nvd-recent-cves', 'nvd-modified-watchlist', 'Request-bound recently modified CVE watchlist'],
   ['postcodes-io', 'postcode-profile', 'Request-bound UK postcode location and administrative geography'],
   ['pypi-json', 'python-package', 'PyPI current project metadata'],
+  ['pypi-release', 'pypi-exact-release', 'Exact PyPI release and distributions'],
+  ['pypi-simple-project', 'pypi-simple-index', 'PyPI Simple index distributions'],
   ['stack-exchange', 'community-questions', 'Stack Overflow tagged activity queue'],
   ['uk-bank-holidays', 'uk-bank-holiday-calendar', 'Request-bound GOV.UK division-aware bank holiday calendar'],
   ['usaspending', 'federal-awards', 'Federal contract award ledger'],

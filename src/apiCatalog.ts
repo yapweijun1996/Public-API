@@ -3437,6 +3437,77 @@ const bnmMacroApis: ApiDemo[] = [
 
 
 
+const npmRegistryDocs = 'https://github.com/npm/registry/blob/main/docs/REGISTRY-API.md'
+const pyPiSimpleHeaders = { Accept: 'application/vnd.pypi.simple.v1+json' }
+const npmPackageField = (defaultValue: string) => textField('packageName', {
+  label: 'npm package', defaultValue, minLength: 1, maxLength: 214,
+  pattern: '(?:@[a-z0-9][a-z0-9._\\-]*/)?[a-z0-9][a-z0-9._\\-]*',
+  patternDescription: 'must be a lowercase npm package name, optionally qualified with @scope/.',
+  help: 'Enter an exact npm package name, such as react or @vitejs/plugin-react.',
+})
+const pyPiProjectField = (defaultValue: string) => textField('project', {
+  label: 'PyPI project', defaultValue, minLength: 1, maxLength: 200,
+  pattern: '[a-z0-9]+(?:-[a-z0-9]+)*',
+  patternDescription: 'must use the lowercase PyPI project name with hyphen separators.',
+  help: 'Use lowercase and replace runs of punctuation separators with one hyphen, such as typing-extensions.',
+})
+
+const packageRegistryApis: ApiDemo[] = [
+  {
+    id: 'npm-version', name: 'npm Exact Version', provider: 'npm', category: 'Developer',
+    description: 'Inspect one published npm release, its license, Node.js requirement, dependencies, and distribution integrity.',
+    documentationUrl: npmRegistryDocs, accent: '#cb3837', monogram: 'NPR',
+    fields: [npmPackageField('react'), textField('version', {
+      label: 'Published version', defaultValue: '19.1.0', minLength: 5, maxLength: 100,
+      pattern: '[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.\\-]+)?',
+      patternDescription: 'must be an exact major.minor.patch release with an optional prerelease suffix.',
+      help: 'Enter an exact release such as 19.1.0. npm tags and version ranges are excluded.',
+    })],
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://registry.npmjs.org/{packageName}/{version}',
+      hosts: ['registry.npmjs.org'], transforms: { packageName: 'trim', version: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'npm-packument', name: 'npm Package Release History', provider: 'npm', category: 'Developer',
+    description: 'Browse the npm registry document for one package, including distribution tags and publication timestamps.',
+    documentationUrl: npmRegistryDocs, accent: '#cb3837', monogram: 'NPH',
+    usageNote: 'The full registry document includes historical metadata and can be large for packages with many releases. The preview shows a bounded selection of recent releases.',
+    fields: [npmPackageField('is-number')],
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://registry.npmjs.org/{packageName}',
+      hosts: ['registry.npmjs.org'], transforms: { packageName: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'pypi-release', name: 'PyPI Exact Release', provider: 'Python Package Index', category: 'Developer',
+    description: 'Inspect a specific Python release and its published distribution files, SHA-256 digests, and Python requirements.',
+    documentationUrl: 'https://docs.pypi.org/api/json/#get-a-release', accent: '#3775a9', monogram: 'PYR',
+    fields: [pyPiProjectField('requests'), textField('version', {
+      label: 'Published version', defaultValue: '2.32.5', minLength: 1, maxLength: 100,
+      pattern: '(?:[0-9]+!)?[0-9]+(?:\\.[0-9]+)*(?:(?:a|b|rc)[0-9]+)?(?:\\.post[0-9]+)?(?:\\.dev[0-9]+)?(?:\\+[a-z0-9]+(?:\\.[a-z0-9]+)*)?',
+      patternDescription: 'must use the canonical published PEP 440 release version.',
+      help: 'Enter the exact normalized release shown by PyPI, such as 2.32.5 or 3.0.0rc1.',
+    })],
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://pypi.org/pypi/{project}/{version}/json',
+      hosts: ['pypi.org'], transforms: { project: 'trim', version: 'trim' }, responseTransform: 'json',
+    }),
+  },
+  {
+    id: 'pypi-simple-project', name: 'PyPI Simple Index Files', provider: 'Python Package Index', category: 'Developer',
+    description: 'Read the installer-facing PyPI file index with filenames, secure digests, Python compatibility, and yank status.',
+    documentationUrl: 'https://docs.pypi.org/api/index-api/', accent: '#3775a9', monogram: 'PYI',
+    usageNote: 'Uses the Simple API JSON representation. The index spans releases and may be large. A yanked file can still appear in the index.',
+    fields: [pyPiProjectField('httpx')],
+    headers: pyPiSimpleHeaders,
+    ...declarativeRequest({
+      declarative: true, method: 'GET', urlTemplate: 'https://pypi.org/simple/{project}/',
+      hosts: ['pypi.org'], headers: pyPiSimpleHeaders, transforms: { project: 'trim' }, responseTransform: 'json',
+    }),
+  },
+]
+
 export const apiCatalog: ApiDemo[] = [
   ...coreApis,
   ...additionalInteractiveApis,
@@ -3451,6 +3522,7 @@ export const apiCatalog: ApiDemo[] = [
   ...curatedFiveApiExpansionApis,
   ...macroRateApis,
   ...bnmMacroApis,
+  ...packageRegistryApis,
 ]
 
 for (const api of apiCatalog) {
